@@ -3,7 +3,14 @@
 
 == 사전 요구사항
 
+ifdef::env-site[]
 include::ROOT:partial$_common-requirements.adoc[]
+endif::[]
+ifndef::env-site[]
+* Python 3.11 이상
+* pip (Python 패키지 관리자)
+* Git
+endif::[]
 
 == 개발 환경
 

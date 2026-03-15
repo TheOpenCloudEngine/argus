@@ -20,15 +20,15 @@ Argus Insight 플랫폼의 **기술 문서** 프로젝트입니다. AsciiDoc + A
 
 - AsciiDoc (문서 마크업 언어)
 - Antora 3.x (정적 문서 사이트 생성기)
-- asciidoctor-pdf (PDF 변환기)
-- Node.js + npm (빌드 도구)
+- asciidoctor-pdf (PDF 변환기, Ruby gem)
+- Node.js + npm (Antora 빌드)
+- Ruby + gem (PDF 빌드)
 
 ## 프로젝트 구조
 
 ```
 argus-insight-docs/
 ├── antora-playbook.yml        # HTML 사이트 생성 playbook
-├── antora-playbook-pdf.yml    # PDF 생성 playbook
 ├── package.json               # Node.js 의존성 및 스크립트
 ├── Makefile                   # 빌드 명령어
 ├── docs/                      # 문서 콘텐츠 소스
@@ -52,7 +52,8 @@ argus-insight-docs/
 │           ├── partials/
 │           ├── images/
 │           └── examples/
-├── pdf/                       # PDF 테마 설정
+├── pdf/                       # PDF 관련 파일
+│   ├── argus-insight-book.adoc  # PDF 마스터 문서 (모든 페이지를 include)
 │   └── argus-insight-theme.yml  # asciidoctor-pdf 테마 (A4, 폰트, 색상)
 ├── ui-supplemental/           # Antora UI 커스터마이징
 │   ├── css/custom.css         # 커스텀 CSS
@@ -78,15 +79,15 @@ argus-insight-docs/
 cd argus-insight-docs
 
 # 의존성 설치
-make install        # npm install
+make install        # npm install + gem install asciidoctor-pdf rouge
 
 # HTML 사이트 빌드
 make build          # npx antora antora-playbook.yml
                     # 출력: build/site/
 
 # PDF 빌드
-make pdf            # npx antora antora-playbook-pdf.yml
-                    # 출력: build/pdf/
+make pdf            # asciidoctor-pdf pdf/argus-insight-book.adoc
+                    # 출력: build/pdf/argus-insight.pdf
 
 # HTML 미리보기 (브라우저에서 열기)
 make preview        # npm run preview (http://localhost:8888)
@@ -111,13 +112,29 @@ make clean          # rm -rf build .antora-cache
 
 사이트 전체 설정: URL, 콘텐츠 소스, UI 번들, 출력 디렉토리를 정의합니다.
 
-### antora-playbook-pdf.yml (PDF)
+### pdf/argus-insight-book.adoc (PDF 마스터 문서)
 
-PDF 생성용 playbook. `@antora/pdf-extension`을 사용합니다.
+asciidoctor-pdf용 마스터 문서입니다. 모든 모듈의 페이지를 `include::` 디렉티브로 포함하여 단일 PDF를 생성합니다. 새 페이지 추가 시 이 파일에도 `include::` 를 추가해야 합니다.
 
 ### pdf/argus-insight-theme.yml (PDF 테마)
 
 asciidoctor-pdf의 스타일 설정: A4 용지, 폰트, 색상, 헤더/푸터, 제목 페이지, 코드 블록, 테이블 스타일 등.
+
+## Antora vs asciidoctor-pdf 호환성
+
+문서 소스(.adoc)는 Antora(HTML)와 asciidoctor-pdf(PDF) 두 도구에서 모두 사용됩니다. Antora 전용 문법(예: `include::ROOT:partial$`)은 asciidoctor-pdf에서 인식되지 않으므로, `ifdef::env-site[]` 가드를 사용하여 분기합니다:
+
+```asciidoc
+\ifdef::env-site[]
+\include::ROOT:partial$_common-requirements.adoc[]
+\endif::[]
+\ifndef::env-site[]
+(직접 인라인 콘텐츠)
+\endif::[]
+```
+
+- `env-site` 속성은 `antora-playbook.yml`에서 설정됨 (Antora 빌드 시 활성)
+- asciidoctor-pdf 빌드 시에는 설정되지 않으므로 `ifndef` 블록 실행
 
 ## AsciiDoc 작성 규칙
 
