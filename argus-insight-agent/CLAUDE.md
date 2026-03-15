@@ -380,6 +380,11 @@ python -m app.processmgr.cli too-many-open-files
 python -m app.processmgr.cli too-many-open-files --threshold 80
 python -m app.processmgr.cli cpu
 python -m app.processmgr.cli cpu --limit 30
+
+# Metric
+python -m app.metrics.cli
+python -m app.metrics.cli --pushgateway.host localhost
+python -m app.metrics.cli --pushgateway.host localhost --pushgateway.port 9091
 ```
 
 ### 2. 개발 환경 - make dev 설치 후 CLI 명령어 실행
@@ -451,6 +456,11 @@ argus-insight-process zombies
 argus-insight-process kill-user alice
 argus-insight-process too-many-open-files
 argus-insight-process cpu --limit 30
+
+# Metric
+argus-insight-metric
+argus-insight-metric --pushgateway.host localhost
+argus-insight-metric --pushgateway.host localhost --pushgateway.port 9091
 ```
 
 ### 3. 패키지 설치 환경 (rpm/deb)
@@ -465,6 +475,7 @@ argus-insight-process cpu --limit 30
 /opt/argus-insight-agent/bin/argus-insight-cert ca info
 /opt/argus-insight-agent/bin/argus-insight-file dir create /tmp/mydir
 /opt/argus-insight-agent/bin/argus-insight-process list
+/opt/argus-insight-agent/bin/argus-insight-metric
 ```
 
 ### CLI 명령어 요약
@@ -479,6 +490,7 @@ argus-insight-process cpu --limit 30
 | `argus-insight-cert` | `app.certmgr.cli` | 인증서 관리 (CA 업로드, 호스트 인증서 생성/조회/삭제) |
 | `argus-insight-file` | `app.filemgr.cli` | 파일/디렉토리 관리 (CRUD, chown, chmod, 링크, 압축) |
 | `argus-insight-process` | `app.processmgr.cli` | 프로세스 관리 (목록, 시그널, 좀비, open files, CPU) |
+| `argus-insight-metric` | `app.metrics.cli` | Prometheus 메트릭 출력 및 Push Gateway 전송 |
 
 ## Swagger / OpenAPI
 
