@@ -129,6 +129,33 @@ class DirListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ExecRequest(BaseModel):
+    """Program execution request."""
+
+    command: str = Field(..., description="Command to execute")
+    cwd: str | None = Field(default=None, description="Working directory (optional)")
+    timeout: int | None = Field(
+        default=None,
+        description="Timeout in seconds (optional, uses config default if not specified)",
+    )
+
+
+class ExecResult(BaseModel):
+    """Program execution result."""
+
+    success: bool
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+    timed_out: bool = False
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Archive
+# ---------------------------------------------------------------------------
+
+
 class ArchiveCreateRequest(BaseModel):
     """Archive creation request."""
 

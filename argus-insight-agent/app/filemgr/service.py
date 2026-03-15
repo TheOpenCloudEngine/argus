@@ -12,9 +12,11 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from app.core.config import settings
 from app.filemgr.schemas import (
     ArchiveCreateRequest,
     DirListResponse,
+    ExecResult,
     FileDownloadResponse,
     FileInfo,
     OperationResult,
@@ -358,3 +360,59 @@ async def create_archive(request: ArchiveCreateRequest) -> OperationResult:
         )
     except OSError as e:
         return OperationResult(success=False, message=str(e))
+
+
+# ---------------------------------------------------------------------------
+# 12. Execute program
+# ---------------------------------------------------------------------------
+
+
+async def execute_command(
+    command: str, cwd: str | None = None, timeout: int | None = None
+) -> ExecResult:
+    """Execute a program and collect output."""
+    effective_timeout = timeout if timeout is not None else settings.filemgr_exec_timeout
+
+    if cwd and not Path(cwd).is_dir():
+        return ExecResult(
+            success=False,
+            exit_code=-1,
+            message=f"Working directory not found: {cwd}",
+        )
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=effective_timeout)
+        exit_code = proc.returncode or 0
+        stdout_str = stdout.decode(errors="replace")
+        stderr_str = stderr.decode(errors="replace")
+
+        logger.info("Executed command: %s (exit_code=%d, cwd=%s)", command, exit_code, cwd)
+        return ExecResult(
+            success=exit_code == 0,
+            exit_code=exit_code,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            message=f"Command completed with exit code {exit_code}",
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        logger.warning("Command timed out after %ds: %s", effective_timeout, command)
+        return ExecResult(
+            success=False,
+            exit_code=-1,
+            timed_out=True,
+            message=f"Command timed out after {effective_timeout} seconds",
+        )
+    except OSError as e:
+        return ExecResult(
+            success=False,
+            exit_code=-1,
+            message=str(e),
+        )

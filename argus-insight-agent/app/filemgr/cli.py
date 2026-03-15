@@ -176,6 +176,19 @@ def cmd_archive(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Exec command
+# ---------------------------------------------------------------------------
+
+
+def cmd_exec(args: argparse.Namespace) -> None:
+    timeout = args.timeout if args.timeout else None
+    result = asyncio.run(service.execute_command(args.command, cwd=args.cwd, timeout=timeout))
+    print(_to_json(result))
+    if not result.success:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -253,6 +266,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", "-f", default="zip", help="Format: zip, tar, tar.gz, tar.bz2 (default: zip)"
     )
 
+    # --- exec ---
+    exec_p = sub.add_parser("exec", help="Execute a program")
+    exec_p.add_argument("command", help="Command to execute")
+    exec_p.add_argument("--cwd", default=None, help="Working directory")
+    exec_p.add_argument(
+        "--timeout", "-t", type=int, default=0, help="Timeout in seconds (default: config value)"
+    )
+
     return parser
 
 
@@ -269,6 +290,7 @@ _DISPATCH = {
     ("file", "delete"): cmd_file_delete,
     ("file", "info"): cmd_file_info,
     ("archive", None): cmd_archive,
+    ("exec", None): cmd_exec,
 }
 
 

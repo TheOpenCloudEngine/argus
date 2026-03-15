@@ -9,6 +9,8 @@ from app.filemgr.schemas import (
     DirCreateRequest,
     DirDeleteRequest,
     DirListResponse,
+    ExecRequest,
+    ExecResult,
     FileDownloadResponse,
     FileInfo,
     FileUploadRequest,
@@ -24,6 +26,7 @@ from app.filemgr.service import (
     delete_directory,
     delete_file,
     download_file,
+    execute_command,
     get_file_info,
     list_directory,
     upload_file,
@@ -137,3 +140,14 @@ async def file_delete(path: str) -> OperationResult:
 async def file_archive(request: ArchiveCreateRequest) -> OperationResult:
     """Compress a directory into an archive file."""
     return await create_archive(request)
+
+
+# ---------------------------------------------------------------------------
+# Execute program
+# ---------------------------------------------------------------------------
+
+
+@router.post("/exec", response_model=ExecResult)
+async def file_exec(request: ExecRequest) -> ExecResult:
+    """Execute a program and collect output."""
+    return await execute_command(request.command, request.cwd, request.timeout)

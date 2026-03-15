@@ -456,3 +456,64 @@ async def test_create_archive_unsupported_format(tmp_path):
     result = await service.create_archive(request)
     assert result.success is False
     assert "Unsupported" in result.message
+
+
+# ---------------------------------------------------------------------------
+# Execute program
+# ---------------------------------------------------------------------------
+
+
+async def test_execute_command_success():
+    result = await service.execute_command("echo hello")
+    assert result.success is True
+    assert result.exit_code == 0
+    assert "hello" in result.stdout
+    assert result.timed_out is False
+
+
+async def test_execute_command_failure():
+    result = await service.execute_command("false")
+    assert result.success is False
+    assert result.exit_code != 0
+
+
+async def test_execute_command_stderr():
+    result = await service.execute_command("echo error >&2")
+    assert "error" in result.stderr
+
+
+async def test_execute_command_with_cwd(tmp_path):
+    result = await service.execute_command("pwd", cwd=str(tmp_path))
+    assert result.success is True
+    assert str(tmp_path) in result.stdout
+
+
+async def test_execute_command_cwd_not_found():
+    result = await service.execute_command("echo hi", cwd="/nonexistent/dir")
+    assert result.success is False
+    assert "not found" in result.message.lower()
+
+
+async def test_execute_command_with_timeout():
+    result = await service.execute_command("echo fast", timeout=10)
+    assert result.success is True
+
+
+async def test_execute_command_timeout_exceeded():
+    result = await service.execute_command("sleep 30", timeout=1)
+    assert result.success is False
+    assert result.timed_out is True
+    assert result.exit_code == -1
+
+
+async def test_execute_command_default_timeout():
+    with patch.object(service.settings, "filemgr_exec_timeout", 60):
+        result = await service.execute_command("echo ok")
+    assert result.success is True
+
+
+async def test_execute_command_collects_output():
+    result = await service.execute_command("echo line1 && echo line2")
+    assert result.success is True
+    assert "line1" in result.stdout
+    assert "line2" in result.stdout
