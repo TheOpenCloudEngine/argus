@@ -219,8 +219,20 @@ make deb            # dpkg-buildpackage -us -uc -b
 
 # 빌드 아티팩트 정리
 make clean
+```
 
-# Sysmon CLI (커맨드라인에서 직접 실행)
+## CLI 실행 방법
+
+CLI는 실행 환경에 따라 3가지 방식으로 호출할 수 있습니다.
+
+### 1. 개발 환경 - python -m 모듈 실행
+
+`argus-insight-agent/` 디렉토리에서 Python 모듈로 직접 실행합니다. 별도 설치 없이 바로 사용 가능합니다.
+
+```bash
+cd argus-insight-agent
+
+# Sysmon
 python -m app.sysmon.cli dmesg --lines 100 --level err
 python -m app.sysmon.cli cpu --interval 1.0
 python -m app.sysmon.cli cores --interval 1.0
@@ -229,7 +241,7 @@ python -m app.sysmon.cli network-errors
 python -m app.sysmon.cli processes --sort cpu_percent --limit 20
 python -m app.sysmon.cli disk
 
-# Yum CLI (커맨드라인에서 직접 실행)
+# Yum
 python -m app.yum.cli repo list
 python -m app.yum.cli repo read base.repo
 python -m app.yum.cli repo create myrepo.repo /path/to/content.repo
@@ -242,7 +254,7 @@ python -m app.yum.cli package upgrade nginx
 python -m app.yum.cli package info nginx
 python -m app.yum.cli package files nginx
 
-# Host CLI (커맨드라인에서 직접 실행)
+# Host
 python -m app.hostmgr.cli hostname get
 python -m app.hostmgr.cli hostname set myhost
 python -m app.hostmgr.cli hostname validate
@@ -255,7 +267,7 @@ python -m app.hostmgr.cli resolv backup
 python -m app.hostmgr.cli resolv nameservers
 python -m app.hostmgr.cli resolv set-nameservers 8.8.8.8 8.8.4.4
 
-# User CLI (커맨드라인에서 직접 실행)
+# User
 python -m app.usermgr.cli backup
 python -m app.usermgr.cli sudo alice
 python -m app.usermgr.cli users list
@@ -273,6 +285,59 @@ python -m app.usermgr.cli ssh passwordless alice
 python -m app.usermgr.cli ssh read-authorized alice
 python -m app.usermgr.cli ssh add-authorized alice "ssh-rsa AAAA... user@host"
 python -m app.usermgr.cli groups list
+```
+
+### 2. 개발 환경 - make dev 설치 후 CLI 명령어 실행
+
+`make dev` (pip install -e ".[dev]")로 패키지를 설치하면 `argus-insight-*` 명령어가 PATH에 등록됩니다.
+
+```bash
+# Sysmon
+argus-insight-sysmon dmesg --lines 100 --level err
+argus-insight-sysmon cpu --interval 1.0
+argus-insight-sysmon cores --interval 1.0
+argus-insight-sysmon network
+argus-insight-sysmon processes --sort cpu_percent --limit 20
+argus-insight-sysmon disk
+
+# Yum
+argus-insight-yum repo list
+argus-insight-yum repo backup
+argus-insight-yum package list
+argus-insight-yum package install nginx
+
+# Host
+argus-insight-host hostname get
+argus-insight-host hosts read
+argus-insight-host resolv nameservers
+
+# User
+argus-insight-user backup
+argus-insight-user users list
+argus-insight-user ssh keygen alice
+argus-insight-user groups list
+```
+
+### 3. 패키지 설치 환경 (rpm/deb)
+
+패키지 설치 시 `/opt/argus-insight-agent/bin/`에 스크립트가 설치됩니다.
+
+```bash
+/opt/argus-insight-agent/bin/argus-insight-sysmon dmesg --lines 100
+/opt/argus-insight-agent/bin/argus-insight-yum repo list
+/opt/argus-insight-agent/bin/argus-insight-host hostname get
+/opt/argus-insight-agent/bin/argus-insight-user users list
+```
+
+### CLI 명령어 요약
+
+| 명령어 | 모듈 | 설명 |
+|--------|------|------|
+| `argus-insight-agent` | `app.main` | API 서버 시작 |
+| `argus-insight-sysmon` | `app.sysmon.cli` | 시스템 모니터링 (CPU, 네트워크, 프로세스, 디스크, dmesg) |
+| `argus-insight-yum` | `app.yum.cli` | Yum 리포지토리 및 패키지 관리 |
+| `argus-insight-host` | `app.hostmgr.cli` | 호스트 관리 (hostname, /etc/hosts, /etc/resolv.conf) |
+| `argus-insight-user` | `app.usermgr.cli` | 사용자 관리 (CRUD, sudo, SSH 키, authorized_keys) |
 ```
 
 ## Swagger / OpenAPI
