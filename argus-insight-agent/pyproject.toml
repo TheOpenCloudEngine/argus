@@ -31,6 +31,7 @@ argus-insight-sysmon = "app.sysmon.cli:main"
 argus-insight-yum = "app.yum.cli:main"
 argus-insight-host = "app.hostmgr.cli:main"
 argus-insight-user = "app.usermgr.cli:main"
+argus-insight-cert = "app.certmgr.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

@@ -35,3 +35,7 @@ monitor:
 terminal:
   shell: ${terminal.shell:/bin/bash}
   max_sessions: ${terminal.max_sessions:10}
+
+certificate:
+  days: ${cert.days:825}
+  key_bits: ${cert.key_bits:2048}
