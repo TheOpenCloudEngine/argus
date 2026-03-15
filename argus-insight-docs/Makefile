@@ -17,7 +17,7 @@ pdf: ## Build PDF document
 	@mkdir -p build/pdf
 	asciidoctor-pdf pdf/argus-insight-book.adoc \
 		-a pdf-themesdir=pdf \
-		-a pdf-theme=argus-insight \
+		-a pdf-theme=reference \
 		-o build/pdf/argus-insight.pdf
 
 preview: ## Build and preview in browser
