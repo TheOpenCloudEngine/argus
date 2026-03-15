@@ -16,9 +16,10 @@ override_dh_auto_install:
 	install -m 755 scripts/argus-agent debian/argus-agent/usr/bin/argus-agent
 
 	# Config
-	mkdir -p debian/argus-agent/etc/argus
-	install -m 640 packaging/config/agent.env.example debian/argus-agent/etc/argus/agent.env
+	mkdir -p debian/argus-agent/etc/argus-insight-agent
+	install -m 640 packaging/config/config.yml debian/argus-agent/etc/argus-insight-agent/config.yml
+	install -m 640 packaging/config/config.properties debian/argus-agent/etc/argus-insight-agent/config.properties
 
 	# Directories
-	mkdir -p debian/argus-agent/var/log/argus
-	mkdir -p debian/argus-agent/var/lib/argus
+	mkdir -p debian/argus-agent/var/log/argus-insight-agent
+	mkdir -p debian/argus-agent/var/lib/argus-insight-agent

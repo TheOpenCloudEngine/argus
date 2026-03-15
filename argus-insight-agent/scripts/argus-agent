@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Argus Server Agent entry point."""
+"""Argus Insight Agent entry point."""
 
 import sys
 import os

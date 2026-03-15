@@ -1,0 +1,29 @@
+# Argus Insight Agent Configuration
+# Variables in ${...} syntax are resolved from config.properties.
+
+app:
+  name: argus-insight-agent
+  version: 0.1.0
+  debug: false
+
+server:
+  host: ${server.host}
+  port: ${server.port}
+
+logging:
+  level: ${log.level}
+  dir: ${log.dir}
+
+data:
+  dir: ${data.dir}
+
+command:
+  timeout: ${command.timeout}
+  max_output: ${command.max_output}
+
+monitor:
+  interval: ${monitor.interval}
+
+terminal:
+  shell: ${terminal.shell}
+  max_sessions: ${terminal.max_sessions}

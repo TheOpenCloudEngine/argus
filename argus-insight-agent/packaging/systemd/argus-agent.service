@@ -1,5 +1,5 @@
 [Unit]
-Description=Argus Server Agent
+Description=Argus Insight Agent
 After=network.target
 Wants=network-online.target
 
@@ -19,13 +19,10 @@ StandardError=journal
 SyslogIdentifier=argus-agent
 
 # Directories
-RuntimeDirectory=argus
-StateDirectory=argus
-LogsDirectory=argus
-ConfigurationDirectory=argus
-
-# Environment
-EnvironmentFile=-/etc/argus/agent.env
+RuntimeDirectory=argus-insight-agent
+StateDirectory=argus-insight-agent
+LogsDirectory=argus-insight-agent
+ConfigurationDirectory=argus-insight-agent
 
 [Install]
 WantedBy=multi-user.target
