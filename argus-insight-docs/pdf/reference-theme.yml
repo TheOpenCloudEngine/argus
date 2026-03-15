@@ -1,10 +1,5 @@
 font:
   catalog:
-    NotoSansKorean:
-      normal: NotoSansKorean.ttf
-      bold: NotoSansKorean.ttf
-      italic: NotoSansKorean.ttf
-      bold_italic: NotoSansKorean.ttf
     NanumMyeonjo:
       normal: NanumMyeongjo.ttf
       bold: NanumMyeongjoBold.ttf
@@ -26,39 +21,13 @@ font:
       italic: NanumBarunGothic.ttf
       bold_italic: NanumBarunGothicBold.ttf
     NanumSquare:
-      normal: NanumSquareRegular.ttf
-      bold: NanumSquareBold.ttf
-      italic: NanumSquareRegular.ttf
-      bold_italic: NanumSquareBold.ttf
-    RixGothic:
-      normal: RixGoM.ttf
-      bold: RixGoB.ttf
-      italic: RixGoM.ttf
-      bold_italic: RixGoB.ttf
-    NotoSerif:
-      normal: notoserif-regular-latin.ttf
-      bold: notoserif-bold-latin.ttf
-      italic: notoserif-italic-latin.ttf
-      bold_italic: notoserif-bolditalic-latin.ttf
-    # NOTE currently, callout numbers don't work with LiberationMono
-    LiberationMono:
-      normal: D2Coding.ttf
-      bold: D2CodingBold.ttf
-      italic: D2Coding.ttf
-      bold_italic: D2CodingBold.ttf
-    Mplus1mn:
-      normal: mplus1mn-regular-ascii-conums.ttf
-      bold: mplus1mn-bold-ascii.ttf
-      italic: mplus1mn-italic-ascii.ttf
-      bold_italic: mplus1mn-bolditalic-ascii.ttf
-    Mplus1pMultilingual:
-      normal: NanumMyeongjo.ttf
-      bold: NanumMyeongjo.ttf
-      italic: NanumMyeongjo.ttf
-      bold_italic: NanumMyeongjo.ttf
+      normal: NanumSquare.ttf
+      bold: NanumSquareB.ttf
+      italic: NanumSquare.ttf
+      bold_italic: NanumSquareB.ttf
   fallbacks:
     # NOTE M+ 1p doesn't support all CJK characters, but it at least has some coverage
-    - NotoSansKorean
+    - NanumSquare
 brand:
   primary_color: 005498
 page:
