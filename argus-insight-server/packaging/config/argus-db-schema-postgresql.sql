@@ -8,12 +8,7 @@
 CREATE USER argus WITH PASSWORD 'argus';
 
 -- Create database
-CREATE DATABASE argus
-    OWNER = argus
-    ENCODING = 'UTF8'
-    LC_COLLATE = 'en_US.UTF-8'
-    LC_CTYPE = 'en_US.UTF-8'
-    TEMPLATE = template0;
+CREATE DATABASE argus OWNER = argus;
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE argus TO argus;
