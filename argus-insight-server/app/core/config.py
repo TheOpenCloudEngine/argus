@@ -108,7 +108,7 @@ def init_settings(
         yaml_path: Absolute path to YAML config file.
         properties_path: Absolute path to properties file.
     """
-    global _raw, _yaml_path, _properties_path, settings
+    global _raw, _yaml_path, _properties_path
     if yaml_path:
         _yaml_path = Path(yaml_path)
     if properties_path:
@@ -118,7 +118,7 @@ def init_settings(
         yaml_path=yaml_path,
         properties_path=properties_path,
     )
-    settings = Settings()
+    settings.__init__()
 
 
 settings = Settings()

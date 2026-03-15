@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -39,18 +40,17 @@ _  ___ |  /   _  /_/ // /_/ /_(__  )     __/ /  _  / / /(__  )_  / _  /_/ /_  / 
 
 def _print_banner() -> None:
     """Print startup banner with version and config paths."""
-    print(BANNER)
-    print(f"Version           : {settings.app_version}")
-    print(f"Config YAML       : {settings.config_yaml_path}")
-    print(f"Config Properties : {settings.config_properties_path}")
-    print()
+    logger.info(BANNER)
+    logger.info("Version           : %s", settings.app_version)
+    logger.info("Config YAML       : %s", settings.config_yaml_path)
+    logger.info("Config Properties : %s", settings.config_properties_path)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    _print_banner()
     setup_logging()
+    _print_banner()
     logger.info("Argus Server Agent %s starting", __version__)
     await metrics_scheduler.start()
     yield
@@ -134,6 +134,21 @@ def run() -> None:
             yaml_path=args.config_yaml,
             properties_path=args.config_properties,
         )
+    else:
+        yaml_exists = settings.config_yaml_path.is_file()
+        props_exists = settings.config_properties_path.is_file()
+        if not yaml_exists and not props_exists:
+            parser.print_help()
+            print()
+            print(
+                f"Error: No configuration files found at default location:\n"
+                f"  - {settings.config_yaml_path}\n"
+                f"  - {settings.config_properties_path}\n"
+                f"\n"
+                f"Specify config file paths with --config-yaml and/or "
+                f"--config-properties options."
+            )
+            sys.exit(1)
 
     uvicorn.run(
         app,
