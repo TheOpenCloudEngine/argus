@@ -24,10 +24,27 @@ from app.yum.router import router as yum_router
 
 logger = logging.getLogger(__name__)
 
+BANNER = r"""
+_______                                  ________             _____        ______ _____     _______                    _____
+___    |_____________ ____  _________    ____  _/________________(_)______ ___  /___  /_    ___    |______ ______________  /_
+__  /| |_  ___/_  __ `/  / / /_  ___/     __  / __  __ \_  ___/_  /__  __ `/_  __ \  __/    __  /| |_  __ `/  _ \_  __ \  __/
+_  ___ |  /   _  /_/ // /_/ /_(__  )     __/ /  _  / / /(__  )_  / _  /_/ /_  / / / /_      _  ___ |  /_/ //  __/  / / / /_
+/_/  |_/_/    _\__, / \__,_/ /____/      /___/  /_/ /_//____/ /_/  _\__, / /_/ /_/\__/      /_/  |_|\__, / \___//_/ /_/\__/
+              /____/                                               /____/                          /____/
+"""
+
+
+def _print_banner() -> None:
+    """Print startup banner with version."""
+    print(BANNER)
+    print(f"Version : {settings.app_version}")
+    print()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
+    _print_banner()
     setup_logging()
     logger.info("Argus Server Agent %s starting", __version__)
     yield
