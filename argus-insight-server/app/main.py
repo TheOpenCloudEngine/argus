@@ -31,9 +31,11 @@ _  ___ |  /   _  /_/ // /_/ /_(__  )     __/ /  _  / / /(__  )_  / _  /_/ /_  / 
 
 
 def _print_banner() -> None:
-    """Print startup banner with version."""
+    """Print startup banner with version and config paths."""
     print(BANNER)
-    print(f"Version : {settings.app_version}")
+    print(f"Version           : {settings.app_version}")
+    print(f"Config YAML       : {settings.config_yaml_path}")
+    print(f"Config Properties : {settings.config_properties_path}")
     print()
 
 
@@ -43,8 +45,6 @@ async def lifespan(app: FastAPI):
     _print_banner()
     setup_logging()
     logger.info("Argus Insight Server %s starting", __version__)
-    logger.info("Config YAML       : %s", settings.config_yaml_path)
-    logger.info("Config Properties : %s", settings.config_properties_path)
     await init_database()
     yield
     await close_database()
