@@ -8,6 +8,7 @@ from app.filemgr.schemas import (
     ChownRequest,
     DirCreateRequest,
     DirDeleteRequest,
+    DirListResponse,
     FileDownloadResponse,
     FileInfo,
     FileUploadRequest,
@@ -24,6 +25,7 @@ from app.filemgr.service import (
     delete_file,
     download_file,
     get_file_info,
+    list_directory,
     upload_file,
 )
 
@@ -87,6 +89,17 @@ async def file_info(path: str) -> FileInfo:
         return get_file_info(path)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/list", response_model=DirListResponse)
+async def dir_list(path: str) -> DirListResponse:
+    """List files and directories in the given path."""
+    try:
+        return list_directory(path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except NotADirectoryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ---------------------------------------------------------------------------

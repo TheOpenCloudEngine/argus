@@ -111,6 +111,24 @@ class FileDownloadResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Directory listing
+# ---------------------------------------------------------------------------
+
+
+class DirListResponse(BaseModel):
+    """Directory listing response."""
+
+    path: str
+    entries: list[FileInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Archive
+# ---------------------------------------------------------------------------
+
+
 class ArchiveCreateRequest(BaseModel):
     """Archive creation request."""
 

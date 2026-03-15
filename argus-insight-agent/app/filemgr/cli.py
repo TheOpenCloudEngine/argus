@@ -70,6 +70,15 @@ def cmd_dir_info(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_dir_list(args: argparse.Namespace) -> None:
+    try:
+        result = service.list_directory(args.path)
+        print(_to_json(result))
+    except (FileNotFoundError, NotADirectoryError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Ownership / permissions commands
 # ---------------------------------------------------------------------------
@@ -196,6 +205,9 @@ def build_parser() -> argparse.ArgumentParser:
     dir_info_p = dir_sub.add_parser("info", help="Show directory info")
     dir_info_p.add_argument("path", help="Directory path")
 
+    dir_list_p = dir_sub.add_parser("list", help="List directory contents")
+    dir_list_p.add_argument("path", help="Directory path")
+
     # --- chown ---
     chown_p = sub.add_parser("chown", help="Change ownership")
     chown_p.add_argument("path", help="File or directory path")
@@ -248,6 +260,7 @@ _DISPATCH = {
     ("dir", "create"): cmd_dir_create,
     ("dir", "delete"): cmd_dir_delete,
     ("dir", "info"): cmd_dir_info,
+    ("dir", "list"): cmd_dir_list,
     ("chown", None): cmd_chown,
     ("chmod", None): cmd_chmod,
     ("link", None): cmd_link,

@@ -269,6 +269,62 @@ def test_get_file_info_not_found(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Directory listing
+# ---------------------------------------------------------------------------
+
+
+def test_list_directory(tmp_path):
+    (tmp_path / "file1.txt").write_text("a")
+    (tmp_path / "file2.txt").write_text("b")
+    (tmp_path / "subdir").mkdir()
+    result = service.list_directory(str(tmp_path))
+    assert result.path == str(tmp_path)
+    assert result.total == 3
+    names = [e.name for e in result.entries]
+    assert "file1.txt" in names
+    assert "file2.txt" in names
+    assert "subdir" in names
+
+
+def test_list_directory_empty(tmp_path):
+    result = service.list_directory(str(tmp_path))
+    assert result.total == 0
+    assert result.entries == []
+
+
+def test_list_directory_not_found(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        service.list_directory(str(tmp_path / "nope"))
+
+
+def test_list_directory_not_a_directory(tmp_path):
+    f = tmp_path / "afile.txt"
+    f.write_text("data")
+    with pytest.raises(NotADirectoryError):
+        service.list_directory(str(f))
+
+
+def test_list_directory_sorted(tmp_path):
+    (tmp_path / "c.txt").write_text("c")
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "b.txt").write_text("b")
+    result = service.list_directory(str(tmp_path))
+    names = [e.name for e in result.entries]
+    assert names == ["a.txt", "b.txt", "c.txt"]
+
+
+def test_list_directory_with_symlink(tmp_path):
+    target = tmp_path / "real.txt"
+    target.write_text("data")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+    result = service.list_directory(str(tmp_path))
+    assert result.total == 2
+    link_entry = next(e for e in result.entries if e.name == "link.txt")
+    assert link_entry.is_link is True
+
+
+# ---------------------------------------------------------------------------
 # File upload / download / delete
 # ---------------------------------------------------------------------------
 

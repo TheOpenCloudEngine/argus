@@ -14,6 +14,7 @@ from pathlib import Path
 
 from app.filemgr.schemas import (
     ArchiveCreateRequest,
+    DirListResponse,
     FileDownloadResponse,
     FileInfo,
     OperationResult,
@@ -289,7 +290,34 @@ def delete_file(path: str) -> OperationResult:
 
 
 # ---------------------------------------------------------------------------
-# 10. Archive (compress directory)
+# 10. Directory listing
+# ---------------------------------------------------------------------------
+
+
+def list_directory(path: str) -> DirListResponse:
+    """List files and directories in the given path."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Not found: {path}")
+    if not p.is_dir():
+        raise NotADirectoryError(f"Not a directory: {path}")
+
+    entries = []
+    for child in sorted(p.iterdir()):
+        try:
+            entries.append(_file_info(child))
+        except OSError:
+            continue
+
+    return DirListResponse(
+        path=str(p),
+        entries=entries,
+        total=len(entries),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 11. Archive (compress directory)
 # ---------------------------------------------------------------------------
 
 

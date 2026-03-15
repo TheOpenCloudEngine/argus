@@ -322,6 +322,7 @@ python -m app.filemgr.cli dir create /tmp/mydir --mode 755
 python -m app.filemgr.cli dir delete /tmp/mydir
 python -m app.filemgr.cli dir delete /tmp/mydir --recursive
 python -m app.filemgr.cli dir info /tmp/mydir
+python -m app.filemgr.cli dir list /tmp/mydir
 python -m app.filemgr.cli chown /tmp/mydir -o alice -g staff
 python -m app.filemgr.cli chown /tmp/mydir -o root --recursive
 python -m app.filemgr.cli chmod /tmp/mydir 755
@@ -377,6 +378,8 @@ argus-insight-cert host files
 # File
 argus-insight-file dir create /tmp/mydir
 argus-insight-file dir delete /tmp/mydir -r
+argus-insight-file dir info /tmp/mydir
+argus-insight-file dir list /tmp/mydir
 argus-insight-file chown /tmp/mydir -o alice -g staff
 argus-insight-file chmod /tmp/mydir 755
 argus-insight-file link /opt/data /tmp/data-link
@@ -490,6 +493,7 @@ FastAPI가 자동으로 제공하는 API 문서입니다. 별도 설정 없이 �
 | PUT       | /api/v1/file/chmod               | 파일/디렉토리 권한 변경                                 |
 | POST      | /api/v1/file/link                | 심볼릭 링크 생성                                       |
 | GET       | /api/v1/file/info?path=          | 파일/디렉토리 메타정보 조회                              |
+| GET       | /api/v1/file/list?path=          | 디렉토리 파일/디렉토리 목록 조회                          |
 | POST      | /api/v1/file/upload              | 파일 업로드                                           |
 | GET       | /api/v1/file/download?path=      | 파일 다운로드 (base64)                                 |
 | DELETE    | /api/v1/file/file?path=          | 파일 삭제                                             |
