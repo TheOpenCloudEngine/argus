@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models for agent management."""
 
-from sqlalchemy import Column, DateTime, Float, String, func
+from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, func
 
 from app.core.database import Base
 
@@ -15,11 +15,14 @@ class ArgusAgent(Base):
     version = Column(String(50))
     kernel_version = Column(String(255))
     os_version = Column(String(255))
+    cpu_count = Column(Integer)
+    core_count = Column(Integer)
+    total_memory = Column(BigInteger)
     cpu_usage = Column(Float)
     memory_usage = Column(Float)
     status = Column(String(20), nullable=False, default="UNREGISTERED")
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class ArgusAgentHeartbeat(Base):
@@ -28,4 +31,4 @@ class ArgusAgentHeartbeat(Base):
     __tablename__ = "argus_agents_heartbeat"
 
     hostname = Column(String(255), primary_key=True)
-    last_heartbeat_at = Column(DateTime, server_default=func.now())
+    last_heartbeat_at = Column(DateTime(timezone=True), server_default=func.now())

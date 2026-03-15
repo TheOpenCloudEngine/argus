@@ -8,7 +8,7 @@ import sys
 
 from prometheus_client import generate_latest
 
-from app.metrics.collector import _get_fqdn, collect_metrics
+from app.metrics.collector import _get_hostname, collect_metrics
 from app.metrics.pusher import JOB_NAME
 
 
@@ -20,18 +20,17 @@ def _print_metrics(registry) -> None:
 
 def _push_metrics(registry, host: str, port: int) -> bool:
     """Push metrics to Prometheus Push Gateway."""
-    from prometheus_client import push_to_gateway
+    from prometheus_client import pushadd_to_gateway
 
     gateway = f"{host}:{port}"
-    instance = _get_fqdn()
+    instance = _get_hostname()
 
     try:
-        push_to_gateway(
+        pushadd_to_gateway(
             gateway,
             job=JOB_NAME,
             registry=registry,
             grouping_key={"instance": instance},
-            method="POST",
         )
         print(f"Pushed metrics to {gateway} (job={JOB_NAME}, instance={instance})")
         return True

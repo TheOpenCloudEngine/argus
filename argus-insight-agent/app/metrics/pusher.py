@@ -6,10 +6,10 @@ deleting metrics pushed by other agents (grouping key includes instance).
 
 import logging
 
-from prometheus_client import push_to_gateway
+from prometheus_client import pushadd_to_gateway
 
 from app.core.config import settings
-from app.metrics.collector import _get_fqdn, collect_metrics
+from app.metrics.collector import _get_hostname, collect_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +30,15 @@ def push_metrics() -> bool:
         return False
 
     gateway = f"{settings.prometheus_pushgateway_host}:{settings.prometheus_pushgateway_port}"
-    instance = _get_fqdn()
+    instance = _get_hostname()
 
     try:
         registry = collect_metrics()
-        push_to_gateway(
+        pushadd_to_gateway(
             gateway,
             job=JOB_NAME,
             registry=registry,
             grouping_key={"instance": instance},
-            method="POST",
         )
         logger.info(
             "Pushed metrics to %s (job=%s, instance=%s)",
