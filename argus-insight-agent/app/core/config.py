@@ -24,6 +24,11 @@ def _get(section: str, key: str, default=None):
     return _raw.get(section, {}).get(key, default)
 
 
+def _get_nested(section: str, subsection: str, key: str, default=None):
+    """Get a nested value from the loaded config dict."""
+    return _raw.get(section, {}).get(subsection, {}).get(key, default)
+
+
 class Settings:
     """Global application settings loaded from config.yml + config.properties."""
 
@@ -39,7 +44,14 @@ class Settings:
 
         # Logging
         self.log_level: str = _get("logging", "level", "INFO")
-        self.log_dir: Path = Path(_get("logging", "dir", "/var/log/argus-insight-agent"))
+        self.log_dir: Path = Path(_get("logging", "dir", "logs"))
+        self.log_filename: str = _get("logging", "filename", "agent.log")
+        self.log_rolling_type: str = _get_nested(
+            "logging", "rolling", "type", "daily"
+        )
+        self.log_rolling_backup_count: int = int(
+            _get_nested("logging", "rolling", "backup_count", 30)
+        )
 
         # Data
         self.data_dir: Path = Path(_get("data", "dir", "/var/lib/argus-insight-agent"))

@@ -44,7 +44,7 @@ argus-insight-agent/
 │   ├── core/
 │   │   ├── config.py        # Settings 클래스 (config.yml + config.properties 기반)
 │   │   ├── config_loader.py # properties 파싱 + YAML ${var} 변수 치환 로더
-│   │   ├── logging.py       # stdout + 파일 로깅 설정
+│   │   ├── logging.py       # 일별 롤링 파일 로깅 설정
 │   │   └── security.py      # SecurityHeadersMiddleware, BLOCKED_COMMANDS
 │   ├── command/             # 셸 명령 실행 모듈
 │   │   ├── router.py        # POST /api/v1/command/execute
@@ -95,6 +95,9 @@ server.port=8600
 # 로깅
 log.level=INFO
 log.dir=/var/log/argus-insight-agent
+log.filename=agent.log
+log.rolling.type=daily
+log.rolling.backup_count=30
 
 # 명령 실행
 command.timeout=300
@@ -112,6 +115,10 @@ server:
 logging:
   level: ${log.level}
   dir: ${log.dir}
+  filename: ${log.filename}
+  rolling:
+    type: ${log.rolling.type}
+    backup_count: ${log.rolling.backup_count}
 
 command:
   timeout: ${command.timeout}
@@ -139,7 +146,10 @@ command:
 | server | port | server.port | 8600 | 바인드 포트 |
 | app | debug | - | false | 디버그 모드 |
 | logging | level | log.level | INFO | 로그 레벨 |
-| logging | dir | log.dir | /var/log/argus-insight-agent | 로그 디렉토리 |
+| logging | dir | log.dir | /var/log/argus-insight-agent (패키지), logs (직접 실행) | 로그 디렉토리 |
+| logging | filename | log.filename | agent.log | 로그 파일명 |
+| logging | rolling.type | log.rolling.type | daily | 롤링 방식 (일 단위) |
+| logging | rolling.backup_count | log.rolling.backup_count | 30 | 롤링 파일 보관 개수 |
 | data | dir | data.dir | /var/lib/argus-insight-agent | 데이터 디렉토리 |
 | command | timeout | command.timeout | 300 | 명령 실행 타임아웃 (초) |
 | command | max_output | command.max_output | 1048576 | 명령 출력 최대 크기 (1MB) |
@@ -186,6 +196,33 @@ make clean
 | POST      | /api/v1/package/manage      | 패키지 설치/삭제/업데이트 (dnf/yum/apt 자동 감지)    |
 | GET       | /api/v1/package/list        | 설치된 패키지 전체 목록 조회                        |
 | WebSocket | /api/v1/terminal/ws         | PTY 기반 원격 터미널 세션 (resize 지원)            |
+
+## 로깅
+
+### 로그 포맷
+
+```
+LEVEL yyyy-MM-dd HH:mm:ss.SSS PID 프로그램명 소스파일:함수명:라인 - 메시지
+```
+
+예시:
+```
+INFO 2025-03-15 14:30:45.123 12345 argus-insight-agent main.py:lifespan:25 - Argus Insight Agent 0.1.0 starting
+```
+
+### 파일 롤링
+
+- 기본 로그 파일: `agent.log`
+- 일 단위로 자동 롤링
+- 롤링된 파일명: `agent_20250101.log` (날짜 suffix)
+- 기본 보관 개수: 30일 (`log.rolling.backup_count`)
+
+### 로그 디렉토리
+
+| 실행 환경 | 로그 디렉토리 |
+|----------|-------------|
+| rpm/deb 패키지 설치 | `/var/log/argus-insight-agent/` |
+| 터미널 직접 실행 (개발) | `argus-insight-agent/logs/` (설정 파일 없을 시 기본값) |
 
 ## 보안 고려사항
 

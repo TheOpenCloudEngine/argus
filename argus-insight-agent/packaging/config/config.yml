@@ -13,6 +13,10 @@ server:
 logging:
   level: ${log.level}
   dir: ${log.dir}
+  filename: ${log.filename}
+  rolling:
+    type: ${log.rolling.type}
+    backup_count: ${log.rolling.backup_count}
 
 data:
   dir: ${data.dir}
