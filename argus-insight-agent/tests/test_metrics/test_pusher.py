@@ -13,7 +13,7 @@ class TestPushMetrics:
         mock_settings.prometheus_enable_push = False
         assert push_metrics() is False
 
-    @patch("app.metrics.pusher.push_to_gateway")
+    @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
     @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
@@ -30,25 +30,9 @@ class TestPushMetrics:
             job=JOB_NAME,
             registry=mock_collect.return_value,
             grouping_key={"instance": "host1.example.com"},
-            method="POST",
         )
 
-    @patch("app.metrics.pusher.push_to_gateway")
-    @patch("app.metrics.pusher.collect_metrics")
-    @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
-    @patch("app.metrics.pusher.settings")
-    def test_uses_post_method(self, mock_settings, mock_fqdn, mock_collect, mock_push):
-        mock_settings.prometheus_enable_push = True
-        mock_settings.prometheus_pushgateway_host = "localhost"
-        mock_settings.prometheus_pushgateway_port = 9091
-        mock_collect.return_value = MagicMock()
-
-        push_metrics()
-
-        call_kwargs = mock_push.call_args
-        assert call_kwargs.kwargs.get("method") == "POST" or call_kwargs[1].get("method") == "POST"
-
-    @patch("app.metrics.pusher.push_to_gateway")
+    @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
     @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
@@ -61,7 +45,7 @@ class TestPushMetrics:
 
         assert push_metrics() is False
 
-    @patch("app.metrics.pusher.push_to_gateway")
+    @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
     @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
@@ -77,7 +61,7 @@ class TestPushMetrics:
         grouping_key = call_kwargs.kwargs.get("grouping_key") or call_kwargs[1].get("grouping_key")
         assert grouping_key == {"instance": "host1.example.com"}
 
-    @patch("app.metrics.pusher.push_to_gateway")
+    @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
     @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")

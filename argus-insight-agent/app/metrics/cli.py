@@ -20,18 +20,17 @@ def _print_metrics(registry) -> None:
 
 def _push_metrics(registry, host: str, port: int) -> bool:
     """Push metrics to Prometheus Push Gateway."""
-    from prometheus_client import push_to_gateway
+    from prometheus_client import pushadd_to_gateway
 
     gateway = f"{host}:{port}"
     instance = _get_fqdn()
 
     try:
-        push_to_gateway(
+        pushadd_to_gateway(
             gateway,
             job=JOB_NAME,
             registry=registry,
             grouping_key={"instance": instance},
-            method="POST",
         )
         print(f"Pushed metrics to {gateway} (job={JOB_NAME}, instance={instance})")
         return True
