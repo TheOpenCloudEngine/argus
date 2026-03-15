@@ -27,6 +27,7 @@ dev = [
 
 [project.scripts]
 argus-agent = "app.main:run"
+argus-sysmon = "app.sysmon.cli:main"
 argus-yum = "app.yum.cli:main"
 
 [tool.setuptools.packages.find]

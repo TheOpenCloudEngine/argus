@@ -9,6 +9,7 @@
 - **애플리케이션 설치 및 관리** (`package`): dnf/yum/apt 패키지 매니저 자동 감지 후 패키지 설치, 삭제, 업데이트 수행
 - **원격 터미널** (`terminal`): PTY 기반 WebSocket 터미널 세션으로 서버에 직접 접속하는 것과 동일한 경험 제공
 - **Yum 리포지토리 및 패키지 관리** (`yum`): yum repo 파일 CRUD, 백업, 패키지 설치/삭제/업그레이드, 패키지 정보 조회. API와 CLI 모두 지원
+- **시스템 모니터링** (`sysmon`): dmesg, CPU(top/htop 스타일), 네트워크(인터페이스별 트래픽/에러), 프로세스(VSS/RSS/PSS/USS/SWAP), 디스크 파티션. React UI용 JSON 구조화. API와 CLI 모두 지원
 
 ## 운영 환경
 
@@ -56,6 +57,11 @@ argus-insight-agent/
 │   │   ├── router.py        # GET /api/v1/monitor/system, WS /api/v1/monitor/ws
 │   │   ├── schemas.py       # SystemInfo, CpuInfo, MemoryInfo, DiskInfo, NetworkInfo
 │   │   └── service.py       # psutil 기반 CPU/메모리/디스크/네트워크 수집
+│   ├── sysmon/              # 시스템 모니터링 모듈 (고급)
+│   │   ├── router.py        # /api/v1/sysmon/* API 엔드포인트
+│   │   ├── schemas.py       # React UI용 JSON 모델 (CPU/네트워크/프로세스/디스크)
+│   │   ├── service.py       # psutil/dmesg/ethtool 기반 메트릭 수집
+│   │   └── cli.py           # 커맨드라인 인터페이스 (argus-sysmon)
 │   ├── package/             # 패키지(애플리케이션) 관리 모듈
 │   │   ├── router.py        # POST /api/v1/package/manage, GET /api/v1/package/list
 │   │   ├── schemas.py       # PackageRequest, PackageInfo, PackageActionResult
@@ -74,6 +80,7 @@ argus-insight-agent/
 │   ├── test_command/        # 명령 실행 테스트
 │   ├── test_monitor/        # 모니터링 테스트
 │   ├── test_package/        # 패키지 관리 테스트 (미작성)
+│   ├── test_sysmon/         # 시스템 모니터링 테스트
 │   ├── test_terminal/       # 터미널 테스트 (미작성)
 │   └── test_yum/            # yum 모듈 테스트
 ├── packaging/
@@ -197,6 +204,15 @@ make deb            # dpkg-buildpackage -us -uc -b
 # 빌드 아티팩트 정리
 make clean
 
+# Sysmon CLI (커맨드라인에서 직접 실행)
+python -m app.sysmon.cli dmesg --lines 100 --level err
+python -m app.sysmon.cli cpu --interval 1.0
+python -m app.sysmon.cli cores --interval 1.0
+python -m app.sysmon.cli network
+python -m app.sysmon.cli network-errors
+python -m app.sysmon.cli processes --sort cpu_percent --limit 20
+python -m app.sysmon.cli disk
+
 # Yum CLI (커맨드라인에서 직접 실행)
 python -m app.yum.cli repo list
 python -m app.yum.cli repo read base.repo
@@ -222,6 +238,13 @@ python -m app.yum.cli package files nginx
 | POST      | /api/v1/package/manage      | 패키지 설치/삭제/업데이트 (dnf/yum/apt 자동 감지)    |
 | GET       | /api/v1/package/list        | 설치된 패키지 전체 목록 조회                        |
 | WebSocket | /api/v1/terminal/ws         | PTY 기반 원격 터미널 세션 (resize 지원)            |
+| GET       | /api/v1/sysmon/dmesg         | dmesg 커널 로그 캡처 (?lines=200&level=err)       |
+| GET       | /api/v1/sysmon/cpu           | CPU 사용량 (top 스타일, user/system/iowait 등)     |
+| GET       | /api/v1/sysmon/cpu/cores     | 코어별 CPU 사용량 (htop 스타일)                    |
+| GET       | /api/v1/sysmon/network       | 네트워크 인터페이스별 트래픽 + 전체 합산               |
+| GET       | /api/v1/sysmon/network/errors | 네트워크 인터페이스별 에러/드롭 카운터               |
+| GET       | /api/v1/sysmon/processes     | 프로세스별 리소스 점유율 (CPU/RSS/VSS/PSS/USS/SWAP)  |
+| GET       | /api/v1/sysmon/disk/partitions | 디스크 파티션 현황                                |
 | GET       | /api/v1/yum/repo             | yum repo 파일 목록 조회                          |
 | POST      | /api/v1/yum/repo             | yum repo 파일 생성                              |
 | PUT       | /api/v1/yum/repo             | yum repo 파일 수정                              |
