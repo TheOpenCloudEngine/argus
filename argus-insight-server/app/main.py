@@ -43,6 +43,8 @@ async def lifespan(app: FastAPI):
     _print_banner()
     setup_logging()
     logger.info("Argus Insight Server %s starting", __version__)
+    logger.info("Config YAML       : %s", settings.config_yaml_path)
+    logger.info("Config Properties : %s", settings.config_properties_path)
     await init_database()
     yield
     await close_database()

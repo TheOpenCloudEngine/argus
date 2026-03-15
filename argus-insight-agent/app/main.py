@@ -50,6 +50,8 @@ async def lifespan(app: FastAPI):
     _print_banner()
     setup_logging()
     logger.info("Argus Server Agent %s starting", __version__)
+    logger.info("Config YAML       : %s", settings.config_yaml_path)
+    logger.info("Config Properties : %s", settings.config_properties_path)
     await metrics_scheduler.start()
     yield
     await metrics_scheduler.stop()

@@ -21,6 +21,8 @@ from pathlib import Path
 from app.core.config_loader import load_config
 
 _CONFIG_DIR = Path(os.environ.get("ARGUS_CONFIG_DIR", "/etc/argus-insight-agent"))
+_yaml_path: Path = _CONFIG_DIR / "config.yml"
+_properties_path: Path = _CONFIG_DIR / "config.properties"
 _raw: dict = load_config(config_dir=_CONFIG_DIR)
 
 
@@ -70,6 +72,8 @@ class Settings:
 
         # Config
         self.config_dir: Path = _CONFIG_DIR
+        self.config_yaml_path: Path = _yaml_path
+        self.config_properties_path: Path = _properties_path
 
         # Backup
         self.backup_dir: Path = Path(_get("backup", "dir", "backups"))
@@ -117,7 +121,11 @@ def init_settings(
         yaml_path: Absolute path to YAML config file.
         properties_path: Absolute path to properties file.
     """
-    global _raw, settings
+    global _raw, _yaml_path, _properties_path, settings
+    if yaml_path:
+        _yaml_path = Path(yaml_path)
+    if properties_path:
+        _properties_path = Path(properties_path)
     _raw = load_config(
         config_dir=_CONFIG_DIR,
         yaml_path=yaml_path,
