@@ -77,6 +77,64 @@ class SudoGrantRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# SSH Key
+# ---------------------------------------------------------------------------
+
+
+class SshKeyResult(BaseModel):
+    """Result of SSH key generation."""
+
+    success: bool
+    message: str
+    private_key_path: str = ""
+    public_key_path: str = ""
+
+
+class SshKeyContent(BaseModel):
+    """SSH key file contents."""
+
+    username: str
+    private_key: str = Field("", description="id_rsa content")
+    public_key: str = Field("", description="id_rsa.pub content")
+
+
+class SshKeyGenRequest(BaseModel):
+    """Request to generate SSH keys for a user."""
+
+    username: str = Field(..., description="Username")
+    key_type: str = Field("rsa", description="Key type (rsa, ed25519, ecdsa)")
+    bits: int = Field(4096, description="Key size in bits (for RSA)")
+    comment: str = Field("", description="Key comment")
+
+
+class SshKeyDeleteRequest(BaseModel):
+    """Request to delete SSH keys for a user."""
+
+    username: str = Field(..., description="Username")
+
+
+class AuthorizedKeysContent(BaseModel):
+    """Content of authorized_keys file."""
+
+    username: str
+    content: str
+    key_count: int = 0
+
+
+class AuthorizedKeyAddRequest(BaseModel):
+    """Request to add a key to authorized_keys."""
+
+    username: str = Field(..., description="Username")
+    public_key: str = Field(..., description="Public key string to add")
+
+
+class PasswordlessLoginRequest(BaseModel):
+    """Request to configure passwordless login for a user."""
+
+    username: str = Field(..., description="Username")
+
+
+# ---------------------------------------------------------------------------
 # Group
 # ---------------------------------------------------------------------------
 

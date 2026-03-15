@@ -1,16 +1,21 @@
-"""User management service - users, groups, sudo, backup."""
+"""User management service - users, groups, sudo, SSH keys, backup."""
 
 import asyncio
 import logging
+import os
+import shutil
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
 from app.core.config import settings
 from app.usermgr.schemas import (
+    AuthorizedKeysContent,
     BackupResult,
     GroupInfo,
     OperationResult,
+    SshKeyContent,
+    SshKeyResult,
     UserDetail,
     UserInfo,
 )
@@ -99,6 +104,24 @@ def _user_groups(username: str) -> list[str]:
         if info and username in info.members:
             groups.append(info.groupname)
     return groups
+
+
+def _get_user_home(username: str) -> Path | None:
+    """Get the home directory for a user from /etc/passwd."""
+    users = list_users()
+    user = next((u for u in users if u.username == username), None)
+    if user is None:
+        return None
+    return Path(user.home)
+
+
+def _get_user_uid_gid(username: str) -> tuple[int, int] | None:
+    """Get (uid, gid) for a user from /etc/passwd."""
+    users = list_users()
+    user = next((u for u in users if u.username == username), None)
+    if user is None:
+        return None
+    return user.uid, user.gid
 
 
 def _has_sudo(username: str) -> bool:
@@ -373,3 +396,233 @@ async def delete_user(username: str, remove_home: bool = False) -> OperationResu
         success=True,
         message=f"User {username} deleted successfully",
     )
+
+
+# ---------------------------------------------------------------------------
+# 8. SSH key generation
+# ---------------------------------------------------------------------------
+
+
+async def generate_ssh_key(
+    username: str,
+    key_type: str = "rsa",
+    bits: int = 4096,
+    comment: str = "",
+) -> SshKeyResult:
+    """Generate SSH key pair for a user via ssh-keygen."""
+    home = _get_user_home(username)
+    if home is None:
+        return SshKeyResult(
+            success=False,
+            message=f"User not found: {username}",
+        )
+
+    ids = _get_user_uid_gid(username)
+    if ids is None:
+        return SshKeyResult(success=False, message=f"User not found: {username}")
+    uid, gid = ids
+
+    ssh_dir = home / ".ssh"
+    key_file = ssh_dir / "id_rsa"
+
+    if key_file.is_file():
+        return SshKeyResult(
+            success=False,
+            message=f"SSH key already exists: {key_file}",
+            private_key_path=str(key_file),
+            public_key_path=str(key_file) + ".pub",
+        )
+
+    # Ensure .ssh directory exists with correct permissions
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    ssh_dir.chmod(0o700)
+    os.chown(ssh_dir, uid, gid)
+
+    # Build ssh-keygen command
+    key_comment = comment or f"{username}@{os.uname().nodename}"
+    cmd = f'ssh-keygen -t {key_type} -b {bits} -f {key_file} -N "" -C "{key_comment}"'
+
+    exit_code, stdout, stderr = await _run(cmd)
+    if exit_code != 0:
+        return SshKeyResult(
+            success=False,
+            message=f"ssh-keygen failed: {stderr}",
+        )
+
+    # Fix ownership
+    for f in [key_file, Path(str(key_file) + ".pub")]:
+        if f.is_file():
+            os.chown(f, uid, gid)
+
+    logger.info("Generated SSH key for user %s: %s", username, key_file)
+    return SshKeyResult(
+        success=True,
+        message=f"SSH key generated for {username}",
+        private_key_path=str(key_file),
+        public_key_path=str(key_file) + ".pub",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 9. Read SSH key files
+# ---------------------------------------------------------------------------
+
+
+def read_ssh_keys(username: str) -> SshKeyContent:
+    """Read id_rsa and id_rsa.pub for a user."""
+    home = _get_user_home(username)
+    if home is None:
+        raise FileNotFoundError(f"User not found: {username}")
+
+    ssh_dir = home / ".ssh"
+    private_key_file = ssh_dir / "id_rsa"
+    public_key_file = ssh_dir / "id_rsa.pub"
+
+    private_key = ""
+    public_key = ""
+
+    if private_key_file.is_file():
+        private_key = private_key_file.read_text(encoding="utf-8")
+    if public_key_file.is_file():
+        public_key = public_key_file.read_text(encoding="utf-8")
+
+    if not private_key and not public_key:
+        raise FileNotFoundError(f"No SSH keys found for {username} in {ssh_dir}")
+
+    return SshKeyContent(
+        username=username,
+        private_key=private_key,
+        public_key=public_key,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. Delete SSH keys
+# ---------------------------------------------------------------------------
+
+
+def delete_ssh_keys(username: str) -> OperationResult:
+    """Delete the .ssh directory for a user."""
+    home = _get_user_home(username)
+    if home is None:
+        return OperationResult(success=False, message=f"User not found: {username}")
+
+    ssh_dir = home / ".ssh"
+    if not ssh_dir.is_dir():
+        return OperationResult(
+            success=False,
+            message=f"No .ssh directory found: {ssh_dir}",
+        )
+
+    try:
+        shutil.rmtree(ssh_dir)
+        logger.info("Deleted .ssh directory for user %s: %s", username, ssh_dir)
+        return OperationResult(
+            success=True,
+            message=f"Deleted {ssh_dir}",
+        )
+    except OSError as e:
+        return OperationResult(success=False, message=str(e))
+
+
+# ---------------------------------------------------------------------------
+# 11. Passwordless login
+# ---------------------------------------------------------------------------
+
+
+async def set_passwordless_login(username: str) -> OperationResult:
+    """Configure a user for passwordless login (empty password in /etc/shadow)."""
+    users = list_users()
+    if not any(u.username == username for u in users):
+        return OperationResult(success=False, message=f"User not found: {username}")
+
+    # passwd -d removes the password, allowing passwordless login
+    exit_code, stdout, stderr = await _run(f"passwd -d {username}")
+    if exit_code != 0:
+        return OperationResult(
+            success=False,
+            message=f"Failed to set passwordless login: {stderr}",
+        )
+
+    logger.info("Set passwordless login for user: %s", username)
+    return OperationResult(
+        success=True,
+        message=f"Passwordless login configured for {username}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 12. Read authorized_keys
+# ---------------------------------------------------------------------------
+
+
+def read_authorized_keys(username: str) -> AuthorizedKeysContent:
+    """Read authorized_keys file for a user."""
+    home = _get_user_home(username)
+    if home is None:
+        raise FileNotFoundError(f"User not found: {username}")
+
+    auth_keys_file = home / ".ssh" / "authorized_keys"
+    if not auth_keys_file.is_file():
+        raise FileNotFoundError(f"No authorized_keys found: {auth_keys_file}")
+
+    content = auth_keys_file.read_text(encoding="utf-8")
+    key_count = sum(1 for line in content.splitlines() if line.strip() and not line.startswith("#"))
+
+    return AuthorizedKeysContent(
+        username=username,
+        content=content,
+        key_count=key_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 13. Add to authorized_keys
+# ---------------------------------------------------------------------------
+
+
+def add_authorized_key(username: str, public_key: str) -> OperationResult:
+    """Add a public key to a user's authorized_keys file."""
+    home = _get_user_home(username)
+    if home is None:
+        return OperationResult(success=False, message=f"User not found: {username}")
+
+    ids = _get_user_uid_gid(username)
+    if ids is None:
+        return OperationResult(success=False, message=f"User not found: {username}")
+    uid, gid = ids
+
+    ssh_dir = home / ".ssh"
+    auth_keys_file = ssh_dir / "authorized_keys"
+
+    try:
+        # Ensure .ssh directory exists
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        ssh_dir.chmod(0o700)
+        os.chown(ssh_dir, uid, gid)
+
+        # Append key (ensure trailing newline)
+        key_line = public_key.strip() + "\n"
+
+        # Check for duplicate
+        if auth_keys_file.is_file():
+            existing = auth_keys_file.read_text(encoding="utf-8")
+            if public_key.strip() in existing:
+                return OperationResult(
+                    success=True,
+                    message="Public key already exists in authorized_keys",
+                )
+
+        with open(auth_keys_file, "a", encoding="utf-8") as f:
+            f.write(key_line)
+
+        auth_keys_file.chmod(0o600)
+        os.chown(auth_keys_file, uid, gid)
+
+        logger.info("Added authorized key for user %s", username)
+        return OperationResult(
+            success=True,
+            message=f"Public key added to {auth_keys_file}",
+        )
+    except OSError as e:
+        return OperationResult(success=False, message=str(e))

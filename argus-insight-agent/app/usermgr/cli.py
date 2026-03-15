@@ -12,6 +12,13 @@ Commands:
     users create <username> [options]     Create a new user
     users delete <username> [--remove-home]  Delete a user
 
+    ssh keygen <username>                 Generate SSH key pair
+    ssh read-key <username>               Read SSH key files (id_rsa, .pub)
+    ssh delete-key <username>             Delete .ssh directory
+    ssh passwordless <username>           Configure passwordless login
+    ssh read-authorized <username>        Read authorized_keys
+    ssh add-authorized <username> <key>   Add key to authorized_keys
+
     groups list                           List all groups
 """
 
@@ -96,6 +103,64 @@ def cmd_users_delete(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# SSH
+# ---------------------------------------------------------------------------
+
+
+def cmd_ssh_keygen(args: argparse.Namespace) -> None:
+    result = asyncio.run(
+        service.generate_ssh_key(
+            username=args.username,
+            key_type=args.type,
+            bits=args.bits,
+            comment=args.comment or "",
+        )
+    )
+    print(_to_json(result))
+    if not result.success:
+        sys.exit(1)
+
+
+def cmd_ssh_read_key(args: argparse.Namespace) -> None:
+    try:
+        result = service.read_ssh_keys(args.username)
+        print(_to_json(result))
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_ssh_delete_key(args: argparse.Namespace) -> None:
+    result = service.delete_ssh_keys(args.username)
+    print(_to_json(result))
+    if not result.success:
+        sys.exit(1)
+
+
+def cmd_ssh_passwordless(args: argparse.Namespace) -> None:
+    result = asyncio.run(service.set_passwordless_login(args.username))
+    print(_to_json(result))
+    if not result.success:
+        sys.exit(1)
+
+
+def cmd_ssh_read_authorized(args: argparse.Namespace) -> None:
+    try:
+        result = service.read_authorized_keys(args.username)
+        print(_to_json(result))
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_ssh_add_authorized(args: argparse.Namespace) -> None:
+    result = service.add_authorized_key(args.username, args.key)
+    print(_to_json(result))
+    if not result.success:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
 
@@ -145,6 +210,32 @@ def build_parser() -> argparse.ArgumentParser:
     delete_p.add_argument("username", help="Username to delete")
     delete_p.add_argument("-r", "--remove-home", action="store_true", help="Remove home directory")
 
+    # --- ssh ---
+    ssh_parser = sub.add_parser("ssh", help="SSH key and access management")
+    ssh_sub = ssh_parser.add_subparsers(dest="action", required=True)
+
+    keygen_p = ssh_sub.add_parser("keygen", help="Generate SSH key pair")
+    keygen_p.add_argument("username", help="Username")
+    keygen_p.add_argument("-t", "--type", default="rsa", help="Key type (rsa, ed25519, ecdsa)")
+    keygen_p.add_argument("-b", "--bits", type=int, default=4096, help="Key size in bits")
+    keygen_p.add_argument("-c", "--comment", help="Key comment")
+
+    read_key_p = ssh_sub.add_parser("read-key", help="Read SSH key files")
+    read_key_p.add_argument("username", help="Username")
+
+    del_key_p = ssh_sub.add_parser("delete-key", help="Delete .ssh directory")
+    del_key_p.add_argument("username", help="Username")
+
+    pwless_p = ssh_sub.add_parser("passwordless", help="Configure passwordless login")
+    pwless_p.add_argument("username", help="Username")
+
+    read_auth_p = ssh_sub.add_parser("read-authorized", help="Read authorized_keys")
+    read_auth_p.add_argument("username", help="Username")
+
+    add_auth_p = ssh_sub.add_parser("add-authorized", help="Add key to authorized_keys")
+    add_auth_p.add_argument("username", help="Username")
+    add_auth_p.add_argument("key", help="Public key string")
+
     # --- groups ---
     groups_parser = sub.add_parser("groups", help="Group management")
     groups_sub = groups_parser.add_subparsers(dest="action", required=True)
@@ -161,6 +252,12 @@ _DISPATCH = {
     ("users", "info"): cmd_users_info,
     ("users", "create"): cmd_users_create,
     ("users", "delete"): cmd_users_delete,
+    ("ssh", "keygen"): cmd_ssh_keygen,
+    ("ssh", "read-key"): cmd_ssh_read_key,
+    ("ssh", "delete-key"): cmd_ssh_delete_key,
+    ("ssh", "passwordless"): cmd_ssh_passwordless,
+    ("ssh", "read-authorized"): cmd_ssh_read_authorized,
+    ("ssh", "add-authorized"): cmd_ssh_add_authorized,
     ("groups", "list"): cmd_groups_list,
 }
 

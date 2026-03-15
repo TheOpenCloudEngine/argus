@@ -1,4 +1,4 @@
-"""Tests for usermgr service - users, groups, sudo, backup."""
+"""Tests for usermgr service - users, groups, sudo, SSH keys, backup."""
 
 import zipfile
 from unittest.mock import AsyncMock, patch
@@ -11,12 +11,20 @@ from app.usermgr import service
 # Fixtures
 # ---------------------------------------------------------------------------
 
-SAMPLE_PASSWD = """\
-root:x:0:0:root:/root:/bin/bash
-daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
-alice:x:1000:1000:Alice Kim:/home/alice:/bin/bash
-bob:x:1001:1001:Bob Lee:/home/bob:/bin/zsh
-"""
+
+def _sample_passwd(tmp_path):
+    """Generate sample /etc/passwd with tmp_path-based home directories."""
+    alice_home = tmp_path / "home" / "alice"
+    bob_home = tmp_path / "home" / "bob"
+    alice_home.mkdir(parents=True, exist_ok=True)
+    bob_home.mkdir(parents=True, exist_ok=True)
+    return (
+        f"root:x:0:0:root:/root:/bin/bash\n"
+        f"daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n"
+        f"alice:x:1000:1000:Alice Kim:{alice_home}:/bin/bash\n"
+        f"bob:x:1001:1001:Bob Lee:{bob_home}:/bin/zsh\n"
+    )
+
 
 SAMPLE_GROUP = """\
 root:x:0:
@@ -32,7 +40,7 @@ developers:x:2000:alice,bob
 @pytest.fixture
 def passwd_file(tmp_path):
     f = tmp_path / "passwd"
-    f.write_text(SAMPLE_PASSWD)
+    f.write_text(_sample_passwd(tmp_path))
     return f
 
 
@@ -298,3 +306,185 @@ async def test_delete_user_with_remove_home():
     assert result.success is True
     cmd = mock_run.call_args[0][0]
     assert "-r" in cmd
+
+
+# ---------------------------------------------------------------------------
+# SSH key generation
+# ---------------------------------------------------------------------------
+
+
+async def test_generate_ssh_key(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    with patch.object(service, "_run", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = (0, "", "")
+        # ssh-keygen is mocked, so we create the files manually to simulate
+        ssh_dir = alice_home / ".ssh"
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        result = await service.generate_ssh_key("alice")
+
+    assert result.success is True
+    assert "alice" in result.message
+
+
+async def test_generate_ssh_key_already_exists(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    ssh_dir = alice_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    (ssh_dir / "id_rsa").write_text("existing key")
+
+    result = await service.generate_ssh_key("alice")
+    assert result.success is False
+    assert "already exists" in result.message
+
+
+async def test_generate_ssh_key_user_not_found():
+    result = await service.generate_ssh_key("nonexistent")
+    assert result.success is False
+    assert "not found" in result.message.lower()
+
+
+# ---------------------------------------------------------------------------
+# Read SSH keys
+# ---------------------------------------------------------------------------
+
+
+def test_read_ssh_keys(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    ssh_dir = alice_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    (ssh_dir / "id_rsa").write_text("PRIVATE_KEY_CONTENT")
+    (ssh_dir / "id_rsa.pub").write_text("ssh-rsa AAAA... alice@host")
+
+    result = service.read_ssh_keys("alice")
+    assert result.username == "alice"
+    assert "PRIVATE_KEY_CONTENT" in result.private_key
+    assert "ssh-rsa" in result.public_key
+
+
+def test_read_ssh_keys_no_keys(tmp_path):
+    # alice home exists but no .ssh/id_rsa
+    with pytest.raises(FileNotFoundError):
+        service.read_ssh_keys("alice")
+
+
+def test_read_ssh_keys_user_not_found():
+    with pytest.raises(FileNotFoundError):
+        service.read_ssh_keys("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# Delete SSH keys
+# ---------------------------------------------------------------------------
+
+
+def test_delete_ssh_keys(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    ssh_dir = alice_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    (ssh_dir / "id_rsa").write_text("key")
+    (ssh_dir / "id_rsa.pub").write_text("pub")
+
+    result = service.delete_ssh_keys("alice")
+    assert result.success is True
+    assert not ssh_dir.exists()
+
+
+def test_delete_ssh_keys_no_ssh_dir():
+    result = service.delete_ssh_keys("alice")
+    assert result.success is False
+    assert ".ssh" in result.message
+
+
+def test_delete_ssh_keys_user_not_found():
+    result = service.delete_ssh_keys("nonexistent")
+    assert result.success is False
+
+
+# ---------------------------------------------------------------------------
+# Passwordless login
+# ---------------------------------------------------------------------------
+
+
+async def test_set_passwordless_login():
+    with patch.object(service, "_run", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = (0, "", "")
+        result = await service.set_passwordless_login("alice")
+
+    assert result.success is True
+    cmd = mock_run.call_args[0][0]
+    assert "passwd -d alice" in cmd
+
+
+async def test_set_passwordless_login_user_not_found():
+    result = await service.set_passwordless_login("nonexistent")
+    assert result.success is False
+
+
+async def test_set_passwordless_login_fails():
+    with patch.object(service, "_run", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = (1, "", "passwd: Permission denied")
+        result = await service.set_passwordless_login("alice")
+
+    assert result.success is False
+
+
+# ---------------------------------------------------------------------------
+# Read authorized_keys
+# ---------------------------------------------------------------------------
+
+
+def test_read_authorized_keys(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    ssh_dir = alice_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    (ssh_dir / "authorized_keys").write_text(
+        "ssh-rsa AAAA1 alice@host1\nssh-rsa AAAA2 alice@host2\n"
+    )
+
+    result = service.read_authorized_keys("alice")
+    assert result.username == "alice"
+    assert result.key_count == 2
+    assert "AAAA1" in result.content
+
+
+def test_read_authorized_keys_not_found():
+    with pytest.raises(FileNotFoundError):
+        service.read_authorized_keys("alice")
+
+
+def test_read_authorized_keys_user_not_found():
+    with pytest.raises(FileNotFoundError):
+        service.read_authorized_keys("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# Add authorized key
+# ---------------------------------------------------------------------------
+
+
+def test_add_authorized_key(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+
+    with patch.object(service, "os") as mock_os:
+        mock_os.chown = lambda *a, **k: None
+        result = service.add_authorized_key("alice", "ssh-rsa AAAA_NEW alice@new")
+
+    auth_file = alice_home / ".ssh" / "authorized_keys"
+    assert result.success is True
+    assert "ssh-rsa AAAA_NEW" in auth_file.read_text()
+
+
+def test_add_authorized_key_duplicate(tmp_path):
+    alice_home = tmp_path / "home" / "alice"
+    ssh_dir = alice_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    (ssh_dir / "authorized_keys").write_text("ssh-rsa EXISTING alice@host\n")
+
+    result = service.add_authorized_key("alice", "ssh-rsa EXISTING alice@host")
+    assert result.success is True
+    assert "already exists" in result.message
+
+
+def test_add_authorized_key_user_not_found():
+    result = service.add_authorized_key("nonexistent", "ssh-rsa key")
+    assert result.success is False
