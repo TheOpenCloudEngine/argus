@@ -33,6 +33,7 @@ argus-insight-host = "app.hostmgr.cli:main"
 argus-insight-user = "app.usermgr.cli:main"
 argus-insight-cert = "app.certmgr.cli:main"
 argus-insight-file = "app.filemgr.cli:main"
+argus-insight-process = "app.processmgr.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
