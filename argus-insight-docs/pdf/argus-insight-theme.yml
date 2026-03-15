@@ -3,6 +3,15 @@
 
 extends: default
 
+font:
+  catalog:
+    merge: true
+    Noto Sans KR:
+      normal: fonts/NotoSansKR-Regular.ttf
+      bold: fonts/NotoSansKR-Bold.ttf
+      italic: fonts/NotoSansKR-Regular.ttf
+      bold_italic: fonts/NotoSansKR-Bold.ttf
+
 page:
   size: A4
   margin: [30mm, 25mm, 30mm, 25mm]
