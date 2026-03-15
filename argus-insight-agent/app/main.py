@@ -154,16 +154,19 @@ def run() -> None:
     else:
         yaml_exists = settings.config_yaml_path.is_file()
         props_exists = settings.config_properties_path.is_file()
-        if not yaml_exists and not props_exists:
+        server_props_exists = settings.config_server_properties_path.is_file()
+        if not yaml_exists and not props_exists and not server_props_exists:
             parser.print_help()
             print()
             print(
                 f"Error: No configuration files found at default location:\n"
                 f"  - {settings.config_yaml_path}\n"
                 f"  - {settings.config_properties_path}\n"
+                f"  - {settings.config_server_properties_path}\n"
                 f"\n"
-                f"Specify config file paths with --config-yaml and/or "
-                f"--config-properties options."
+                f"Specify config file paths with --config-yaml, "
+                f"--config-properties, and/or "
+                f"--config-server-properties options."
             )
             sys.exit(1)
 
