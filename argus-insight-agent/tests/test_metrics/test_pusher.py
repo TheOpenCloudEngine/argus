@@ -15,7 +15,7 @@ class TestPushMetrics:
 
     @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
-    @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
+    @patch("app.metrics.pusher._get_hostname", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
     def test_success_returns_true(self, mock_settings, mock_fqdn, mock_collect, mock_push):
         mock_settings.prometheus_enable_push = True
@@ -34,7 +34,7 @@ class TestPushMetrics:
 
     @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
-    @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
+    @patch("app.metrics.pusher._get_hostname", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
     def test_failure_returns_false(self, mock_settings, mock_fqdn, mock_collect, mock_push):
         mock_settings.prometheus_enable_push = True
@@ -47,7 +47,7 @@ class TestPushMetrics:
 
     @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
-    @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
+    @patch("app.metrics.pusher._get_hostname", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
     def test_uses_fqdn_as_instance(self, mock_settings, mock_fqdn, mock_collect, mock_push):
         mock_settings.prometheus_enable_push = True
@@ -63,7 +63,7 @@ class TestPushMetrics:
 
     @patch("app.metrics.pusher.pushadd_to_gateway")
     @patch("app.metrics.pusher.collect_metrics")
-    @patch("app.metrics.pusher._get_fqdn", return_value="host1.example.com")
+    @patch("app.metrics.pusher._get_hostname", return_value="host1.example.com")
     @patch("app.metrics.pusher.settings")
     def test_job_name(self, mock_settings, mock_fqdn, mock_collect, mock_push):
         mock_settings.prometheus_enable_push = True

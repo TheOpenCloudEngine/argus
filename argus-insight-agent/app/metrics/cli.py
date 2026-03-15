@@ -8,7 +8,7 @@ import sys
 
 from prometheus_client import generate_latest
 
-from app.metrics.collector import _get_fqdn, collect_metrics
+from app.metrics.collector import _get_hostname, collect_metrics
 from app.metrics.pusher import JOB_NAME
 
 
@@ -23,7 +23,7 @@ def _push_metrics(registry, host: str, port: int) -> bool:
     from prometheus_client import pushadd_to_gateway
 
     gateway = f"{host}:{port}"
-    instance = _get_fqdn()
+    instance = _get_hostname()
 
     try:
         pushadd_to_gateway(
