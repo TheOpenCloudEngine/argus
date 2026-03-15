@@ -15,7 +15,7 @@
 
 ## 운영 환경
 
-- systemd 서비스로 동작 (`argus-agent.service`)
+- systemd 서비스로 동작 (`argus-insight-agent.service`)
 - **root 권한**으로 실행 (서버 관리 작업에 필요)
 - 기본 포트: **8600**
 - 디렉토리 구조:
@@ -23,7 +23,8 @@
   - `/var/log/argus-insight-agent/` - 로그 파일 (`agent.log`)
   - `/var/lib/argus-insight-agent/` - 데이터 디렉토리
   - `/opt/argus-insight/agent/backups/` - 백업 디렉토리 (yum repo 백업 등)
-  - `/usr/lib/argus-agent/` - 애플리케이션 코드
+  - `/opt/argus-insight-agent/` - 애플리케이션 코드
+  - `/opt/argus-insight-agent/bin/argus-insight-agent` - 엔트리포인트
 - 장애 시 자동 재시작 (`Restart=on-failure`, 5초 간격)
 
 ## 기술 스택
@@ -102,8 +103,9 @@ argus-insight-agent/
 │   │   ├── config.yml         # YAML 설정 파일 (${var} 변수 사용)
 │   │   └── config.properties  # Java-style 변수 정의 파일
 │   ├── debian/              # Debian 패키지 빌드 설정
-│   └── systemd/             # argus-agent.service 유닛 파일
-├── scripts/argus-agent      # 시스템 설치 시 엔트리포인트 (/usr/bin/argus-agent)
+│   └── systemd/             # argus-insight-agent.service 유닛 파일
+├── requirements.txt         # Python 의존성 (pip install -r)
+├── scripts/argus-insight-agent  # 시스템 설치 시 엔트리포인트 (/opt/argus-insight-agent/bin/)
 ├── pyproject.toml           # 프로젝트 설정 및 의존성
 └── Makefile                 # 빌드/실행/테스트 명령
 ```
