@@ -66,6 +66,11 @@ class Settings:
         # Config
         self.config_dir: Path = _CONFIG_DIR
 
+        # Backup
+        self.backup_dir: Path = Path(
+            _get("backup", "dir", "backups")
+        )
+
         # Command execution
         self.command_timeout: int = int(_get("command", "timeout", 300))
         self.command_max_output: int = int(

@@ -8,6 +8,7 @@
 - **서버 자원 모니터링** (`monitor`): CPU, 메모리, 디스크, 네트워크 상태를 REST 및 WebSocket 실시간 스트리밍으로 제공
 - **애플리케이션 설치 및 관리** (`package`): dnf/yum/apt 패키지 매니저 자동 감지 후 패키지 설치, 삭제, 업데이트 수행
 - **원격 터미널** (`terminal`): PTY 기반 WebSocket 터미널 세션으로 서버에 직접 접속하는 것과 동일한 경험 제공
+- **Yum 리포지토리 및 패키지 관리** (`yum`): yum repo 파일 CRUD, 백업, 패키지 설치/삭제/업그레이드, 패키지 정보 조회. API와 CLI 모두 지원
 
 ## 운영 환경
 
@@ -18,6 +19,7 @@
   - `/etc/argus-insight-agent/` - 설정 파일 (`config.yml`, `config.properties`)
   - `/var/log/argus-insight-agent/` - 로그 파일 (`agent.log`)
   - `/var/lib/argus-insight-agent/` - 데이터 디렉토리
+  - `/opt/argus-insight/agent/backups/` - 백업 디렉토리 (yum repo 백업 등)
   - `/usr/lib/argus-agent/` - 애플리케이션 코드
 - 장애 시 자동 재시작 (`Restart=on-failure`, 5초 간격)
 
@@ -58,16 +60,22 @@ argus-insight-agent/
 │   │   ├── router.py        # POST /api/v1/package/manage, GET /api/v1/package/list
 │   │   ├── schemas.py       # PackageRequest, PackageInfo, PackageActionResult
 │   │   └── service.py       # dnf/yum/apt 자동 감지 및 패키지 관리
-│   └── terminal/            # 원격 터미널 모듈
-│       ├── router.py        # WS /api/v1/terminal/ws
-│       └── service.py       # TerminalManager: PTY fork, 세션 관리, resize 지원
+│   ├── terminal/            # 원격 터미널 모듈
+│   │   ├── router.py        # WS /api/v1/terminal/ws
+│   │   └── service.py       # TerminalManager: PTY fork, 세션 관리, resize 지원
+│   └── yum/                 # Yum 리포지토리 & 패키지 관리 모듈
+│       ├── router.py        # /api/v1/yum/* API 엔드포인트
+│       ├── schemas.py       # Repo/Package 요청/응답 모델
+│       ├── service.py       # 리포지토리 CRUD, 백업, 패키지 관리
+│       └── cli.py           # 커맨드라인 인터페이스 (argus-yum)
 ├── tests/
 │   ├── conftest.py          # 공통 fixtures (httpx AsyncClient)
 │   ├── test_config_loader.py # config loader 테스트
 │   ├── test_command/        # 명령 실행 테스트
 │   ├── test_monitor/        # 모니터링 테스트
 │   ├── test_package/        # 패키지 관리 테스트 (미작성)
-│   └── test_terminal/       # 터미널 테스트 (미작성)
+│   ├── test_terminal/       # 터미널 테스트 (미작성)
+│   └── test_yum/            # yum 모듈 테스트
 ├── packaging/
 │   ├── config/
 │   │   ├── config.yml         # YAML 설정 파일 (${var} 변수 사용)
@@ -154,6 +162,7 @@ command:
 | logging | filename | log.filename | agent.log | 로그 파일명 |
 | logging | rolling.type | log.rolling.type | daily | 롤링 방식 (일 단위) |
 | logging | rolling.backup_count | log.rolling.backup_count | 30 | 롤링 파일 보관 개수 |
+| backup | dir | backup.dir | /opt/argus-insight/agent/backups (패키지), backups (직접 실행) | 백업 디렉토리 |
 | data | dir | data.dir | /var/lib/argus-insight-agent | 데이터 디렉토리 |
 | command | timeout | command.timeout | 300 | 명령 실행 타임아웃 (초) |
 | command | max_output | command.max_output | 1048576 | 명령 출력 최대 크기 (1MB) |
@@ -187,6 +196,19 @@ make deb            # dpkg-buildpackage -us -uc -b
 
 # 빌드 아티팩트 정리
 make clean
+
+# Yum CLI (커맨드라인에서 직접 실행)
+python -m app.yum.cli repo list
+python -m app.yum.cli repo read base.repo
+python -m app.yum.cli repo create myrepo.repo /path/to/content.repo
+python -m app.yum.cli repo backup
+python -m app.yum.cli package list
+python -m app.yum.cli package search httpd
+python -m app.yum.cli package install nginx
+python -m app.yum.cli package remove nginx
+python -m app.yum.cli package upgrade nginx
+python -m app.yum.cli package info nginx
+python -m app.yum.cli package files nginx
 ```
 
 ## API 엔드포인트
@@ -200,6 +222,16 @@ make clean
 | POST      | /api/v1/package/manage      | 패키지 설치/삭제/업데이트 (dnf/yum/apt 자동 감지)    |
 | GET       | /api/v1/package/list        | 설치된 패키지 전체 목록 조회                        |
 | WebSocket | /api/v1/terminal/ws         | PTY 기반 원격 터미널 세션 (resize 지원)            |
+| GET       | /api/v1/yum/repo             | yum repo 파일 목록 조회                          |
+| POST      | /api/v1/yum/repo             | yum repo 파일 생성                              |
+| PUT       | /api/v1/yum/repo             | yum repo 파일 수정                              |
+| GET       | /api/v1/yum/repo/{filename}  | yum repo 파일 내용 읽기                          |
+| POST      | /api/v1/yum/repo/backup      | yum repo 파일 전체 백업 (zip)                     |
+| POST      | /api/v1/yum/package          | yum 패키지 설치/삭제/업그레이드                     |
+| GET       | /api/v1/yum/package          | 설치된 RPM 패키지 전체 목록                         |
+| GET       | /api/v1/yum/package/search   | 설치된 패키지 검색                                 |
+| GET       | /api/v1/yum/package/{name}/info  | 패키지 상세 메타데이터 조회                       |
+| GET       | /api/v1/yum/package/{name}/files | 패키지 소유 파일 목록                            |
 
 ## 로깅
 
