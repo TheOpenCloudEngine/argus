@@ -1,0 +1,250 @@
+"use client"
+
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  File,
+  FileArchive,
+  FileAudio,
+  FileCode,
+  FileImage,
+  FileText,
+  FileVideo,
+  Folder,
+  FileSpreadsheet,
+  FileType,
+} from "lucide-react"
+
+import { cn } from "@workspace/ui/lib/utils"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+
+import type { StorageEntry, SortConfig, SortDirection } from "./types"
+import { formatBytes, formatDate, getFileCategory } from "./utils"
+
+type BrowserTableProps = {
+  entries: StorageEntry[]
+  selectedKeys: Set<string>
+  onSelectionChange: (keys: Set<string>) => void
+  onFolderOpen: (prefix: string) => void
+  sort: SortConfig
+  onSortChange: (sort: SortConfig) => void
+  isLoading: boolean
+}
+
+const fileIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  image: FileImage,
+  video: FileVideo,
+  audio: FileAudio,
+  archive: FileArchive,
+  code: FileCode,
+  document: FileText,
+  text: FileType,
+  data: FileSpreadsheet,
+  generic: File,
+}
+
+function FileIcon({ name, className }: { name: string; className?: string }) {
+  const category = getFileCategory(name)
+  const Icon = fileIcons[category] ?? File
+  return <Icon className={className} />
+}
+
+function SortButton({
+  column,
+  label,
+  currentSort,
+  onSortChange,
+  className,
+}: {
+  column: SortConfig["column"]
+  label: string
+  currentSort: SortConfig
+  onSortChange: (sort: SortConfig) => void
+  className?: string
+}) {
+  const isActive = currentSort.column === column
+  const nextDirection: SortDirection =
+    isActive && currentSort.direction === "asc" ? "desc" : "asc"
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSortChange({ column, direction: nextDirection })}
+      className={cn(
+        "flex items-center gap-1 hover:text-foreground transition-colors",
+        isActive ? "text-foreground" : "text-muted-foreground",
+        className,
+      )}
+    >
+      {label}
+      {isActive ? (
+        currentSort.direction === "asc" ? (
+          <ArrowUp className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3.5 w-3.5" />
+      )}
+    </button>
+  )
+}
+
+export function BrowserTable({
+  entries,
+  selectedKeys,
+  onSelectionChange,
+  onFolderOpen,
+  sort,
+  onSortChange,
+  isLoading,
+}: BrowserTableProps) {
+  const allSelectableKeys = entries.map((e) => e.key)
+  const allSelected =
+    allSelectableKeys.length > 0 &&
+    allSelectableKeys.every((k) => selectedKeys.has(k))
+  const someSelected =
+    !allSelected && allSelectableKeys.some((k) => selectedKeys.has(k))
+
+  function toggleAll() {
+    if (allSelected) {
+      onSelectionChange(new Set())
+    } else {
+      onSelectionChange(new Set(allSelectableKeys))
+    }
+  }
+
+  function toggleOne(key: string) {
+    const next = new Set(selectedKeys)
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    onSelectionChange(next)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          <span className="text-sm">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+          <Folder className="h-12 w-12 opacity-30" />
+          <span className="text-sm">This folder is empty</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 overflow-auto border rounded-md">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm border-b">
+          <tr>
+            <th className="w-10 px-3 py-2">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={toggleAll}
+                aria-label="Select all"
+              />
+            </th>
+            <th className="text-left px-3 py-2 font-medium">
+              <SortButton
+                column="name"
+                label="Name"
+                currentSort={sort}
+                onSortChange={onSortChange}
+              />
+            </th>
+            <th className="text-right px-3 py-2 font-medium w-28">
+              <SortButton
+                column="size"
+                label="Size"
+                currentSort={sort}
+                onSortChange={onSortChange}
+                className="justify-end"
+              />
+            </th>
+            <th className="text-left px-3 py-2 font-medium w-48">
+              <SortButton
+                column="lastModified"
+                label="Last Modified"
+                currentSort={sort}
+                onSortChange={onSortChange}
+              />
+            </th>
+            <th className="text-left px-3 py-2 font-medium w-32">
+              Storage Class
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {entries.map((entry) => {
+            const isFolder = entry.kind === "folder"
+            const isSelected = selectedKeys.has(entry.key)
+
+            return (
+              <tr
+                key={entry.key}
+                className={cn(
+                  "hover:bg-muted/50 transition-colors",
+                  isSelected && "bg-muted/40",
+                )}
+              >
+                <td className="px-3 py-1.5">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleOne(entry.key)}
+                    aria-label={`Select ${entry.name}`}
+                  />
+                </td>
+                <td className="px-3 py-1.5">
+                  {isFolder ? (
+                    <button
+                      type="button"
+                      onClick={() => onFolderOpen(entry.key)}
+                      className="flex items-center gap-2 hover:text-primary transition-colors group"
+                    >
+                      <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                      <span className="group-hover:underline truncate">
+                        {entry.name}
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <FileIcon
+                        name={entry.name}
+                        className="h-4 w-4 text-muted-foreground shrink-0"
+                      />
+                      <span className="truncate">{entry.name}</span>
+                    </div>
+                  )}
+                </td>
+                <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                  {isFolder ? "-" : formatBytes(entry.size)}
+                </td>
+                <td className="px-3 py-1.5 text-muted-foreground">
+                  {isFolder ? "-" : formatDate(entry.lastModified)}
+                </td>
+                <td className="px-3 py-1.5 text-muted-foreground">
+                  {isFolder ? "-" : (entry.storageClass ?? "STANDARD")}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
