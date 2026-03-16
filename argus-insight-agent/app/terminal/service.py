@@ -104,7 +104,14 @@ class TerminalManager:
             os.dup2(fd, 2)
             if fd > 2:
                 os.close(fd)
-            os.execvp(settings.terminal_shell, [settings.terminal_shell])
+            # Change to the configured home directory so the shell
+            # doesn't start in the agent's working directory.
+            try:
+                os.chdir(settings.terminal_home_dir)
+            except OSError:
+                os.chdir("/")
+            os.environ["HOME"] = settings.terminal_home_dir
+            os.execvp(settings.terminal_shell, [settings.terminal_shell, "-l"])
         else:
             # Parent process
             os.close(fd)

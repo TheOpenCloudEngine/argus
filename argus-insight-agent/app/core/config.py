@@ -90,6 +90,7 @@ class Settings:
         # Terminal
         self.terminal_shell: str = _get("terminal", "shell", os.environ.get("SHELL", "/bin/bash"))
         self.terminal_max_sessions: int = int(_get("terminal", "max_sessions", 10))
+        self.terminal_home_dir: str = _get("terminal", "home_dir", "/root")
 
         # Certificate
         self.cert_days: int = int(_get("certificate", "days", 825))
