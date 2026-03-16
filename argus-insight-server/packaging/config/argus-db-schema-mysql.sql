@@ -77,3 +77,16 @@ CREATE TABLE IF NOT EXISTS argus_users (
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access');
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('User', 'Standard user with limited access');
+
+-- Seed default users (password: password123)
+INSERT IGNORE INTO argus_users (username, email, first_name, last_name, phone_number, password_hash, status, role_id) VALUES
+('admin',       'admin@argus.io',       'Jaeho',    'Kim',  '010-1234-5678', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   1),
+('sjpark',      'sjpark@argus.io',      'Sungjin',  'Park', '010-2345-6789', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   1),
+('mhlee',       'mhlee@argus.io',       'Minhye',   'Lee',  '010-3456-7890', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('ywchoi',      'ywchoi@argus.io',      'Youngwoo', 'Choi', '010-4567-8901', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('jhhan',       'jhhan@argus.io',       'Jihoon',   'Han',  '010-5678-9012', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('eunseo.jung', 'eunseo.jung@argus.io', 'Eunseo',   'Jung', '010-6789-0123', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('dwkim',       'dwkim@argus.io',       'Dongwook', 'Kim',  '010-7890-1234', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'inactive', 2),
+('hyson',       'hyson@argus.io',       'Hayoung',  'Son',  NULL,            '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('jsyang',      'jsyang@argus.io',      'Jisoo',    'Yang', '010-8901-2345', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'active',   2),
+('twyoon',      'twyoon@argus.io',      'Taewon',   'Yoon', '010-9012-3456', '$2b$12$LJ3m4ys3Lk0TSwHjGBOuBe5E8fGjS1xtRyvAYq5J8K3gV2CQKZW6K', 'inactive', 2);
