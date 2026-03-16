@@ -26,7 +26,7 @@ export function DashboardHeader({ title }: DashboardHeaderProps) {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="검색..."
+            placeholder="Search..."
             className="pl-8 w-64 h-9 text-sm"
           />
         </div>
