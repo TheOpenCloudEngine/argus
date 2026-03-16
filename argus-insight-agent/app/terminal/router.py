@@ -68,12 +68,18 @@ async def terminal_ws(websocket: WebSocket) -> None:
                             cols=payload["cols"],
                         )
                         continue
-                except (json.JSONDecodeError, KeyError):
+                except (json.JSONDecodeError, KeyError, OSError):
                     pass
-                terminal_manager.write_input(session_id, text.encode())
+                try:
+                    terminal_manager.write_input(session_id, text.encode())
+                except (KeyError, OSError):
+                    break
 
             elif "bytes" in message:
-                terminal_manager.write_input(session_id, message["bytes"])
+                try:
+                    terminal_manager.write_input(session_id, message["bytes"])
+                except (KeyError, OSError):
+                    break
 
     except WebSocketDisconnect:
         logger.info("Terminal WebSocket disconnected: %s", session_id)

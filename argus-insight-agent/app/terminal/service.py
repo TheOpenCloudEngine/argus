@@ -64,9 +64,26 @@ class TerminalManager:
                 if s.idle_seconds > SESSION_IDLE_TIMEOUT
             ]
             for sid in stale:
-                logger.warning("Closing stale terminal session: %s (idle %.0fs)", sid,
-                               self._sessions[sid].idle_seconds)
+                logger.warning(
+                    "Closing stale terminal session: %s (idle %.0fs)",
+                    sid,
+                    self._sessions[sid].idle_seconds,
+                )
                 self.close_session(sid)
+            # Also reap any zombie child processes that were left behind.
+            self._reap_zombies()
+
+    @staticmethod
+    def _reap_zombies() -> None:
+        """Non-blocking reap of any finished child processes."""
+        while True:
+            try:
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+                if pid == 0:
+                    break
+                logger.debug("Reaped zombie child pid=%d", pid)
+            except ChildProcessError:
+                break
 
     def create_session(self, session_id: str) -> TerminalSession:
         """Create a new PTY-based terminal session."""
@@ -97,7 +114,13 @@ class TerminalManager:
                 fd=pid,
             )
             self._sessions[session_id] = session
-            logger.info("Terminal session created: %s (pid=%d)", session_id, child_pid)
+            logger.info(
+                "Terminal session created: %s (pid=%d, active=%d/%d)",
+                session_id,
+                child_pid,
+                len(self._sessions),
+                settings.terminal_max_sessions,
+            )
             return session
 
     async def read_output(self, session_id: str, size: int = 4096) -> bytes:
@@ -126,23 +149,58 @@ class TerminalManager:
         session.touch()
 
     def close_session(self, session_id: str) -> None:
-        """Close and clean up a terminal session."""
+        """Close and clean up a terminal session.
+
+        Order of operations is important:
+        1. Remove from dict first so new connections aren't blocked.
+        2. Close the PTY fd so any blocked os.read() in the executor unblocks.
+        3. Send SIGTERM / SIGKILL to the child.
+        4. Non-blocking waitpid to avoid freezing the asyncio event loop.
+        """
         session = self._sessions.pop(session_id, None)
         if session is None:
             return
 
         session.active = False
-        try:
-            os.kill(session.pid, signal.SIGTERM)
-            os.waitpid(session.pid, 0)
-        except (OSError, ChildProcessError):
-            pass
+
+        # 1) Close the PTY master fd first – this unblocks any pending
+        #    os.read() running in the thread-pool executor.
         try:
             os.close(session.fd)
         except OSError:
             pass
 
-        logger.info("Terminal session closed: %s", session_id)
+        # 2) Terminate the child process.
+        try:
+            os.kill(session.pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+        # 3) Non-blocking waitpid – do NOT use blocking waitpid(pid, 0)
+        #    because it freezes the asyncio event loop.
+        try:
+            pid, _ = os.waitpid(session.pid, os.WNOHANG)
+            if pid == 0:
+                # Child hasn't exited yet after SIGTERM; send SIGKILL.
+                try:
+                    os.kill(session.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                # Try once more (non-blocking). The reaper task will
+                # catch any remaining zombies periodically.
+                try:
+                    os.waitpid(session.pid, os.WNOHANG)
+                except (OSError, ChildProcessError):
+                    pass
+        except (OSError, ChildProcessError):
+            pass
+
+        logger.info(
+            "Terminal session closed: %s (pid=%d, remaining=%d)",
+            session_id,
+            session.pid,
+            len(self._sessions),
+        )
 
     def close_all(self) -> None:
         """Close all terminal sessions."""
