@@ -1,9 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Activity, Loader2 } from "lucide-react"
+import { Activity, Loader2, X } from "lucide-react"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -100,12 +101,13 @@ export function ServersTopDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-5xl p-0 overflow-hidden"
+        className="max-w-5xl p-0 overflow-hidden flex flex-col"
         style={{ maxHeight: "85vh" }}
+        showCloseButton={false}
       >
-        <div className="bg-zinc-950 text-zinc-100 font-mono text-xs leading-relaxed">
+        <div className="bg-zinc-950 text-zinc-100 font-mono text-xs leading-relaxed flex flex-col min-h-0 h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 pt-3 pb-1">
+          <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
             <DialogHeader className="p-0 space-y-0">
               <DialogTitle className="text-sm font-bold text-green-400 flex items-center gap-2">
                 <Activity className="h-4 w-4" />
@@ -115,6 +117,10 @@ export function ServersTopDialog({
                 {currentRow.ipAddress} · refreshing every 2s
               </DialogDescription>
             </DialogHeader>
+            <DialogClose className="text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-zinc-800">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
           </div>
 
           {loading && !data && (
@@ -129,7 +135,7 @@ export function ServersTopDialog({
           )}
 
           {data && (
-            <div className="px-4 pb-3 space-y-1">
+            <div className="px-4 pb-3 space-y-1 flex flex-col min-h-0 flex-1">
               {/* Uptime & Tasks */}
               <div className="text-zinc-300">
                 <span className="text-white">up {formatUptime(data.uptime_seconds as number)}</span>
@@ -198,11 +204,8 @@ export function ServersTopDialog({
               )}
 
               {/* Process table */}
-              <div className="border-t border-zinc-700 mt-1 pt-1">
-                <div
-                  className="overflow-auto"
-                  style={{ maxHeight: "calc(85vh - 260px)" }}
-                >
+              <div className="border-t border-zinc-700 mt-1 pt-1 flex-1 min-h-0 flex flex-col">
+                <div className="overflow-auto flex-1 min-h-0 pb-1">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="text-zinc-400 bg-zinc-900 sticky top-0">
