@@ -102,9 +102,17 @@ export const serversColumns: ColumnDef<Server>[] = [
     ),
     cell: ({ row }) => {
       const value = row.getValue("cpuUsage") as number | null
+      if (value == null) return <div className="text-sm text-center">-</div>
+      const color = value > 90 ? "bg-red-500" : "bg-green-500"
       return (
-        <div className="text-sm text-center">
-          {value != null ? `${value.toFixed(1)}%` : "-"}
+        <div className="flex items-center gap-2 min-w-24 px-2">
+          <div className="h-2 w-full rounded-full bg-muted">
+            <div
+              className={cn("h-full rounded-full", color)}
+              style={{ width: `${Math.min(value, 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground w-10 text-right">{value.toFixed(1)}%</span>
         </div>
       )
     },
@@ -117,9 +125,17 @@ export const serversColumns: ColumnDef<Server>[] = [
     ),
     cell: ({ row }) => {
       const value = row.getValue("memoryUsage") as number | null
+      if (value == null) return <div className="text-sm text-center">-</div>
+      const color = value > 90 ? "bg-red-500" : "bg-green-500"
       return (
-        <div className="text-sm text-center">
-          {value != null ? `${value.toFixed(1)}%` : "-"}
+        <div className="flex items-center gap-2 min-w-24 px-2">
+          <div className="h-2 w-full rounded-full bg-muted">
+            <div
+              className={cn("h-full rounded-full", color)}
+              style={{ width: `${Math.min(value, 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground w-10 text-right">{value.toFixed(1)}%</span>
         </div>
       )
     },
