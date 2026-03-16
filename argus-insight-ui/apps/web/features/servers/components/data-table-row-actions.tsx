@@ -68,7 +68,8 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
-            console.log("Terminal server:", row.original.hostname)
+            setCurrentRow(row.original)
+            setOpen("terminal")
           }}
         >
           Terminal

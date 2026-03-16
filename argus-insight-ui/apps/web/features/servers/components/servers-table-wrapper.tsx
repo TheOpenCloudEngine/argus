@@ -1,12 +1,13 @@
 "use client"
 
 import { ServersRegisterDialog } from "./servers-register-dialog"
+import { ServersTerminalDialog } from "./servers-terminal-dialog"
 import { ServersUnregisterDialog } from "./servers-unregister-dialog"
 import { ServersTable } from "./servers-table"
 import { useServers } from "./servers-provider"
 
 export function ServersTableWrapper() {
-  const { servers, isLoading, open, setOpen, currentRow, selectedServers } = useServers()
+  const { servers, isLoading, open, setOpen, currentRow, setCurrentRow, selectedServers } = useServers()
 
   return (
     <>
@@ -23,6 +24,17 @@ export function ServersTableWrapper() {
         currentRow={currentRow}
         selectedServers={selectedServers}
       />
+      {currentRow && (
+        <ServersTerminalDialog
+          key={`terminal-${currentRow.hostname}`}
+          open={open === "terminal"}
+          onOpenChange={(v) => {
+            setOpen(v ? "terminal" : null)
+            if (!v) setTimeout(() => setCurrentRow(null), 500)
+          }}
+          currentRow={currentRow}
+        />
+      )}
     </>
   )
 }
