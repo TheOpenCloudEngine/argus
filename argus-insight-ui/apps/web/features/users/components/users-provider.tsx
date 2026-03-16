@@ -6,7 +6,7 @@ import useDialogState from "@/hooks/use-dialog-state"
 import { fetchUsers } from "../api"
 import { type User } from "../data/schema"
 
-type UsersDialogType = "add" | "edit" | "delete" | "activate" | "deactivate" | "view"
+type UsersDialogType = "add" | "edit" | "delete" | "activate" | "deactivate"
 
 type UsersContextType = {
   open: UsersDialogType | null

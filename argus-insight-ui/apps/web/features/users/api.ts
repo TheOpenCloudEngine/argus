@@ -25,6 +25,7 @@ export async function fetchUsers(params?: UserListParams): Promise<User[]> {
     firstName: u.first_name,
     lastName: u.last_name,
     phoneNumber: u.phone_number ?? "",
+    role: typeof u.role === "string" ? u.role.toLowerCase() : u.role,
     createdAt: new Date(u.created_at as string),
     updatedAt: new Date(u.updated_at as string),
   }))
