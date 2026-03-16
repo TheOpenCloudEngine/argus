@@ -1,5 +1,6 @@
 "use client"
 
+import { ServersInspectDialog } from "./servers-inspect-dialog"
 import { ServersRegisterDialog } from "./servers-register-dialog"
 import { ServersTerminalDialog } from "./servers-terminal-dialog"
 import { ServersTerminalWarningDialog } from "./servers-terminal-warning-dialog"
@@ -30,15 +31,25 @@ export function ServersTableWrapper() {
         onOpenChange={(v) => setOpen(v ? "terminal-warning" : null)}
       />
       {currentRow && (
-        <ServersTerminalDialog
-          key={`terminal-${currentRow.hostname}`}
-          open={open === "terminal"}
-          onOpenChange={(v) => {
-            setOpen(v ? "terminal" : null)
-            if (!v) setTimeout(() => setCurrentRow(null), 500)
-          }}
-          currentRow={currentRow}
-        />
+        <>
+          <ServersTerminalDialog
+            key={`terminal-${currentRow.hostname}`}
+            open={open === "terminal"}
+            onOpenChange={(v) => {
+              setOpen(v ? "terminal" : null)
+              if (!v) setTimeout(() => setCurrentRow(null), 500)
+            }}
+            currentRow={currentRow}
+          />
+          <ServersInspectDialog
+            open={open === "inspect"}
+            onOpenChange={(v) => {
+              setOpen(v ? "inspect" : null)
+              if (!v) setTimeout(() => setCurrentRow(null), 300)
+            }}
+            currentRow={currentRow}
+          />
+        </>
       )}
     </>
   )

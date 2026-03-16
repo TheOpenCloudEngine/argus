@@ -3,7 +3,8 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -51,6 +52,29 @@ async def unregister_servers(
 ):
     """Unregister servers by changing their status from REGISTERED to UNREGISTERED."""
     return await service.unregister_servers(session, hostnames=body.hostnames)
+
+
+@router.get("/servers/{hostname}/inspect")
+async def server_inspect(hostname: str):
+    """Proxy host inspection request to the agent identified by hostname."""
+    from app.core.database import async_session
+
+    async with async_session() as session:
+        agent = await service.get_agent_by_hostname(session, hostname)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent not found: {hostname}")
+
+    agent_url = f"http://{agent.ip_address}:4501/api/v1/host/inspect"
+    logger.info("Inspect proxy: hostname=%s url=%s", hostname, agent_url)
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(agent_url)
+            return resp.json()
+    except httpx.RequestError as e:
+        logger.error("Inspect proxy error: hostname=%s err=%s", hostname, e)
+        raise HTTPException(status_code=502, detail=f"Agent communication failed: {e}")
 
 
 @router.websocket("/servers/{hostname}/terminal/ws")
