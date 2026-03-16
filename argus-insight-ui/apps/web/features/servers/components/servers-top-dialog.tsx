@@ -100,6 +100,15 @@ export function ServersTopDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Dark scrollbar styles for terminal look */}
+      <style>{`
+        .top-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .top-scrollbar::-webkit-scrollbar-track { background: #09090b; }
+        .top-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+        .top-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        .top-scrollbar::-webkit-scrollbar-corner { background: #09090b; }
+        .top-scrollbar { scrollbar-color: #3f3f46 #09090b; }
+      `}</style>
       <DialogContent
         className="max-w-5xl p-0 overflow-hidden flex flex-col"
         style={{ maxHeight: "85vh" }}
@@ -205,7 +214,7 @@ export function ServersTopDialog({
 
               {/* Process table */}
               <div className="border-t border-zinc-700 mt-1 pt-1 flex-1 min-h-0 flex flex-col">
-                <div className="overflow-auto flex-1 min-h-0 pb-1">
+                <div className="overflow-auto flex-1 min-h-0 pb-1 top-scrollbar">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="text-zinc-400 bg-zinc-900 sticky top-0">
