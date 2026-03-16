@@ -118,7 +118,6 @@ class Settings:
         )
         self.prometheus_push_cron: str = _get("prometheus", "push-cron", "* * * * *")
 
-
     def _load_server_properties(self) -> dict[str, str]:
         """Load server.properties from the configured path."""
         from app.core.config_loader import load_properties

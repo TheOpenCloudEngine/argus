@@ -59,9 +59,7 @@ class TerminalManager:
         while True:
             await asyncio.sleep(30)
             stale = [
-                sid
-                for sid, s in self._sessions.items()
-                if s.idle_seconds > SESSION_IDLE_TIMEOUT
+                sid for sid, s in self._sessions.items() if s.idle_seconds > SESSION_IDLE_TIMEOUT
             ]
             for sid in stale:
                 logger.warning(
