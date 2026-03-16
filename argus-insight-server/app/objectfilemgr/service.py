@@ -1,0 +1,447 @@
+"""Object file manager service.
+
+Implements S3-compatible object storage operations for both AWS S3 and MinIO.
+
+Capabilities:
+  1. Object CRUD: PutObject, GetObject, DeleteObject, CopyObject, HeadObject, DeleteObjects
+  2. Directory (Prefix) management: ListObjectsV2, CreateFolder
+  3. Large file support: Multipart Upload (initiate, sign parts, complete, abort)
+  4. S3 Select: SQL query on CSV/JSON/Parquet objects
+  5. Object Tagging: Get/Put/Delete tags
+"""
+
+import logging
+from datetime import UTC, datetime
+
+from app.core.config import settings
+from app.core.s3 import get_s3_client
+from app.objectfilemgr.schemas import (
+    CompletedPart,
+    CompleteMultipartResponse,
+    CopyObjectResponse,
+    CreateFolderResponse,
+    DeleteObjectsResponse,
+    FolderInfo,
+    HeadObjectResponse,
+    ListObjectsResponse,
+    MultipartUploadInitResponse,
+    MultipartUploadPartUrl,
+    MultipartUploadUrlsResponse,
+    ObjectInfo,
+    PresignedUploadUrlResponse,
+    PresignedUrlResponse,
+    S3SelectResponse,
+    Tag,
+    TaggingResponse,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _format_dt(dt: datetime | str | None) -> str:
+    """Convert a datetime to ISO 8601 string."""
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        return dt
+    return dt.astimezone(UTC).isoformat()
+
+
+def _extract_name(prefix: str) -> str:
+    """Extract the last segment of a prefix path as its display name."""
+    trimmed = prefix.rstrip("/")
+    return trimmed.rsplit("/", 1)[-1] if "/" in trimmed else trimmed
+
+
+# =========================================================================== #
+# 1. Object management
+# =========================================================================== #
+
+
+async def head_object(bucket: str, key: str) -> HeadObjectResponse:
+    """Retrieve object metadata without downloading the object body."""
+    async with get_s3_client() as s3:
+        resp = await s3.head_object(Bucket=bucket, Key=key)
+    return HeadObjectResponse(
+        key=key,
+        size=resp.get("ContentLength", 0),
+        last_modified=_format_dt(resp.get("LastModified")),
+        etag=resp.get("ETag", "").strip('"'),
+        content_type=resp.get("ContentType"),
+        storage_class=resp.get("StorageClass"),
+        metadata=resp.get("Metadata", {}),
+    )
+
+
+async def get_object(bucket: str, key: str) -> dict:
+    """Download an object. Returns the streaming body and metadata.
+
+    The caller (router) is responsible for streaming the body to the HTTP response.
+    """
+    async with get_s3_client() as s3:
+        resp = await s3.get_object(Bucket=bucket, Key=key)
+        body = await resp["Body"].read()
+    return {
+        "body": body,
+        "content_type": resp.get("ContentType", "application/octet-stream"),
+        "content_length": resp.get("ContentLength", 0),
+        "etag": resp.get("ETag", "").strip('"'),
+        "last_modified": _format_dt(resp.get("LastModified")),
+    }
+
+
+async def put_object(
+    bucket: str,
+    key: str,
+    body: bytes,
+    content_type: str = "application/octet-stream",
+) -> dict:
+    """Upload a single object."""
+    async with get_s3_client() as s3:
+        resp = await s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+        )
+    etag = resp.get("ETag", "").strip('"')
+    logger.info("PutObject: bucket=%s key=%s size=%d", bucket, key, len(body))
+    return {"key": key, "etag": etag}
+
+
+async def delete_object(bucket: str, key: str) -> None:
+    """Delete a single object."""
+    async with get_s3_client() as s3:
+        await s3.delete_object(Bucket=bucket, Key=key)
+    logger.info("DeleteObject: bucket=%s key=%s", bucket, key)
+
+
+async def delete_objects(bucket: str, keys: list[str]) -> DeleteObjectsResponse:
+    """Delete multiple objects in a single request (up to 1000)."""
+    async with get_s3_client() as s3:
+        resp = await s3.delete_objects(
+            Bucket=bucket,
+            Delete={"Objects": [{"Key": k} for k in keys], "Quiet": False},
+        )
+    deleted = [d["Key"] for d in resp.get("Deleted", [])]
+    errors = [
+        {"key": e["Key"], "code": e.get("Code"), "message": e.get("Message")}
+        for e in resp.get("Errors", [])
+    ]
+    logger.info("DeleteObjects: bucket=%s requested=%d deleted=%d", bucket, len(keys), len(deleted))
+    return DeleteObjectsResponse(deleted=deleted, errors=errors)
+
+
+async def copy_object(
+    bucket: str,
+    source_key: str,
+    destination_key: str,
+    source_bucket: str | None = None,
+) -> CopyObjectResponse:
+    """Copy an object within or across buckets.
+
+    S3 has no native Move operation; move = copy + delete.
+    """
+    src_bucket = source_bucket or bucket
+    copy_source = f"{src_bucket}/{source_key}"
+    async with get_s3_client() as s3:
+        resp = await s3.copy_object(
+            Bucket=bucket,
+            CopySource=copy_source,
+            Key=destination_key,
+        )
+    etag = resp.get("CopyObjectResult", {}).get("ETag", "").strip('"')
+    logger.info("CopyObject: %s/%s -> %s/%s", src_bucket, source_key, bucket, destination_key)
+    return CopyObjectResponse(key=destination_key, etag=etag)
+
+
+# =========================================================================== #
+# 2. Directory (Prefix) management
+# =========================================================================== #
+
+
+async def list_objects(
+    bucket: str,
+    prefix: str = "",
+    delimiter: str = "/",
+    continuation_token: str | None = None,
+    max_keys: int = 1000,
+) -> ListObjectsResponse:
+    """List objects using ListObjectsV2 with Delimiter support.
+
+    When delimiter is "/", CommonPrefixes returns virtual folder names,
+    and Contents returns only direct-child objects under the prefix.
+    """
+    params: dict = {
+        "Bucket": bucket,
+        "Prefix": prefix,
+        "Delimiter": delimiter,
+        "MaxKeys": max_keys,
+    }
+    if continuation_token:
+        params["ContinuationToken"] = continuation_token
+
+    async with get_s3_client() as s3:
+        resp = await s3.list_objects_v2(**params)
+
+    folders = [
+        FolderInfo(prefix=cp["Prefix"], name=_extract_name(cp["Prefix"]))
+        for cp in resp.get("CommonPrefixes", [])
+    ]
+
+    objects = [
+        ObjectInfo(
+            key=obj["Key"],
+            size=obj.get("Size", 0),
+            last_modified=_format_dt(obj.get("LastModified")),
+            etag=obj.get("ETag", "").strip('"'),
+            storage_class=obj.get("StorageClass"),
+        )
+        for obj in resp.get("Contents", [])
+        # Skip the prefix marker itself (0-byte folder placeholder)
+        if obj["Key"] != prefix
+    ]
+
+    return ListObjectsResponse(
+        folders=folders,
+        objects=objects,
+        next_continuation_token=resp.get("NextContinuationToken"),
+        is_truncated=resp.get("IsTruncated", False),
+        key_count=resp.get("KeyCount", len(folders) + len(objects)),
+    )
+
+
+async def create_folder(bucket: str, key: str) -> CreateFolderResponse:
+    """Create a virtual folder by putting a 0-byte object with a trailing slash."""
+    folder_key = key if key.endswith("/") else key + "/"
+    async with get_s3_client() as s3:
+        await s3.put_object(Bucket=bucket, Key=folder_key, Body=b"")
+    logger.info("CreateFolder: bucket=%s key=%s", bucket, folder_key)
+    return CreateFolderResponse(key=folder_key)
+
+
+# =========================================================================== #
+# 3. Multipart upload
+# =========================================================================== #
+
+
+async def initiate_multipart_upload(
+    bucket: str,
+    key: str,
+    content_type: str = "application/octet-stream",
+) -> MultipartUploadInitResponse:
+    """Initiate a multipart upload and return the upload_id."""
+    async with get_s3_client() as s3:
+        resp = await s3.create_multipart_upload(
+            Bucket=bucket,
+            Key=key,
+            ContentType=content_type,
+        )
+    upload_id = resp["UploadId"]
+    logger.info("InitiateMultipartUpload: bucket=%s key=%s upload_id=%s", bucket, key, upload_id)
+    return MultipartUploadInitResponse(upload_id=upload_id, key=key)
+
+
+async def get_multipart_upload_urls(
+    bucket: str,
+    key: str,
+    upload_id: str,
+    part_numbers: list[int],
+) -> MultipartUploadUrlsResponse:
+    """Generate presigned URLs for uploading individual parts."""
+    parts: list[MultipartUploadPartUrl] = []
+    async with get_s3_client() as s3:
+        for pn in part_numbers:
+            url = await s3.generate_presigned_url(
+                "upload_part",
+                Params={
+                    "Bucket": bucket,
+                    "Key": key,
+                    "UploadId": upload_id,
+                    "PartNumber": pn,
+                },
+                ExpiresIn=settings.s3_presigned_url_expiry,
+            )
+            parts.append(MultipartUploadPartUrl(part_number=pn, url=url))
+    return MultipartUploadUrlsResponse(parts=parts)
+
+
+async def complete_multipart_upload(
+    bucket: str,
+    key: str,
+    upload_id: str,
+    parts: list[CompletedPart],
+) -> CompleteMultipartResponse:
+    """Complete a multipart upload by assembling the parts."""
+    multipart = {
+        "Parts": [
+            {"PartNumber": p.part_number, "ETag": p.etag}
+            for p in sorted(parts, key=lambda x: x.part_number)
+        ]
+    }
+    async with get_s3_client() as s3:
+        resp = await s3.complete_multipart_upload(
+            Bucket=bucket,
+            Key=key,
+            UploadId=upload_id,
+            MultipartUpload=multipart,
+        )
+    etag = resp.get("ETag", "").strip('"')
+    logger.info(
+        "CompleteMultipartUpload: bucket=%s key=%s upload_id=%s parts=%d",
+        bucket, key, upload_id, len(parts),
+    )
+    return CompleteMultipartResponse(key=key, etag=etag)
+
+
+async def abort_multipart_upload(bucket: str, key: str, upload_id: str) -> None:
+    """Abort a multipart upload, discarding uploaded parts."""
+    async with get_s3_client() as s3:
+        await s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+    logger.info("AbortMultipartUpload: bucket=%s key=%s upload_id=%s", bucket, key, upload_id)
+
+
+# =========================================================================== #
+# Presigned URLs (download / simple upload)
+# =========================================================================== #
+
+
+async def generate_download_url(bucket: str, key: str) -> PresignedUrlResponse:
+    """Generate a presigned GET URL for downloading an object."""
+    async with get_s3_client() as s3:
+        url = await s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=settings.s3_presigned_url_expiry,
+        )
+    return PresignedUrlResponse(url=url, expires_in=settings.s3_presigned_url_expiry)
+
+
+async def generate_upload_url(
+    bucket: str,
+    key: str,
+    content_type: str = "application/octet-stream",
+) -> PresignedUploadUrlResponse:
+    """Generate a presigned PUT URL for uploading an object directly."""
+    async with get_s3_client() as s3:
+        url = await s3.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": bucket,
+                "Key": key,
+                "ContentType": content_type,
+            },
+            ExpiresIn=settings.s3_presigned_url_expiry,
+        )
+    return PresignedUploadUrlResponse(
+        url=url,
+        key=key,
+        expires_in=settings.s3_presigned_url_expiry,
+    )
+
+
+# =========================================================================== #
+# 4. S3 Select
+# =========================================================================== #
+
+
+def _build_input_serialization(
+    input_format: str,
+    compression: str,
+    csv_header: str,
+) -> dict:
+    """Build the InputSerialization dict for S3 Select."""
+    ser: dict = {"CompressionType": compression}
+    fmt = input_format.upper()
+    if fmt == "CSV":
+        ser["CSV"] = {"FileHeaderInfo": csv_header}
+    elif fmt == "JSON":
+        ser["JSON"] = {"Type": "DOCUMENT"}
+    elif fmt == "PARQUET":
+        ser["Parquet"] = {}
+    return ser
+
+
+def _build_output_serialization(output_format: str) -> dict:
+    """Build the OutputSerialization dict for S3 Select."""
+    fmt = output_format.upper()
+    if fmt == "CSV":
+        return {"CSV": {}}
+    return {"JSON": {}}
+
+
+async def s3_select(
+    bucket: str,
+    key: str,
+    expression: str,
+    input_format: str = "CSV",
+    output_format: str = "JSON",
+    compression: str = "NONE",
+    csv_header: str = "USE",
+) -> S3SelectResponse:
+    """Execute an S3 Select SQL query on a CSV/JSON/Parquet object."""
+    async with get_s3_client() as s3:
+        resp = await s3.select_object_content(
+            Bucket=bucket,
+            Key=key,
+            Expression=expression,
+            ExpressionType="SQL",
+            InputSerialization=_build_input_serialization(input_format, compression, csv_header),
+            OutputSerialization=_build_output_serialization(output_format),
+        )
+
+        records: list[str] = []
+        stats: dict | None = None
+
+        async for event in resp["Payload"]:
+            if "Records" in event:
+                payload = event["Records"]["Payload"]
+                if isinstance(payload, bytes):
+                    records.append(payload.decode("utf-8"))
+                else:
+                    records.append(str(payload))
+            elif "Stats" in event:
+                details = event["Stats"].get("Details", {})
+                stats = {
+                    "bytes_scanned": details.get("BytesScanned"),
+                    "bytes_processed": details.get("BytesProcessed"),
+                    "bytes_returned": details.get("BytesReturned"),
+                }
+
+    logger.info("S3Select: bucket=%s key=%s records=%d", bucket, key, len(records))
+    return S3SelectResponse(records=records, stats=stats)
+
+
+# =========================================================================== #
+# 5. Object Tagging
+# =========================================================================== #
+
+
+async def get_object_tagging(bucket: str, key: str) -> TaggingResponse:
+    """Get the tag set of an object."""
+    async with get_s3_client() as s3:
+        resp = await s3.get_object_tagging(Bucket=bucket, Key=key)
+    tags = [
+        Tag(Key=t["Key"], Value=t["Value"])
+        for t in resp.get("TagSet", [])
+    ]
+    return TaggingResponse(key=key, tags=tags)
+
+
+async def put_object_tagging(bucket: str, key: str, tags: list[Tag]) -> None:
+    """Replace the tag set of an object."""
+    tag_set = [{"Key": t.key, "Value": t.value} for t in tags]
+    async with get_s3_client() as s3:
+        await s3.put_object_tagging(
+            Bucket=bucket,
+            Key=key,
+            Tagging={"TagSet": tag_set},
+        )
+    logger.info("PutObjectTagging: bucket=%s key=%s tags=%d", bucket, key, len(tags))
+
+
+async def delete_object_tagging(bucket: str, key: str) -> None:
+    """Remove all tags from an object."""
+    async with get_s3_client() as s3:
+        await s3.delete_object_tagging(Bucket=bucket, Key=key)
+    logger.info("DeleteObjectTagging: bucket=%s key=%s", bucket, key)

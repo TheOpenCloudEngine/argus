@@ -1,0 +1,405 @@
+"""Object file manager API endpoints.
+
+Provides REST API for S3-compatible object storage operations:
+  - Object CRUD (put, get, delete, copy, head, multi-delete)
+  - Directory management (list, create folder)
+  - Multipart upload (initiate, sign parts, complete, abort)
+  - Presigned URLs (download, upload)
+  - S3 Select (SQL query on CSV/JSON/Parquet)
+  - Object tagging (get, put, delete)
+"""
+
+import logging
+import mimetypes
+
+from fastapi import APIRouter, HTTPException, Query, UploadFile
+from fastapi.responses import Response
+
+from app.core.config import settings
+from app.objectfilemgr import service
+from app.objectfilemgr.schemas import (
+    AbortMultipartRequest,
+    CompleteMultipartRequest,
+    CompleteMultipartResponse,
+    CopyObjectRequest,
+    CopyObjectResponse,
+    CreateFolderRequest,
+    CreateFolderResponse,
+    DeleteObjectsRequest,
+    DeleteObjectsResponse,
+    HeadObjectResponse,
+    ListObjectsResponse,
+    MultipartUploadInitResponse,
+    MultipartUploadUrlsRequest,
+    MultipartUploadUrlsResponse,
+    PresignedUploadUrlResponse,
+    PresignedUrlResponse,
+    PutTaggingRequest,
+    S3SelectRequest,
+    S3SelectResponse,
+    TaggingResponse,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/objectfilemgr", tags=["objectfilemgr"])
+
+
+def _bucket(bucket: str | None) -> str:
+    """Resolve bucket name, falling back to the default."""
+    return bucket or settings.s3_default_bucket
+
+
+# =========================================================================== #
+# ListObjectsV2
+# =========================================================================== #
+
+
+@router.get("/objects", response_model=ListObjectsResponse)
+async def list_objects(
+    bucket: str | None = Query(None, description="Bucket name (default from config)"),
+    prefix: str = Query("", description="Prefix (folder path)"),
+    delimiter: str = Query("/", description="Hierarchy delimiter"),
+    continuation_token: str | None = Query(None, description="Pagination token"),
+    max_keys: int = Query(1000, ge=1, le=1000, description="Max items"),
+):
+    """List objects and folders under a prefix (ListObjectsV2)."""
+    try:
+        return await service.list_objects(
+            bucket=_bucket(bucket),
+            prefix=prefix,
+            delimiter=delimiter,
+            continuation_token=continuation_token,
+            max_keys=max_keys,
+        )
+    except Exception as e:
+        logger.error("list_objects error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# HeadObject
+# =========================================================================== #
+
+
+@router.head("/objects/metadata")
+@router.get("/objects/metadata", response_model=HeadObjectResponse)
+async def head_object(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Get object metadata without downloading the body (HeadObject)."""
+    try:
+        return await service.head_object(bucket=_bucket(bucket), key=key)
+    except Exception as e:
+        logger.error("head_object error: key=%s %s", key, e)
+        raise HTTPException(status_code=404, detail=f"Object not found: {key}")
+
+
+# =========================================================================== #
+# GetObject (download)
+# =========================================================================== #
+
+
+@router.get("/objects/download")
+async def get_object(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Download an object (GetObject). Returns the raw file bytes."""
+    try:
+        result = await service.get_object(bucket=_bucket(bucket), key=key)
+    except Exception as e:
+        logger.error("get_object error: key=%s %s", key, e)
+        raise HTTPException(status_code=404, detail=f"Object not found: {key}")
+
+    filename = key.rsplit("/", 1)[-1]
+    return Response(
+        content=result["body"],
+        media_type=result["content_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "ETag": result["etag"],
+        },
+    )
+
+
+# =========================================================================== #
+# PutObject (upload)
+# =========================================================================== #
+
+
+@router.post("/objects/upload")
+async def put_object(
+    file: UploadFile,
+    key: str = Query(..., description="Destination object key"),
+    bucket: str | None = Query(None),
+):
+    """Upload a file (PutObject)."""
+    body = await file.read()
+    content_type = file.content_type or mimetypes.guess_type(key)[0] or "application/octet-stream"
+
+    try:
+        result = await service.put_object(
+            bucket=_bucket(bucket),
+            key=key,
+            body=body,
+            content_type=content_type,
+        )
+        return result
+    except Exception as e:
+        logger.error("put_object error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# DeleteObject / DeleteObjects
+# =========================================================================== #
+
+
+@router.delete("/objects")
+async def delete_object(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Delete a single object (DeleteObject)."""
+    try:
+        await service.delete_object(bucket=_bucket(bucket), key=key)
+        return {"deleted": key}
+    except Exception as e:
+        logger.error("delete_object error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/objects/delete", response_model=DeleteObjectsResponse)
+async def delete_objects(
+    body: DeleteObjectsRequest,
+    bucket: str | None = Query(None),
+):
+    """Delete multiple objects in one request (DeleteObjects, up to 1000)."""
+    try:
+        return await service.delete_objects(bucket=_bucket(bucket), keys=body.keys)
+    except Exception as e:
+        logger.error("delete_objects error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# CopyObject
+# =========================================================================== #
+
+
+@router.post("/objects/copy", response_model=CopyObjectResponse)
+async def copy_object(
+    body: CopyObjectRequest,
+    bucket: str | None = Query(None),
+):
+    """Copy an object (CopyObject). Use copy + delete for move."""
+    try:
+        return await service.copy_object(
+            bucket=_bucket(bucket),
+            source_key=body.source_key,
+            destination_key=body.destination_key,
+            source_bucket=body.source_bucket,
+        )
+    except Exception as e:
+        logger.error("copy_object error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# Create folder
+# =========================================================================== #
+
+
+@router.post("/folders", response_model=CreateFolderResponse)
+async def create_folder(
+    body: CreateFolderRequest,
+    bucket: str | None = Query(None),
+):
+    """Create a virtual folder (0-byte object with trailing slash)."""
+    try:
+        return await service.create_folder(bucket=_bucket(bucket), key=body.key)
+    except Exception as e:
+        logger.error("create_folder error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# Presigned URLs
+# =========================================================================== #
+
+
+@router.get("/objects/download-url", response_model=PresignedUrlResponse)
+async def get_download_url(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Generate a presigned download URL."""
+    try:
+        return await service.generate_download_url(bucket=_bucket(bucket), key=key)
+    except Exception as e:
+        logger.error("generate_download_url error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/objects/upload-url", response_model=PresignedUploadUrlResponse)
+async def get_upload_url(
+    key: str = Query(..., description="Destination key"),
+    content_type: str = Query("application/octet-stream"),
+    bucket: str | None = Query(None),
+):
+    """Generate a presigned upload URL for direct PUT."""
+    try:
+        return await service.generate_upload_url(
+            bucket=_bucket(bucket), key=key, content_type=content_type,
+        )
+    except Exception as e:
+        logger.error("generate_upload_url error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# Multipart upload
+# =========================================================================== #
+
+
+@router.post("/multipart/initiate", response_model=MultipartUploadInitResponse)
+async def initiate_multipart(
+    key: str = Query(..., description="Object key"),
+    content_type: str = Query("application/octet-stream"),
+    bucket: str | None = Query(None),
+):
+    """Initiate a multipart upload."""
+    try:
+        return await service.initiate_multipart_upload(
+            bucket=_bucket(bucket), key=key, content_type=content_type,
+        )
+    except Exception as e:
+        logger.error("initiate_multipart error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/multipart/urls", response_model=MultipartUploadUrlsResponse)
+async def get_multipart_urls(
+    body: MultipartUploadUrlsRequest,
+    bucket: str | None = Query(None),
+):
+    """Get presigned URLs for uploading individual parts."""
+    try:
+        return await service.get_multipart_upload_urls(
+            bucket=_bucket(bucket),
+            key=body.key,
+            upload_id=body.upload_id,
+            part_numbers=body.part_numbers,
+        )
+    except Exception as e:
+        logger.error("get_multipart_urls error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/multipart/complete", response_model=CompleteMultipartResponse)
+async def complete_multipart(
+    body: CompleteMultipartRequest,
+    bucket: str | None = Query(None),
+):
+    """Complete a multipart upload."""
+    try:
+        return await service.complete_multipart_upload(
+            bucket=_bucket(bucket),
+            key=body.key,
+            upload_id=body.upload_id,
+            parts=body.parts,
+        )
+    except Exception as e:
+        logger.error("complete_multipart error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/multipart/abort")
+async def abort_multipart(
+    body: AbortMultipartRequest,
+    bucket: str | None = Query(None),
+):
+    """Abort a multipart upload, discarding all uploaded parts."""
+    try:
+        await service.abort_multipart_upload(
+            bucket=_bucket(bucket), key=body.key, upload_id=body.upload_id,
+        )
+        return {"status": "aborted", "key": body.key, "upload_id": body.upload_id}
+    except Exception as e:
+        logger.error("abort_multipart error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# S3 Select
+# =========================================================================== #
+
+
+@router.post("/objects/select", response_model=S3SelectResponse)
+async def select_object_content(
+    body: S3SelectRequest,
+    bucket: str | None = Query(None),
+):
+    """Execute an S3 Select SQL query on a CSV/JSON/Parquet object."""
+    try:
+        return await service.s3_select(
+            bucket=_bucket(bucket),
+            key=body.key,
+            expression=body.expression,
+            input_format=body.input_format,
+            output_format=body.output_format,
+            compression=body.compression,
+            csv_header=body.csv_header,
+        )
+    except Exception as e:
+        logger.error("s3_select error: key=%s %s", body.key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================== #
+# Object Tagging
+# =========================================================================== #
+
+
+@router.get("/objects/tags", response_model=TaggingResponse)
+async def get_object_tags(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Get the tag set of an object."""
+    try:
+        return await service.get_object_tagging(bucket=_bucket(bucket), key=key)
+    except Exception as e:
+        logger.error("get_object_tagging error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/objects/tags")
+async def put_object_tags(
+    body: PutTaggingRequest,
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Set tags on an object (replaces existing tags)."""
+    try:
+        await service.put_object_tagging(bucket=_bucket(bucket), key=key, tags=body.tags)
+        return {"key": key, "tags_count": len(body.tags)}
+    except Exception as e:
+        logger.error("put_object_tagging error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/objects/tags")
+async def delete_object_tags(
+    key: str = Query(..., description="Object key"),
+    bucket: str | None = Query(None),
+):
+    """Remove all tags from an object."""
+    try:
+        await service.delete_object_tagging(bucket=_bucket(bucket), key=key)
+        return {"key": key, "tags_deleted": True}
+    except Exception as e:
+        logger.error("delete_object_tagging error: key=%s %s", key, e)
+        raise HTTPException(status_code=500, detail=str(e))

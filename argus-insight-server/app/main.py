@@ -18,6 +18,7 @@ from app.core.database import Base, close_database, engine, init_database
 from app.core.logging import setup_logging
 from app.core.security import SecurityHeadersMiddleware
 from app.dashboard.router import router as dashboard_router
+from app.objectfilemgr.router import router as objectfilemgr_router
 from app.proxy.router import router as proxy_router
 from app.servermgr.router import router as servermgr_router
 from app.usermgr.router import router as usermgr_router
@@ -94,6 +95,7 @@ app.include_router(proxy_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(usermgr_router, prefix="/api/v1")
 app.include_router(servermgr_router, prefix="/api/v1")
+app.include_router(objectfilemgr_router, prefix="/api/v1")
 
 
 @app.get("/health")

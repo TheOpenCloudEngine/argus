@@ -100,6 +100,23 @@ class Settings:
         self.db_pool_recycle: int = int(_get_nested("database", "pool", "recycle", 3600))
         self.db_echo: bool = _to_bool(_get("database", "echo", False))
 
+        # Object Storage (S3/MinIO)
+        self.s3_endpoint_url: str = _get("object_storage", "endpoint_url", "http://localhost:9000")
+        self.s3_access_key: str = _get("object_storage", "access_key", "minioadmin")
+        self.s3_secret_key: str = _get("object_storage", "secret_key", "minioadmin")
+        self.s3_region: str = _get("object_storage", "region", "us-east-1")
+        self.s3_default_bucket: str = _get("object_storage", "default_bucket", "argus-data")
+        self.s3_use_ssl: bool = _to_bool(_get("object_storage", "use_ssl", False))
+        self.s3_multipart_threshold: int = int(
+            _get("object_storage", "multipart_threshold", 8388608)
+        )
+        self.s3_multipart_chunksize: int = int(
+            _get("object_storage", "multipart_chunksize", 8388608)
+        )
+        self.s3_presigned_url_expiry: int = int(
+            _get("object_storage", "presigned_url_expiry", 3600)
+        )
+
 
 def init_settings(
     yaml_path: str | None = None,
