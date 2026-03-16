@@ -26,7 +26,7 @@ const nextConfig = {
       beforeFiles: [
         {
           source: "/api/v1/:path*",
-          destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4500"}/api/v1/:path*`,
+          destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.0.1.50:4500"}/api/v1/:path*`,
         },
       ],
     }
