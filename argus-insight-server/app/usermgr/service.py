@@ -6,11 +6,12 @@ Provides CRUD operations for users and roles against the database.
 import hashlib
 import logging
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.usermgr.models import ArgusRole, ArgusUser
 from app.usermgr.schemas import (
+    PaginatedUserResponse,
     RoleName,
     RoleResponse,
     UserAddRequest,
@@ -195,25 +196,29 @@ async def list_users(
     status: str | None = None,
     role: str | None = None,
     search: str | None = None,
-) -> list[UserResponse]:
-    """List users with optional filtering.
+    page: int = 1,
+    page_size: int = 10,
+) -> PaginatedUserResponse:
+    """List users with optional filtering and pagination.
 
     Args:
         status: Filter by user status ('active' or 'inactive').
         role: Filter by role name ('Admin' or 'User'). Joins with argus_roles.
         search: LIKE search across username, first_name, last_name, email, phone_number.
+        page: Page number (1-based).
+        page_size: Number of items per page.
     """
-    query = select(ArgusUser).join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
+    base = select(ArgusUser).join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
 
     if status:
-        query = query.where(ArgusUser.status == status)
+        base = base.where(ArgusUser.status == status)
 
     if role:
-        query = query.where(ArgusRole.name == role)
+        base = base.where(ArgusRole.name == role)
 
     if search:
         pattern = f"%{search}%"
-        query = query.where(
+        base = base.where(
             or_(
                 ArgusUser.username.ilike(pattern),
                 ArgusUser.first_name.ilike(pattern),
@@ -223,10 +228,22 @@ async def list_users(
             )
         )
 
-    query = query.order_by(ArgusUser.created_at.desc())
+    # Count total matching rows
+    count_query = select(func.count()).select_from(base.subquery())
+    total = (await session.execute(count_query)).scalar() or 0
+
+    # Apply ordering and pagination
+    offset = (page - 1) * page_size
+    query = base.order_by(ArgusUser.created_at.desc()).offset(offset).limit(page_size)
     result = await session.execute(query)
     users = result.scalars().all()
-    return [await _build_user_response(session, u) for u in users]
+
+    return PaginatedUserResponse(
+        items=[await _build_user_response(session, u) for u in users],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # ---------------------------------------------------------------------------
