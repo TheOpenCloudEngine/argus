@@ -167,7 +167,7 @@ export function ServersInspectDialog({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="overflow-y-auto px-5 !w-auto"
+        className="overflow-y-auto px-5"
         style={{ width, maxWidth: "none" }}
       >
         {/* Drag handle on the left edge */}
