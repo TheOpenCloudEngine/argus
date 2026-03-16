@@ -57,14 +57,20 @@ async def unregister_servers(
 async def server_terminal_ws(
     websocket: WebSocket,
     hostname: str,
-    session: AsyncSession = Depends(get_session),
 ) -> None:
     """Relay a WebSocket terminal session between UI and an agent identified by hostname.
 
     Looks up the agent's IP address from the argus_agents table, then opens
     a WebSocket to the agent's terminal endpoint and relays messages bidirectionally.
+
+    The DB session is opened briefly for the lookup and closed before the
+    long-lived WebSocket relay to avoid holding a connection pool slot.
     """
-    agent = await service.get_agent_by_hostname(session, hostname)
+    from app.core.database import async_session
+
+    async with async_session() as session:
+        agent = await service.get_agent_by_hostname(session, hostname)
+
     if not agent:
         await websocket.close(code=4004, reason=f"Agent not found: {hostname}")
         return

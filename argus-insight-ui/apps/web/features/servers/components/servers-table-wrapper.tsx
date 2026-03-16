@@ -2,6 +2,7 @@
 
 import { ServersRegisterDialog } from "./servers-register-dialog"
 import { ServersTerminalDialog } from "./servers-terminal-dialog"
+import { ServersTerminalWarningDialog } from "./servers-terminal-warning-dialog"
 import { ServersUnregisterDialog } from "./servers-unregister-dialog"
 import { ServersTable } from "./servers-table"
 import { useServers } from "./servers-provider"
@@ -23,6 +24,10 @@ export function ServersTableWrapper() {
         onOpenChange={(v) => setOpen(v ? "unregister" : null)}
         currentRow={currentRow}
         selectedServers={selectedServers}
+      />
+      <ServersTerminalWarningDialog
+        open={open === "terminal-warning"}
+        onOpenChange={(v) => setOpen(v ? "terminal-warning" : null)}
       />
       {currentRow && (
         <ServersTerminalDialog

@@ -69,7 +69,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <DropdownMenuItem
           onClick={() => {
             setCurrentRow(row.original)
-            setOpen("terminal")
+            if (row.original.status === "REGISTERED") {
+              setOpen("terminal")
+            } else {
+              setOpen("terminal-warning")
+            }
           }}
         >
           Terminal
