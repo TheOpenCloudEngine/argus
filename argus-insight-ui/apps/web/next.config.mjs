@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@workspace/ui"],
+  allowedDevOrigins: ["http://10.0.1.50:3000"],
   async headers() {
     return [
       {
