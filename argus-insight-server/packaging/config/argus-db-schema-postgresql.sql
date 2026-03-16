@@ -1,23 +1,24 @@
--- Argus Insight Server - MariaDB/MySQL Database and User Setup
--- Run this script as a MariaDB/MySQL superuser (e.g., root)
+-- Argus Insight Server - PostgreSQL Database and User Setup
+-- Run this script as a PostgreSQL superuser (e.g., postgres)
 --
 -- Usage:
---   mysql -u root -p < argus-db-schema-mysql.sql
+--   sudo -u postgres psql -f argus-db-schema-postgresql.sql
+
+-- Create user
+CREATE USER argus WITH PASSWORD 'argus';
 
 -- Create database
-CREATE DATABASE IF NOT EXISTS argus
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE argus OWNER = argus;
 
--- Create user and grant privileges
-CREATE USER IF NOT EXISTS 'argus'@'localhost' IDENTIFIED BY 'argus';
-GRANT ALL PRIVILEGES ON argus.* TO 'argus'@'localhost';
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE argus TO argus;
 
--- For remote access (optional, uncomment if needed)
--- CREATE USER IF NOT EXISTS 'argus'@'%' IDENTIFIED BY 'argus';
--- GRANT ALL PRIVILEGES ON argus.* TO 'argus'@'%';
+-- Connect to the argus database and set up schema permissions
+\c argus
 
-FLUSH PRIVILEGES;
+GRANT ALL PRIVILEGES ON SCHEMA public TO argus;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO argus;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO argus;
 
 CREATE TABLE IF NOT EXISTS argus_agents (
     hostname        VARCHAR(255)    PRIMARY KEY,
