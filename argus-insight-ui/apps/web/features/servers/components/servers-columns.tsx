@@ -52,7 +52,7 @@ export const serversColumns: ColumnDef<Server>[] = [
   {
     accessorKey: "ipAddress",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="IP Address" className="justify-center" />
+      <DataTableColumnHeader column={column} title="IP" className="justify-center" />
     ),
     cell: ({ row }) => (
       <div className="text-center text-sm text-nowrap">{row.getValue("ipAddress")}</div>
@@ -72,7 +72,7 @@ export const serversColumns: ColumnDef<Server>[] = [
   {
     accessorKey: "osVersion",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="OS Version" className="justify-center" />
+      <DataTableColumnHeader column={column} title="OS" className="justify-center" />
     ),
     cell: ({ row }) => (
       <div className="text-center text-sm">{row.getValue("osVersion") ?? "-"}</div>
@@ -82,7 +82,7 @@ export const serversColumns: ColumnDef<Server>[] = [
   {
     accessorKey: "coreCount",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Core Count" className="justify-center" />
+      <DataTableColumnHeader column={column} title="Core" className="justify-center" />
     ),
     cell: ({ row }) => (
       <div className="text-center text-sm">{row.getValue("coreCount") ?? "-"}</div>
