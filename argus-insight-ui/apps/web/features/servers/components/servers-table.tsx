@@ -13,7 +13,16 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 
+import { ChevronDown, UserMinus } from "lucide-react"
+
 import { cn } from "@workspace/ui/lib/utils"
+import { Button } from "@workspace/ui/components/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import {
   Table,
   TableBody,
@@ -129,6 +138,28 @@ export function ServersTable({ data, isLoading }: ServersTableProps) {
         ]}
         onSearch={handleSearch}
         onClear={handleClear}
+        extraActions={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="h-8 bg-blue-600 text-white hover:bg-blue-700">
+                Action
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuItem
+                onClick={() => {
+                  console.log("Remove from manager")
+                }}
+              >
+                Remove From Manager
+                <span className="ml-auto">
+                  <UserMinus size={16} />
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
       />
       <div className="overflow-hidden rounded-md border">
         <Table>

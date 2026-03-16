@@ -23,6 +23,7 @@ type DataTableToolbarProps<TData> = {
   }[]
   onSearch?: () => void
   onClear?: () => void
+  extraActions?: React.ReactNode
 }
 
 export function DataTableToolbar<TData>({
@@ -32,6 +33,7 @@ export function DataTableToolbar<TData>({
   filters = [],
   onSearch,
   onClear,
+  extraActions,
 }: DataTableToolbarProps<TData>) {
   return (
     <div className="flex items-center justify-between">
@@ -75,7 +77,7 @@ export function DataTableToolbar<TData>({
           })}
         </div>
       </div>
-      {(onSearch || onClear) && (
+      {(onSearch || onClear || extraActions) && (
         <div className="flex items-center gap-x-2">
           {onSearch && (
             <Button
@@ -98,6 +100,11 @@ export function DataTableToolbar<TData>({
               <X className="mr-1 h-4 w-4" />
               Clear
             </Button>
+          )}
+          {extraActions && (
+            <div className="ml-2">
+              {extraActions}
+            </div>
           )}
         </div>
       )}

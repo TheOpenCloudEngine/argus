@@ -8,6 +8,7 @@ import { Checkbox } from "@workspace/ui/components/checkbox"
 import { DataTableColumnHeader } from "@/components/data-table/column-header"
 import { serverStatusStyles } from "../data/data"
 import { type Server } from "../data/schema"
+import { DataTableRowActions } from "./data-table-row-actions"
 
 export const serversColumns: ColumnDef<Server>[] = [
   {
@@ -185,5 +186,9 @@ export const serversColumns: ColumnDef<Server>[] = [
       )
     },
     enableSorting: false,
+  },
+  {
+    id: "actions",
+    cell: DataTableRowActions,
   },
 ]
