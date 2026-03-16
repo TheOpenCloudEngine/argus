@@ -18,6 +18,7 @@ type DataTableToolbarProps<TData> = {
       label: string
       value: string
       icon?: React.ComponentType<{ className?: string }>
+      badgeClassName?: string
     }[]
   }[]
   onSearch?: () => void

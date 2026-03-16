@@ -26,6 +26,7 @@ import {
   DataTablePagination,
   DataTableToolbar,
 } from "@/components/data-table"
+import { serverStatusStyles } from "../data/data"
 import { type Server } from "../data/schema"
 import { serversColumns as columns } from "./servers-columns"
 import { useServers } from "./servers-provider"
@@ -120,9 +121,9 @@ export function ServersTable({ data, isLoading }: ServersTableProps) {
             columnId: "status",
             title: "Status",
             options: [
-              { label: "REGISTERED", value: "REGISTERED" },
-              { label: "UNREGISTERED", value: "UNREGISTERED" },
-              { label: "DISCONNECTED", value: "DISCONNECTED" },
+              { label: "REGISTERED", value: "REGISTERED", badgeClassName: serverStatusStyles.get("REGISTERED") },
+              { label: "UNREGISTERED", value: "UNREGISTERED", badgeClassName: serverStatusStyles.get("UNREGISTERED") },
+              { label: "DISCONNECTED", value: "DISCONNECTED", badgeClassName: serverStatusStyles.get("DISCONNECTED") },
             ],
           },
         ]}
