@@ -5,7 +5,10 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Download,
+  FileText,
   Filter,
+  Globe,
   List,
   Loader2,
   Skull,
@@ -29,6 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -233,6 +242,84 @@ export function ServersProcessesDialog({
     }
   }
 
+  const buildHtml = useCallback(() => {
+    const now = new Date().toLocaleString()
+    const rows = filtered
+      .map(
+        (p) => `<tr>
+      <td class="r">${p.pid}</td>
+      <td>${p.username}</td>
+      <td class="r">${p.cpu_percent.toFixed(1)}</td>
+      <td class="r">${(p.memory_percent ?? 0).toFixed(1)}</td>
+      <td class="r">${formatBytes(p.memory_rss)}</td>
+      <td class="r">${formatBytes(p.memory_vms)}</td>
+      <td class="c">${p.status?.[0]?.toUpperCase() ?? "?"}</td>
+      <td class="r">${p.num_threads}</td>
+      <td class="cmd">${(p.cmdline || p.name || "-").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+    </tr>`
+      )
+      .join("\n")
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Processes - ${currentRow.hostname}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; color: #1a1a1a; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .meta { font-size: 13px; color: #666; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; white-space: nowrap; }
+  th { background: #f5f5f5; font-weight: 600; text-align: left; }
+  th.r, td.r { text-align: right; }
+  th.c, td.c { text-align: center; }
+  td.cmd { white-space: normal; word-break: break-all; font-family: monospace; font-size: 12px; color: #555; max-width: 500px; }
+  tr:nth-child(even) { background: #fafafa; }
+  @media print { body { margin: 10px; } h1 { font-size: 15px; } table { font-size: 11px; } }
+</style>
+</head>
+<body>
+<h1>Processes - ${currentRow.hostname}</h1>
+<div class="meta">${currentRow.ipAddress} &middot; ${filtered.length} processes &middot; ${now}</div>
+<table>
+<thead>
+  <tr>
+    <th class="r">PID</th><th>USER</th><th class="r">CPU%</th><th class="r">MEM%</th>
+    <th class="r">RSS</th><th class="r">VIRT</th><th class="c">S</th><th class="r">THR</th><th>COMMAND</th>
+  </tr>
+</thead>
+<tbody>
+${rows}
+</tbody>
+</table>
+</body>
+</html>`
+  }, [filtered, currentRow])
+
+  const downloadHtml = useCallback(() => {
+    const html = buildHtml()
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `processes-${currentRow.hostname}-${new Date().toISOString().slice(0, 19).replace(/:/g, "")}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [buildHtml, currentRow])
+
+  const downloadPdf = useCallback(() => {
+    const html = buildHtml()
+    const win = window.open("", "_blank")
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.onload = () => {
+      win.onafterprint = () => win.close()
+      win.print()
+    }
+  }, [buildHtml])
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-30" />
     return sortDir === "asc" ? (
@@ -302,10 +389,33 @@ export function ServersProcessesDialog({
                 </button>
               )}
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto h-8 text-sm gap-1.5"
+                  disabled={filtered.length === 0}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={downloadHtml}>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Download HTML
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={downloadPdf}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="destructive"
               size="sm"
-              className="ml-auto h-8 text-sm gap-1.5"
+              className="h-8 text-sm gap-1.5"
               disabled={selected.size === 0 || killing}
               onClick={() => setKillConfirm(true)}
             >
