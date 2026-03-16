@@ -19,7 +19,7 @@ export function DashboardHeader({ title }: DashboardHeaderProps) {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
       <div className="flex flex-1 items-center gap-2">
-        <h1 className="text-2xl font-semibold leading-none">{title}</h1>
+        <h1 className="text-xl font-semibold leading-none">{title}</h1>
       </div>
       <div className="flex items-center gap-2 ml-auto">
         <div className="relative hidden md:block">
