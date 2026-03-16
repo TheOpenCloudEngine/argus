@@ -24,6 +24,18 @@ router = APIRouter(prefix="/usermgr", tags=["usermgr"])
 # User endpoints
 # ---------------------------------------------------------------------------
 
+@router.get("/users/check")
+async def check_user_exists(
+    username: str | None = Query(None, description="Username to check"),
+    email: str | None = Query(None, description="Email to check"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Check if a username or email already exists."""
+    if not username and not email:
+        raise HTTPException(status_code=400, detail="Provide username or email")
+    return await service.check_user_exists(session, username=username, email=email)
+
+
 @router.post("/users", response_model=UserResponse)
 async def add_user(req: UserAddRequest, session: AsyncSession = Depends(get_session)):
     """Create a new user."""

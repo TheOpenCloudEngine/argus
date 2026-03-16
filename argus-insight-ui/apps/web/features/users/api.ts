@@ -31,6 +31,18 @@ export async function fetchUsers(params?: UserListParams): Promise<User[]> {
   }))
 }
 
+export async function checkUserExists(params: {
+  username?: string
+  email?: string
+}): Promise<{ username_exists?: boolean; email_exists?: boolean }> {
+  const query = new URLSearchParams()
+  if (params.username) query.set("username", params.username)
+  if (params.email) query.set("email", params.email)
+  const res = await fetch(`${BASE}/users/check?${query.toString()}`)
+  if (!res.ok) throw new Error(`Failed to check user: ${res.status}`)
+  return res.json()
+}
+
 type CreateUserPayload = {
   username: string
   email: string

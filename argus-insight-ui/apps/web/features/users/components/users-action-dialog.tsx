@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback, useState } from "react"
 import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -24,7 +25,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { PasswordInput } from "@/components/password-input"
 import { SelectDropdown } from "@/components/select-dropdown"
-import { createUser, modifyUser } from "../api"
+import { checkUserExists, createUser, modifyUser } from "../api"
 import { roles } from "../data/data"
 import { type User } from "../data/schema"
 import { useUsers } from "./users-provider"
@@ -34,8 +35,8 @@ const formSchema = z
     firstName: z.string().min(1, "First Name is required."),
     lastName: z.string().min(1, "Last Name is required."),
     username: z.string().min(1, "Username is required."),
-    phoneNumber: z.string().min(1, "Phone number is required."),
-    email: z.string().email("Invalid email address.").min(1, "Email is required."),
+    phoneNumber: z.string().optional().default(""),
+    email: z.string().min(1, "Email is required.").email("Invalid email address."),
     password: z.string().transform((pwd) => pwd.trim()),
     role: z.string().min(1, "Role is required."),
     confirmPassword: z.string().transform((pwd) => pwd.trim()),
@@ -100,6 +101,11 @@ export function UsersActionDialog({
 }: UsersActionDialogProps) {
   const isEdit = !!currentRow
   const { refreshUsers } = useUsers()
+  const [duplicateErrors, setDuplicateErrors] = useState<{
+    username?: string
+    email?: string
+  }>({})
+
   const form = useForm<UserForm>({
     resolver: zodResolver(formSchema),
     defaultValues: isEdit
@@ -114,7 +120,7 @@ export function UsersActionDialog({
           lastName: "",
           username: "",
           email: "",
-          role: "",
+          role: "user",
           phoneNumber: "",
           password: "",
           confirmPassword: "",
@@ -122,7 +128,44 @@ export function UsersActionDialog({
         },
   })
 
+  const handleCheckUsername = useCallback(
+    async (value: string) => {
+      if (!value || isEdit) return
+      try {
+        const result = await checkUserExists({ username: value })
+        setDuplicateErrors((prev) => ({
+          ...prev,
+          username: result.username_exists
+            ? "This username is already taken."
+            : undefined,
+        }))
+      } catch {
+        // ignore network errors for validation
+      }
+    },
+    [isEdit]
+  )
+
+  const handleCheckEmail = useCallback(
+    async (value: string) => {
+      if (!value || isEdit) return
+      try {
+        const result = await checkUserExists({ email: value })
+        setDuplicateErrors((prev) => ({
+          ...prev,
+          email: result.email_exists
+            ? "This email is already registered."
+            : undefined,
+        }))
+      } catch {
+        // ignore network errors for validation
+      }
+    },
+    [isEdit]
+  )
+
   const onSubmit = async (values: UserForm) => {
+    if (duplicateErrors.username || duplicateErrors.email) return
     try {
       if (isEdit && currentRow) {
         await modifyUser(currentRow.id, {
@@ -145,6 +188,7 @@ export function UsersActionDialog({
       }
       await refreshUsers()
       form.reset()
+      setDuplicateErrors({})
       onOpenChange(false)
     } catch (err) {
       console.error("Failed to save user:", err)
@@ -153,11 +197,28 @@ export function UsersActionDialog({
 
   const isPasswordTouched = !!form.formState.dirtyFields.password
 
+  // Compute whether Save button should be enabled
+  const watched = form.watch()
+  const hasDuplicateError = !!duplicateErrors.username || !!duplicateErrors.email
+  const requiredFilled = isEdit
+    ? !!(watched.firstName && watched.lastName && watched.email)
+    : !!(
+        watched.firstName &&
+        watched.lastName &&
+        watched.username &&
+        watched.email &&
+        watched.role &&
+        watched.password &&
+        watched.confirmPassword
+      )
+  const isSaveDisabled = !requiredFilled || hasDuplicateError
+
   return (
     <Dialog
       open={open}
       onOpenChange={(state) => {
         form.reset()
+        setDuplicateErrors({})
         onOpenChange(state)
       }}
     >
@@ -211,9 +272,31 @@ export function UsersActionDialog({
                   <FormItem>
                     <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input placeholder="john_doe" disabled={isEdit} {...field} />
+                      <Input
+                        placeholder="john_doe"
+                        disabled={isEdit}
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleCheckUsername(e.target.value)
+                        }}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          if (duplicateErrors.username) {
+                            setDuplicateErrors((prev) => ({
+                              ...prev,
+                              username: undefined,
+                            }))
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
+                    {duplicateErrors.username && (
+                      <p className="text-sm font-medium text-destructive">
+                        {duplicateErrors.username}
+                      </p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -224,9 +307,30 @@ export function UsersActionDialog({
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="john.doe@gmail.com" {...field} />
+                      <Input
+                        placeholder="john.doe@gmail.com"
+                        {...field}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          handleCheckEmail(e.target.value)
+                        }}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          if (duplicateErrors.email) {
+                            setDuplicateErrors((prev) => ({
+                              ...prev,
+                              email: undefined,
+                            }))
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
+                    {duplicateErrors.email && (
+                      <p className="text-sm font-medium text-destructive">
+                        {duplicateErrors.email}
+                      </p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -296,8 +400,8 @@ export function UsersActionDialog({
           </Form>
         </div>
         <DialogFooter>
-          <Button type="submit" form="user-form">
-            Save changes
+          <Button type="submit" form="user-form" disabled={isSaveDisabled}>
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

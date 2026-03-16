@@ -56,6 +56,24 @@ async def _build_user_response(session: AsyncSession, user: ArgusUser) -> UserRe
 # User operations
 # ---------------------------------------------------------------------------
 
+async def check_user_exists(
+    session: AsyncSession, username: str | None = None, email: str | None = None
+) -> dict[str, bool]:
+    """Check if a username or email already exists."""
+    result: dict[str, bool] = {}
+    if username:
+        row = await session.execute(
+            select(ArgusUser).where(ArgusUser.username == username)
+        )
+        result["username_exists"] = row.scalars().first() is not None
+    if email:
+        row = await session.execute(
+            select(ArgusUser).where(ArgusUser.email == email)
+        )
+        result["email_exists"] = row.scalars().first() is not None
+    return result
+
+
 async def add_user(session: AsyncSession, req: UserAddRequest) -> UserResponse:
     """Create a new user."""
     role = await _get_role_by_name(session, req.role.value)
