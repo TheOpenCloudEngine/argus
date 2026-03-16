@@ -9,7 +9,7 @@ import { type Server } from "../data/schema"
 type ServersDialogType = "delete"
 
 type SearchParams = {
-  status: string | null
+  status: string[]
   search: string
 }
 
@@ -44,12 +44,12 @@ export function ServersProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   // Applied filters (last searched values)
-  const appliedFiltersRef = useRef<SearchParams>({ status: null, search: "" })
+  const appliedFiltersRef = useRef<SearchParams>({ status: [], search: "" })
 
   const loadServers = useCallback(async (params: {
     page: number
     pageSize: number
-    status: string | null
+    status: string[]
     search: string
   }) => {
     try {
@@ -57,7 +57,7 @@ export function ServersProvider({ children }: { children: React.ReactNode }) {
       const data: PaginatedServers = await fetchServers({
         page: params.page,
         pageSize: params.pageSize,
-        status: params.status || undefined,
+        status: params.status.length > 0 ? params.status : undefined,
         search: params.search || undefined,
       })
       setServers(data.items)
@@ -71,7 +71,7 @@ export function ServersProvider({ children }: { children: React.ReactNode }) {
 
   // Initial load
   useEffect(() => {
-    loadServers({ page: 1, pageSize, status: null, search: "" })
+    loadServers({ page: 1, pageSize, status: [], search: "" })
   }, [loadServers, pageSize])
 
   // Reload when pagination changes (using last applied filters)

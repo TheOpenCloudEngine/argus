@@ -3,7 +3,7 @@ import { type Server } from "./data/schema"
 const BASE = "/api/v1/servermgr"
 
 type ServerListParams = {
-  status?: string
+  status?: string[]
   search?: string
   page?: number
   pageSize?: number
@@ -33,7 +33,7 @@ function mapServer(s: Record<string, unknown>): Server {
 
 export async function fetchServers(params?: ServerListParams): Promise<PaginatedServers> {
   const query = new URLSearchParams()
-  if (params?.status) query.set("status", params.status)
+  if (params?.status && params.status.length > 0) query.set("status", params.status.join(","))
   if (params?.search) query.set("search", params.search)
   query.set("page", String(params?.page ?? 1))
   query.set("page_size", String(params?.pageSize ?? 10))

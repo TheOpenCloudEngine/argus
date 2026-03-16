@@ -97,11 +97,7 @@ export function ServersTable({ data, isLoading }: ServersTableProps) {
     const statusVal = columnFilters.find((f) => f.id === "status")?.value
     const searchVal = columnFilters.find((f) => f.id === "hostname")?.value
 
-    let status: string | null = null
-    if (Array.isArray(statusVal) && statusVal.length === 1) {
-      status = statusVal[0]
-    }
-
+    const status: string[] = Array.isArray(statusVal) ? statusVal : []
     const search = typeof searchVal === "string" ? searchVal : ""
 
     searchServers({ status, search })
@@ -124,9 +120,9 @@ export function ServersTable({ data, isLoading }: ServersTableProps) {
             columnId: "status",
             title: "Status",
             options: [
-              { label: "Registered", value: "REGISTERED" },
-              { label: "Unregistered", value: "UNREGISTERED" },
-              { label: "Disconnected", value: "DISCONNECTED" },
+              { label: "REGISTERED", value: "REGISTERED" },
+              { label: "UNREGISTERED", value: "UNREGISTERED" },
+              { label: "DISCONNECTED", value: "DISCONNECTED" },
             ],
           },
         ]}

@@ -25,7 +25,9 @@ async def list_servers(
     base = select(ArgusAgent)
 
     if status:
-        base = base.where(ArgusAgent.status == status)
+        status_list = [s.strip() for s in status.split(",") if s.strip()]
+        if status_list:
+            base = base.where(ArgusAgent.status.in_(status_list))
 
     if search:
         pattern = f"%{search}%"
@@ -33,7 +35,6 @@ async def list_servers(
             or_(
                 ArgusAgent.hostname.ilike(pattern),
                 ArgusAgent.ip_address.ilike(pattern),
-                ArgusAgent.os_version.ilike(pattern),
             )
         )
 

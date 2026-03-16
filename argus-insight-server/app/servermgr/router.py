@@ -16,8 +16,8 @@ router = APIRouter(prefix="/servermgr", tags=["servermgr"])
 
 @router.get("/servers", response_model=PaginatedServerResponse)
 async def list_servers(
-    status: str | None = Query(None, description="Filter by status"),
-    search: str | None = Query(None, description="Search hostname, IP, OS version"),
+    status: str | None = Query(None, description="Filter by status (comma-separated for IN)"),
+    search: str | None = Query(None, description="LIKE search on hostname, IP address"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     session: AsyncSession = Depends(get_session),
