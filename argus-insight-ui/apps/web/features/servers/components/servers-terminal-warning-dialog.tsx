@@ -25,7 +25,7 @@ export function ServersTerminalWarningDialog({
         <AlertDialogHeader className="text-start">
           <AlertDialogTitle>Terminal Unavailable</AlertDialogTitle>
           <AlertDialogDescription>
-            Terminal은 서버가 등록된 상태에서만 실행할 수 있습니다.
+            Terminal can only be used when the server is registered. Please register the server first.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
