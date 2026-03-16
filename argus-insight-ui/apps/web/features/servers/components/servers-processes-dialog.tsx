@@ -1,0 +1,440 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Filter,
+  List,
+  Loader2,
+  Skull,
+  X,
+} from "lucide-react"
+
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
+import { fetchProcesses, killProcess } from "../api"
+import { type Server as ServerType } from "../data/schema"
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+type ServersProcessesDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  currentRow: ServerType
+}
+
+type SortField =
+  | "pid"
+  | "username"
+  | "cpu_percent"
+  | "memory_rss"
+  | "memory_vms"
+  | "status"
+  | "num_threads"
+  | "memory_percent"
+
+type SortDir = "asc" | "desc"
+
+type ProcessRow = {
+  pid: number
+  ppid: number
+  name: string
+  username: string
+  status: string
+  cpu_percent: number
+  memory_rss: number
+  memory_vms: number
+  memory_percent?: number
+  create_time: number
+  cmdline: string
+  num_threads: number
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB", "TB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(1)}${sizes[i]}`
+}
+
+const COLUMNS: {
+  key: SortField
+  label: string
+  align: "left" | "right" | "center"
+  width: string
+}[] = [
+  { key: "pid", label: "PID", align: "right", width: "w-20" },
+  { key: "username", label: "USER", align: "left", width: "w-24" },
+  { key: "cpu_percent", label: "CPU%", align: "right", width: "w-20" },
+  { key: "memory_percent" as SortField, label: "MEM%", align: "right", width: "w-20" },
+  { key: "memory_rss", label: "RSS", align: "right", width: "w-24" },
+  { key: "memory_vms", label: "VIRT", align: "right", width: "w-24" },
+  { key: "status", label: "S", align: "center", width: "w-14" },
+  { key: "num_threads", label: "THR", align: "right", width: "w-16" },
+]
+
+export function ServersProcessesDialog({
+  open,
+  onOpenChange,
+  currentRow,
+}: ServersProcessesDialogProps) {
+  const [processes, setProcesses] = useState<ProcessRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<SortField>("pid")
+  const [sortDir, setSortDir] = useState<SortDir>("asc")
+  const [filter, setFilter] = useState("")
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [killConfirm, setKillConfirm] = useState(false)
+  const [killing, setKilling] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const loadProcesses = useCallback(async () => {
+    try {
+      const result = await fetchProcesses(currentRow.hostname)
+      const procs = (result.processes ?? []) as ProcessRow[]
+      setProcesses(procs)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch processes")
+    } finally {
+      setLoading(false)
+    }
+  }, [currentRow.hostname])
+
+  useEffect(() => {
+    if (open) {
+      setLoading(true)
+      setProcesses([])
+      setSelected(new Set())
+      setFilter("")
+      setSortField("pid")
+      setSortDir("asc")
+      loadProcesses()
+      intervalRef.current = setInterval(loadProcesses, 5000)
+    } else {
+      setProcesses([])
+      setError(null)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [open, loadProcesses])
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortField(field)
+      setSortDir(field === "pid" || field === "username" || field === "status" ? "asc" : "desc")
+    }
+  }
+
+  const filtered = useMemo(() => {
+    let list = processes
+    if (filter.trim()) {
+      const q = filter.toLowerCase()
+      list = list.filter(
+        (p) =>
+          p.cmdline.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q)
+      )
+    }
+    const sorted = [...list].sort((a, b) => {
+      const fa = sortField
+      const va = a[fa] ?? 0
+      const vb = b[fa] ?? 0
+      if (typeof va === "string" && typeof vb === "string") {
+        return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va)
+      }
+      const na = Number(va)
+      const nb = Number(vb)
+      return sortDir === "asc" ? na - nb : nb - na
+    })
+    return sorted
+  }, [processes, filter, sortField, sortDir])
+
+  const toggleSelect = (pid: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(pid)) next.delete(pid)
+      else next.add(pid)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map((p) => p.pid)))
+    }
+  }
+
+  const handleKill = async () => {
+    setKilling(true)
+    try {
+      const pids = Array.from(selected)
+      await Promise.all(
+        pids.map((pid) => killProcess(currentRow.hostname, pid, "SIGKILL"))
+      )
+      setSelected(new Set())
+      await loadProcesses()
+    } catch (err) {
+      console.error("Kill failed:", err)
+    } finally {
+      setKilling(false)
+      setKillConfirm(false)
+    }
+  }
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-30" />
+    return sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3" />
+    ) : (
+      <ArrowDown className="h-3 w-3" />
+    )
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="max-w-6xl p-0 overflow-hidden flex flex-col"
+          style={{ maxHeight: "85vh" }}
+          showCloseButton={false}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b shrink-0">
+            <DialogHeader className="p-0 space-y-0">
+              <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+                <List className="h-4 w-4" />
+                Processes - {currentRow.hostname}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                {currentRow.ipAddress} · {filtered.length} processes
+                {filter && ` (filtered)`} · refreshing every 5s
+              </DialogDescription>
+            </DialogHeader>
+            <DialogClose className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+            <div className="relative flex-1 max-w-sm">
+              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Filter by command..."
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="pl-8 h-8 text-xs"
+              />
+              {filter && (
+                <button
+                  onClick={() => setFilter("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              disabled={selected.size === 0 || killing}
+              onClick={() => setKillConfirm(true)}
+            >
+              {killing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Skull className="h-3.5 w-3.5" />
+              )}
+              Kill ({selected.size})
+            </Button>
+          </div>
+
+          {/* Loading */}
+          {loading && processes.length === 0 && (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground text-sm">Loading...</span>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && processes.length === 0 && (
+            <div className="px-4 py-8 text-destructive text-center text-sm">{error}</div>
+          )}
+
+          {/* Process grid */}
+          {processes.length > 0 && (
+            <div className="flex-1 min-h-0 overflow-auto px-4 pb-3">
+              {/* Grid header */}
+              <div className="grid grid-cols-[32px_80px_96px_80px_80px_96px_96px_56px_64px_1fr] gap-0 sticky top-0 bg-background z-10 border-b text-xs font-medium text-muted-foreground">
+                <div className="px-1 py-2 flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selected.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="h-3.5 w-3.5 rounded border-muted-foreground/50 cursor-pointer"
+                  />
+                </div>
+                {COLUMNS.map((col) => (
+                  <button
+                    key={col.key}
+                    onClick={() => handleSort(col.key)}
+                    className={`px-2 py-2 flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer select-none ${
+                      col.align === "right"
+                        ? "justify-end"
+                        : col.align === "center"
+                          ? "justify-center"
+                          : "justify-start"
+                    }`}
+                  >
+                    {col.label}
+                    <SortIcon field={col.key} />
+                  </button>
+                ))}
+                <div className="px-2 py-2">COMMAND</div>
+              </div>
+
+              {/* Grid rows */}
+              <div className="text-xs">
+                {filtered.map((p) => {
+                  const isSelected = selected.has(p.pid)
+                  return (
+                    <div
+                      key={p.pid}
+                      className={`grid grid-cols-[32px_80px_96px_80px_80px_96px_96px_56px_64px_1fr] gap-0 border-b border-border/50 hover:bg-muted/50 transition-colors ${
+                        isSelected ? "bg-muted/80" : ""
+                      }`}
+                    >
+                      <div className="px-1 py-1.5 flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(p.pid)}
+                          className="h-3.5 w-3.5 rounded border-muted-foreground/50 cursor-pointer"
+                        />
+                      </div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {p.pid}
+                      </div>
+                      <div className="px-2 py-1.5 truncate">{p.username}</div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        <span
+                          className={
+                            p.cpu_percent > 50
+                              ? "text-destructive font-bold"
+                              : p.cpu_percent > 10
+                                ? "text-yellow-600 dark:text-yellow-400 font-semibold"
+                                : ""
+                          }
+                        >
+                          {p.cpu_percent.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {(p.memory_percent ?? 0).toFixed(1)}
+                      </div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {formatBytes(p.memory_rss)}
+                      </div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {formatBytes(p.memory_vms)}
+                      </div>
+                      <div className="px-2 py-1.5 text-center">
+                        <span
+                          className={
+                            p.status === "running"
+                              ? "text-green-600 dark:text-green-400"
+                              : p.status === "zombie"
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                          }
+                        >
+                          {p.status?.[0]?.toUpperCase() ?? "?"}
+                        </span>
+                      </div>
+                      <div className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {p.num_threads}
+                      </div>
+                      <div className="px-2 py-1.5 truncate font-mono text-muted-foreground" title={p.cmdline || p.name}>
+                        {p.cmdline || p.name || "-"}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Kill confirmation */}
+      <AlertDialog open={killConfirm} onOpenChange={setKillConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kill {selected.size} process{selected.size > 1 ? "es" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will send SIGKILL to the selected process{selected.size > 1 ? "es" : ""} on{" "}
+              <strong>{currentRow.hostname}</strong>. This action cannot be undone.
+              <br />
+              <span className="font-mono text-xs mt-1 block">
+                PIDs: {Array.from(selected).sort((a, b) => a - b).join(", ")}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={killing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleKill}
+              disabled={killing}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {killing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Skull className="h-4 w-4 mr-1" />
+              )}
+              Kill
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}

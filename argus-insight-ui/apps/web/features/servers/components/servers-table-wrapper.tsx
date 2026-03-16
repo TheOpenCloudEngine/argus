@@ -5,6 +5,7 @@ import { ServersRegisterDialog } from "./servers-register-dialog"
 import { ServersTerminalDialog } from "./servers-terminal-dialog"
 import { ServersTerminalWarningDialog } from "./servers-terminal-warning-dialog"
 import { ServersTopDialog } from "./servers-top-dialog"
+import { ServersProcessesDialog } from "./servers-processes-dialog"
 import { ServersUnregisterDialog } from "./servers-unregister-dialog"
 import { ServersTable } from "./servers-table"
 import { useServers } from "./servers-provider"
@@ -54,6 +55,14 @@ export function ServersTableWrapper() {
             open={open === "top"}
             onOpenChange={(v) => {
               setOpen(v ? "top" : null)
+              if (!v) setTimeout(() => setCurrentRow(null), 300)
+            }}
+            currentRow={currentRow}
+          />
+          <ServersProcessesDialog
+            open={open === "processes"}
+            onOpenChange={(v) => {
+              setOpen(v ? "processes" : null)
               if (!v) setTimeout(() => setCurrentRow(null), 300)
             }}
             currentRow={currentRow}
