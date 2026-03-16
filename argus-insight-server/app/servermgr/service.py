@@ -5,11 +5,11 @@ Provides read operations for the argus_agents table.
 
 import logging
 
-from sqlalchemy import Integer, func, or_, select
+from sqlalchemy import Integer, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.models import ArgusAgent, ArgusAgentHeartbeat
-from app.servermgr.schemas import PaginatedServerResponse, ServerResponse
+from app.servermgr.schemas import ApproveResponse, PaginatedServerResponse, ServerResponse
 
 logger = logging.getLogger(__name__)
 
@@ -79,3 +79,19 @@ async def list_servers(
         page=page,
         page_size=page_size,
     )
+
+
+async def approve_servers(
+    session: AsyncSession,
+    hostnames: list[str],
+) -> ApproveResponse:
+    """Approve servers by changing status from UNREGISTERED to REGISTERED."""
+    stmt = (
+        update(ArgusAgent)
+        .where(ArgusAgent.hostname.in_(hostnames))
+        .where(ArgusAgent.status == "UNREGISTERED")
+        .values(status="REGISTERED")
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return ApproveResponse(updated=result.rowcount)

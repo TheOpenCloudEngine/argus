@@ -1,22 +1,26 @@
 "use client"
 
 import { type Row } from "@tanstack/react-table"
-import { MoreHorizontal, Search, Terminal } from "lucide-react"
+import { CheckCircle, MoreHorizontal, Search, Terminal } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { type Server } from "../data/schema"
+import { useServers } from "./servers-provider"
 
 type DataTableRowActionsProps = {
   row: Row<Server>
 }
 
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
+  const { setCurrentRow, setOpen } = useServers()
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -29,6 +33,18 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[160px]">
+        <DropdownMenuItem
+          onClick={() => {
+            setCurrentRow(row.original)
+            setOpen("approve")
+          }}
+        >
+          Approve
+          <span className="ml-auto">
+            <CheckCircle size={16} />
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
             console.log("Inspect server:", row.original.hostname)

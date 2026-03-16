@@ -13,7 +13,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 
-import { ChevronDown, UserMinus } from "lucide-react"
+import { CheckCircle, ChevronDown, UserMinus } from "lucide-react"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
@@ -48,6 +48,8 @@ type ServersTableProps = {
 export function ServersTable({ data, isLoading }: ServersTableProps) {
   const {
     setSelectedServers,
+    setCurrentRow,
+    setOpen,
     total,
     page,
     pageSize,
@@ -147,6 +149,17 @@ export function ServersTable({ data, isLoading }: ServersTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuItem
+                onClick={() => {
+                  setCurrentRow(null)
+                  setOpen("approve")
+                }}
+              >
+                Approve
+                <span className="ml-auto">
+                  <CheckCircle size={16} />
+                </span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   console.log("Remove from manager")

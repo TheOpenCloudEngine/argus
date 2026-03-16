@@ -29,3 +29,15 @@ class PaginatedServerResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ApproveRequest(BaseModel):
+    """Request to approve (register) servers by hostname."""
+
+    hostnames: list[str]
+
+
+class ApproveResponse(BaseModel):
+    """Response after approving servers."""
+
+    updated: int
