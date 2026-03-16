@@ -211,7 +211,7 @@ export function UsersActionDialog({
                   <FormItem>
                     <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input placeholder="john_doe" {...field} />
+                      <Input placeholder="john_doe" disabled={isEdit} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
