@@ -198,6 +198,61 @@ INSERT IGNORE INTO argus_configuration_infra (category, config_key, config_value
 ('ldap', 'group_member_attribute','memberUid',            'Group member attribute'),
 ('command', 'openssl_path',      '/usr/bin/openssl',     'Path to OpenSSL binary');
 
+-- ---------------------------------------------------------------------------
+-- Notes tables
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_notebooks (
+    id              INT             AUTO_INCREMENT PRIMARY KEY COMMENT 'Auto-incremented notebook identifier',
+    user_id         INT             NOT NULL                  COMMENT 'Owner user (FK to argus_users)',
+    title           VARCHAR(255)    NOT NULL                  COMMENT 'Notebook display title',
+    description     VARCHAR(500)                              COMMENT 'Optional notebook description',
+    color           VARCHAR(20)     NOT NULL DEFAULT 'default' COMMENT 'Theme color identifier',
+    is_pinned       BOOLEAN         NOT NULL DEFAULT FALSE    COMMENT 'Whether the notebook is pinned to top',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation timestamp',
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Record last update timestamp',
+    CONSTRAINT fk_notebook_user FOREIGN KEY (user_id) REFERENCES argus_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='User notebooks (top-level container for notes)';
+
+CREATE TABLE IF NOT EXISTS argus_notebook_sections (
+    id              INT             AUTO_INCREMENT PRIMARY KEY COMMENT 'Auto-incremented section identifier',
+    notebook_id     INT             NOT NULL                  COMMENT 'Parent notebook (FK to argus_notebooks)',
+    title           VARCHAR(255)    NOT NULL                  COMMENT 'Section display title',
+    color           VARCHAR(20)     NOT NULL DEFAULT 'default' COMMENT 'Theme color identifier',
+    display_order   INT             NOT NULL DEFAULT 0        COMMENT 'Sort order within the notebook',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation timestamp',
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Record last update timestamp',
+    CONSTRAINT fk_section_notebook FOREIGN KEY (notebook_id) REFERENCES argus_notebooks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Sections within a notebook (tab-like grouping)';
+
+CREATE TABLE IF NOT EXISTS argus_notebook_pages (
+    id              INT             AUTO_INCREMENT PRIMARY KEY COMMENT 'Auto-incremented page identifier',
+    section_id      INT             NOT NULL                  COMMENT 'Parent section (FK to argus_notebook_sections)',
+    title           VARCHAR(255)    NOT NULL                  COMMENT 'Page display title',
+    content         LONGTEXT        NOT NULL                  COMMENT 'Markdown content of the page',
+    display_order   INT             NOT NULL DEFAULT 0        COMMENT 'Sort order within the section',
+    is_pinned       BOOLEAN         NOT NULL DEFAULT FALSE    COMMENT 'Whether the page is pinned to top',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation timestamp',
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Record last update timestamp',
+    CONSTRAINT fk_page_section FOREIGN KEY (section_id) REFERENCES argus_notebook_sections(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Pages within a section containing markdown content';
+
+CREATE TABLE IF NOT EXISTS argus_notebook_page_versions (
+    id              INT             AUTO_INCREMENT PRIMARY KEY COMMENT 'Auto-incremented version identifier',
+    page_id         INT             NOT NULL                  COMMENT 'Page this version belongs to',
+    version         INT             NOT NULL                  COMMENT 'Incrementing version number per page',
+    title           VARCHAR(255)    NOT NULL                  COMMENT 'Page title at this version',
+    content         LONGTEXT        NOT NULL                  COMMENT 'Full markdown content snapshot',
+    change_summary  VARCHAR(255)                              COMMENT 'Optional description of what changed',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation timestamp',
+    UNIQUE KEY uq_page_version (page_id, version),
+    CONSTRAINT fk_version_page FOREIGN KEY (page_id) REFERENCES argus_notebook_pages(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Version history snapshots for notebook pages';
+
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access');
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('User', 'Standard user with limited access');
