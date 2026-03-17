@@ -32,8 +32,34 @@ const DELIMITER_PRESETS: { label: string; value: string }[] = [
   { label: "Pipe (|)", value: "|" },
 ]
 
+/** Sentinel values for the Delimiter select. */
+const DELIM_ESCAPE = "__escape__"
+const DELIM_CUSTOM = "__custom__"
+
 /** Sentinel value used by the Select component to represent "no quote character". */
 const NO_QUOTE = "__none__"
+
+/**
+ * Convert escape sequences in user input to actual characters.
+ * Supports: \xHH, \uHHHH, \n, \r, \t, \0, \\
+ */
+function parseEscapeSequences(input: string): string {
+  return input.replace(
+    /\\x([0-9A-Fa-f]{2})|\\u([0-9A-Fa-f]{4})|\\([nrt0\\])/g,
+    (_, hex2, hex4, simple) => {
+      if (hex2) return String.fromCharCode(parseInt(hex2, 16))
+      if (hex4) return String.fromCharCode(parseInt(hex4, 16))
+      switch (simple) {
+        case "n": return "\n"
+        case "r": return "\r"
+        case "t": return "\t"
+        case "0": return "\0"
+        case "\\": return "\\"
+        default: return simple
+      }
+    },
+  )
+}
 
 type CsvViewerProps = {
   /** Raw file URL to fetch the CSV/TSV data from. */
@@ -45,11 +71,12 @@ type CsvViewerProps = {
 export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
   const [encoding, setEncoding] = useState("UTF-8")
   const [delimiter, setDelimiter] = useState(defaultDelimiter)
-  const [customDelimiter, setCustomDelimiter] = useState("")
-  const [isCustomDelimiter, setIsCustomDelimiter] = useState(false)
+  /** Tracks which special mode is active: null = preset, "escape" or "custom". */
+  const [delimiterMode, setDelimiterMode] = useState<null | "escape" | "custom">(null)
+  /** Raw text the user typed into the auxiliary input (escape sequences or custom char). */
+  const [delimiterInput, setDelimiterInput] = useState("")
 
   const [hasHeader, setHasHeader] = useState(true)
-  const [escapeChar, setEscapeChar] = useState("")
   const [quoteChar, setQuoteChar] = useState(NO_QUOTE)
   const [customQuoteChar, setCustomQuoteChar] = useState("")
   const [isCustomQuote, setIsCustomQuote] = useState(false)
@@ -58,7 +85,25 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const effectiveDelimiter = isCustomDelimiter ? customDelimiter : delimiter
+  /** Resolve the effective single-char delimiter for PapaParse. */
+  const effectiveDelimiter = useMemo(() => {
+    if (delimiterMode === "escape") {
+      const parsed = parseEscapeSequences(delimiterInput)
+      return parsed.charAt(0) || delimiter
+    }
+    if (delimiterMode === "custom") {
+      return delimiterInput.charAt(0) || delimiter
+    }
+    return delimiter
+  }, [delimiterMode, delimiterInput, delimiter])
+
+  /** Resolve the effective escape char (only when delimiter mode is "escape"). */
+  const effectiveEscapeChar = useMemo(() => {
+    if (delimiterMode === "escape" && delimiterInput) {
+      return parseEscapeSequences(delimiterInput).charAt(0) || undefined
+    }
+    return undefined
+  }, [delimiterMode, delimiterInput])
 
   const effectiveQuoteChar = useMemo(() => {
     if (isCustomQuote) return customQuoteChar || false
@@ -67,7 +112,7 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
   }, [isCustomQuote, customQuoteChar, quoteChar])
 
   const fetchAndParse = useCallback(
-    async (enc: string, delim: string, escape: string, quote: string | false) => {
+    async (enc: string, delim: string, escape: string | undefined, quote: string | false) => {
       setIsLoading(true)
       setError(null)
       setRows([])
@@ -90,7 +135,6 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
         if (quote !== false) {
           parseConfig.quoteChar = quote
         } else {
-          // Disable quoting entirely
           parseConfig.quoteChar = "\0"
         }
 
@@ -110,13 +154,12 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
 
   // Initial load
   useEffect(() => {
-    fetchAndParse(encoding, effectiveDelimiter, escapeChar, effectiveQuoteChar)
-    // Only run on mount / url change
+    fetchAndParse(encoding, effectiveDelimiter, effectiveEscapeChar, effectiveQuoteChar)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   function handleRefresh() {
-    fetchAndParse(encoding, effectiveDelimiter, escapeChar, effectiveQuoteChar)
+    fetchAndParse(encoding, effectiveDelimiter, effectiveEscapeChar, effectiveQuoteChar)
   }
 
   const displayRows = useMemo(() => {
@@ -127,15 +170,21 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
     return { header: undefined, data: rows, allRows: rows }
   }, [rows, hasHeader])
 
-  // Column count for proper rendering
   const columnCount = useMemo(() => {
     if (!rows.length) return 0
     return Math.max(...rows.map((r) => r.length))
   }, [rows])
 
+  /** The value shown in the Delimiter Select. */
+  const delimiterSelectValue = useMemo(() => {
+    if (delimiterMode === "escape") return DELIM_ESCAPE
+    if (delimiterMode === "custom") return DELIM_CUSTOM
+    return delimiter
+  }, [delimiterMode, delimiter])
+
   return (
     <div className="flex flex-col gap-3 h-full text-sm">
-      {/* Controls – Row 1 */}
+      {/* Controls */}
       <div className="flex items-end gap-3 flex-wrap">
         <div className="space-y-1">
           <Label className="text-sm">Encoding</Label>
@@ -155,44 +204,60 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
 
         <div className="space-y-1">
           <Label className="text-sm">Delimiter</Label>
-          <Select
-            value={isCustomDelimiter ? "__custom__" : delimiter}
-            onValueChange={(v) => {
-              if (v === "__custom__") {
-                setIsCustomDelimiter(true)
-              } else {
-                setIsCustomDelimiter(false)
-                setDelimiter(v)
-              }
-            }}
-          >
-            <SelectTrigger className="w-[150px] h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DELIMITER_PRESETS.map((p) => (
-                <SelectItem key={p.value} value={p.value} className="text-sm">
-                  {p.label}
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={delimiterSelectValue}
+              onValueChange={(v) => {
+                if (v === DELIM_ESCAPE) {
+                  setDelimiterMode("escape")
+                  setDelimiterInput("")
+                } else if (v === DELIM_CUSTOM) {
+                  setDelimiterMode("custom")
+                  setDelimiterInput("")
+                } else {
+                  setDelimiterMode(null)
+                  setDelimiter(v)
+                }
+              }}
+            >
+              <SelectTrigger className="w-[150px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DELIMITER_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value} className="text-sm">
+                    {p.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value={DELIM_ESCAPE} className="text-sm">
+                  Escape
                 </SelectItem>
-              ))}
-              <SelectItem value="__custom__" className="text-sm">
-                Custom...
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+                <SelectItem value={DELIM_CUSTOM} className="text-sm">
+                  Custom...
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
-        {isCustomDelimiter && (
-          <div className="space-y-1">
-            <Label className="text-sm">Custom Delimiter</Label>
-            <Input
-              value={customDelimiter}
-              onChange={(e) => setCustomDelimiter(e.target.value)}
-              placeholder="e.g. :"
-              className="w-[80px] h-8 text-sm font-[D2Coding,monospace]"
-            />
+            {delimiterMode === "escape" && (
+              <Input
+                value={delimiterInput}
+                onChange={(e) => setDelimiterInput(e.target.value)}
+                placeholder="e.g. \x1b"
+                className="w-[100px] h-8 text-sm font-[D2Coding,monospace]"
+              />
+            )}
+
+            {delimiterMode === "custom" && (
+              <Input
+                value={delimiterInput}
+                onChange={(e) => setDelimiterInput(e.target.value.slice(0, 1))}
+                placeholder="e.g. :"
+                className="w-[80px] h-8 text-sm font-[D2Coding,monospace]"
+                maxLength={1}
+              />
+            )}
           </div>
-        )}
+        </div>
 
         <div className="space-y-1">
           <Label className="text-sm">Header</Label>
@@ -208,53 +273,41 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
         </div>
 
         <div className="space-y-1">
-          <Label className="text-sm">Escape</Label>
-          <Input
-            value={escapeChar}
-            onChange={(e) => setEscapeChar(e.target.value.slice(0, 1))}
-            placeholder="None"
-            className="w-[70px] h-8 text-sm font-[D2Coding,monospace]"
-            maxLength={1}
-          />
-        </div>
-
-        <div className="space-y-1">
           <Label className="text-sm">Quote</Label>
-          <Select
-            value={isCustomQuote ? "__custom__" : quoteChar}
-            onValueChange={(v) => {
-              if (v === "__custom__") {
-                setIsCustomQuote(true)
-              } else {
-                setIsCustomQuote(false)
-                setQuoteChar(v)
-              }
-            }}
-          >
-            <SelectTrigger className="w-[120px] h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_QUOTE} className="text-sm">None</SelectItem>
-              <SelectItem value={'"'} className="text-sm">Double (&quot;)</SelectItem>
-              <SelectItem value="'" className="text-sm">Single (&apos;)</SelectItem>
-              <SelectItem value="__custom__" className="text-sm">Custom...</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={isCustomQuote ? "__custom__" : quoteChar}
+              onValueChange={(v) => {
+                if (v === "__custom__") {
+                  setIsCustomQuote(true)
+                } else {
+                  setIsCustomQuote(false)
+                  setQuoteChar(v)
+                }
+              }}
+            >
+              <SelectTrigger className="w-[120px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_QUOTE} className="text-sm">None</SelectItem>
+                <SelectItem value={'"'} className="text-sm">Double (&quot;)</SelectItem>
+                <SelectItem value="'" className="text-sm">Single (&apos;)</SelectItem>
+                <SelectItem value="__custom__" className="text-sm">Custom...</SelectItem>
+              </SelectContent>
+            </Select>
 
-        {isCustomQuote && (
-          <div className="space-y-1">
-            <Label className="text-sm">Custom Quote</Label>
-            <Input
-              value={customQuoteChar}
-              onChange={(e) => setCustomQuoteChar(e.target.value.slice(0, 1))}
-              placeholder="e.g. `"
-              className="w-[80px] h-8 text-sm font-[D2Coding,monospace]"
-              maxLength={1}
-            />
+            {isCustomQuote && (
+              <Input
+                value={customQuoteChar}
+                onChange={(e) => setCustomQuoteChar(e.target.value.slice(0, 1))}
+                placeholder="e.g. `"
+                className="w-[80px] h-8 text-sm font-[D2Coding,monospace]"
+                maxLength={1}
+              />
+            )}
           </div>
-        )}
+        </div>
 
         <Button
           type="button"
