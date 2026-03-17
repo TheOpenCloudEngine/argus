@@ -30,6 +30,7 @@ async def ca_cert_status(
     session: AsyncSession = Depends(get_session),
 ) -> CaCertStatusResponse:
     """Check if the CA certificate file exists."""
+    logger.info("CA certificate status check requested")
     result = await service.get_ca_cert_status(session)
     return CaCertStatusResponse(**result)
 
@@ -56,6 +57,7 @@ async def ca_cert_view(
     session: AsyncSession = Depends(get_session),
 ) -> CaCertViewResponse:
     """View the CA certificate content and decoded information."""
+    logger.info("CA certificate view requested")
     try:
         result = await service.view_ca_cert(session)
     except FileNotFoundError as exc:
@@ -88,6 +90,7 @@ async def ca_key_status(
     session: AsyncSession = Depends(get_session),
 ) -> CaKeyStatusResponse:
     """Check if the CA key file exists."""
+    logger.info("CA key status check requested")
     result = await service.get_ca_key_status(session)
     return CaKeyStatusResponse(**result)
 
@@ -114,6 +117,7 @@ async def ca_key_view(
     session: AsyncSession = Depends(get_session),
 ) -> CaKeyViewResponse:
     """View the CA key content and decoded information."""
+    logger.info("CA key view requested")
     try:
         result = await service.view_ca_key(session)
     except FileNotFoundError as exc:

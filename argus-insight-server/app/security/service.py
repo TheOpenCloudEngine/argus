@@ -35,13 +35,17 @@ async def _get_config_value(session: AsyncSession, category: str, key: str) -> s
 
 async def get_openssl_path(session: AsyncSession) -> str:
     """Get the configured OpenSSL binary path."""
-    return await _get_config_value(session, "command", "openssl_path")
+    value = await _get_config_value(session, "command", "openssl_path")
+    logger.info("OpenSSL path resolved: %s", value or "(not configured)")
+    return value
 
 
 async def get_ca_cert_dir(session: AsyncSession) -> str:
     """Get the configured CA certificate directory path."""
     value = await _get_config_value(session, "security", "ca_cert_dir")
-    return value if value else DEFAULT_CERT_DIR
+    resolved = value if value else DEFAULT_CERT_DIR
+    logger.info("CA cert directory resolved: %s", resolved)
+    return resolved
 
 
 async def get_ca_cert_status(session: AsyncSession) -> dict:
@@ -69,6 +73,7 @@ async def upload_ca_cert(
     4. Validate with openssl x509.
     5. Delete the file if validation fails.
     """
+    logger.info("Starting CA certificate upload process")
     cert_dir = await get_ca_cert_dir(session)
     openssl_path = await get_openssl_path(session)
 
@@ -127,6 +132,7 @@ async def view_ca_cert(session: AsyncSession) -> dict:
 
     Returns both the raw PEM content and the decoded openssl x509 -text output.
     """
+    logger.info("Starting CA certificate view process")
     cert_dir = await get_ca_cert_dir(session)
     openssl_path = await get_openssl_path(session)
 
@@ -164,6 +170,7 @@ async def view_ca_cert(session: AsyncSession) -> dict:
 
 async def delete_ca_cert(session: AsyncSession) -> dict:
     """Delete the CA certificate file."""
+    logger.info("Starting CA certificate deletion process")
     cert_dir = await get_ca_cert_dir(session)
     cert_file = Path(cert_dir) / CA_CERT_FILENAME
 
@@ -207,6 +214,7 @@ async def upload_ca_key(
     4. Validate with openssl rsa -in ca.key -check -noout.
     5. Delete the file if validation fails (RSA key ok not in output).
     """
+    logger.info("Starting CA key upload process")
     cert_dir = await get_ca_cert_dir(session)
     openssl_path = await get_openssl_path(session)
 
@@ -266,6 +274,7 @@ async def view_ca_key(session: AsyncSession) -> dict:
 
     Returns both the raw PEM content and the decoded openssl rsa -text output.
     """
+    logger.info("Starting CA key view process")
     cert_dir = await get_ca_cert_dir(session)
     openssl_path = await get_openssl_path(session)
 
@@ -303,6 +312,7 @@ async def view_ca_key(session: AsyncSession) -> dict:
 
 async def delete_ca_key(session: AsyncSession) -> dict:
     """Delete the CA key file."""
+    logger.info("Starting CA key deletion process")
     cert_dir = await get_ca_cert_dir(session)
     key_file = Path(cert_dir) / CA_KEY_FILENAME
 
@@ -342,6 +352,7 @@ async def generate_self_signed_ca(
     4. Generate self-signed CA certificate with openssl req -x509.
     5. Return filenames on success.
     """
+    logger.info("Starting self-signed CA generation process")
     cert_dir = await get_ca_cert_dir(session)
     openssl_path = await get_openssl_path(session)
 
