@@ -163,7 +163,7 @@ INSERT IGNORE INTO argus_configuration_filebrowser_extension (preview_id, extens
 
 CREATE TABLE IF NOT EXISTS argus_configuration_infra (
     id              INT             NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    category        VARCHAR(50)     NOT NULL                COMMENT 'Category grouping (e.g. network)',
+    category        VARCHAR(50)     NOT NULL                COMMENT 'Category grouping (e.g. domain, powerdns)',
     config_key      VARCHAR(100)    NOT NULL UNIQUE         COMMENT 'Unique setting key',
     config_value    VARCHAR(500)    NOT NULL DEFAULT ''     COMMENT 'Setting value',
     description     VARCHAR(255)                            COMMENT 'Human-readable description',
@@ -173,10 +173,14 @@ CREATE TABLE IF NOT EXISTS argus_configuration_infra (
 
 -- Seed Infrastructure configuration
 INSERT IGNORE INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
-('network', 'domain_name',  '', 'Domain name for this infrastructure'),
-('network', 'dns_server_1', '', 'Primary DNS server'),
-('network', 'dns_server_2', '', 'Secondary DNS server'),
-('network', 'dns_server_3', '', 'Tertiary DNS server');
+('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
+('domain', 'dns_server_1',   '', 'Primary DNS server'),
+('domain', 'dns_server_2',   '', 'Secondary DNS server'),
+('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
+('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
+('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
+('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
+('powerdns', 'pdns_server_id', '', 'PowerDNS server ID');
 
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access');

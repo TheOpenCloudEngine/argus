@@ -225,17 +225,21 @@ CREATE TABLE IF NOT EXISTS argus_configuration_infra (
 );
 
 COMMENT ON TABLE argus_configuration_infra IS 'Infrastructure configuration (key-value, grouped by category)';
-COMMENT ON COLUMN argus_configuration_infra.category IS 'Category grouping (e.g. network)';
+COMMENT ON COLUMN argus_configuration_infra.category IS 'Category grouping (e.g. domain, powerdns)';
 COMMENT ON COLUMN argus_configuration_infra.config_key IS 'Unique setting key';
 COMMENT ON COLUMN argus_configuration_infra.config_value IS 'Setting value';
 COMMENT ON COLUMN argus_configuration_infra.description IS 'Human-readable description';
 
 -- Seed Infrastructure configuration
 INSERT INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
-('network', 'domain_name',  '', 'Domain name for this infrastructure'),
-('network', 'dns_server_1', '', 'Primary DNS server'),
-('network', 'dns_server_2', '', 'Secondary DNS server'),
-('network', 'dns_server_3', '', 'Tertiary DNS server')
+('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
+('domain', 'dns_server_1',   '', 'Primary DNS server'),
+('domain', 'dns_server_2',   '', 'Secondary DNS server'),
+('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
+('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
+('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
+('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
+('powerdns', 'pdns_server_id', '', 'PowerDNS server ID')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- Seed default roles

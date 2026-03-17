@@ -1,37 +1,34 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2, Minus, Plus, Save } from "lucide-react"
+import { Loader2, Save } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { Separator } from "@workspace/ui/components/separator"
 
 import { fetchInfraConfig, updateInfraCategory } from "@/features/settings/api"
 
-const MAX_DNS_SERVERS = 3
+const DNS_SERVER_COUNT = 3
 
 // --------------------------------------------------------------------------- //
-// Network Settings Section
+// Domain Settings Section
 // --------------------------------------------------------------------------- //
 
-function NetworkSettingsSection({
+function DomainSettingsSection({
   domainName,
   dnsServers,
   onDomainNameChange,
   onDnsServerChange,
-  onAddDns,
-  onRemoveDns,
   onSave,
   saving,
 }: {
   domainName: string
-  dnsServers: string[]
+  dnsServers: [string, string, string]
   onDomainNameChange: (value: string) => void
   onDnsServerChange: (index: number, value: string) => void
-  onAddDns: () => void
-  onRemoveDns: (index: number) => void
   onSave: () => void
   saving: boolean
 }) {
@@ -40,7 +37,7 @@ function NetworkSettingsSection({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Network</CardTitle>
+            <CardTitle>Domain</CardTitle>
             <CardDescription>
               Domain name and DNS server configuration
             </CardDescription>
@@ -71,56 +68,112 @@ function NetworkSettingsSection({
             </p>
           </div>
 
-          {/* DNS Servers */}
+          {/* DNS Servers - always 3 fixed fields */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>DNS Servers</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Up to {MAX_DNS_SERVERS} DNS servers can be configured
-                </p>
-              </div>
-              {dnsServers.length < MAX_DNS_SERVERS && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={onAddDns}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Add
-                </Button>
-              )}
+            <div>
+              <Label>DNS Servers</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure up to {DNS_SERVER_COUNT} DNS servers
+              </p>
             </div>
-            <div className="space-y-2">
-              {dnsServers.map((dns, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-6 shrink-0 text-right">
-                    {index + 1}.
-                  </span>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {Array.from({ length: DNS_SERVER_COUNT }, (_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Label htmlFor={`dns-server-${i + 1}`} className="text-xs">
+                    DNS Server {i + 1}
+                  </Label>
                   <Input
-                    value={dns}
-                    onChange={(e) => onDnsServerChange(index, e.target.value)}
-                    placeholder={`DNS Server ${index + 1} (e.g. 8.8.8.8)`}
-                    className="flex-1"
+                    id={`dns-server-${i + 1}`}
+                    value={dnsServers[i]}
+                    onChange={(e) => onDnsServerChange(i, e.target.value)}
+                    placeholder={`e.g. 8.8.${i === 0 ? "8.8" : i === 1 ? "4.4" : "0.0"}`}
                   />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => onRemoveDns(index)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
                 </div>
               ))}
-              {dnsServers.length === 0 && (
-                <p className="text-sm text-muted-foreground py-2">
-                  No DNS servers configured. Click &quot;Add&quot; to add one.
-                </p>
-              )}
             </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// --------------------------------------------------------------------------- //
+// PowerDNS Settings Section
+// --------------------------------------------------------------------------- //
+
+function PowerDnsSettingsSection({
+  values,
+  onChange,
+  onSave,
+  saving,
+}: {
+  values: { ip: string; port: string; api_key: string; server_id: string }
+  onChange: (key: string, value: string) => void
+  onSave: () => void
+  saving: boolean
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>PowerDNS</CardTitle>
+            <CardDescription>
+              PowerDNS server connection settings
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={onSave} disabled={saving}>
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+            ) : (
+              <Save className="h-4 w-4 mr-1.5" />
+            )}
+            Save
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="pdns-ip">PowerDNS IP</Label>
+            <Input
+              id="pdns-ip"
+              value={values.ip}
+              onChange={(e) => onChange("ip", e.target.value)}
+              placeholder="e.g. 10.0.1.50"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pdns-port">PowerDNS Port</Label>
+            <Input
+              id="pdns-port"
+              type="number"
+              min={1}
+              max={65535}
+              value={values.port}
+              onChange={(e) => onChange("port", e.target.value)}
+              placeholder="e.g. 8081"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pdns-api-key">API Key</Label>
+            <Input
+              id="pdns-api-key"
+              type="password"
+              value={values.api_key}
+              onChange={(e) => onChange("api_key", e.target.value)}
+              placeholder="PowerDNS API key"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pdns-server-id">Server ID</Label>
+            <Input
+              id="pdns-server-id"
+              value={values.server_id}
+              onChange={(e) => onChange("server_id", e.target.value)}
+              placeholder="e.g. localhost"
+            />
           </div>
         </div>
       </CardContent>
@@ -135,11 +188,15 @@ function NetworkSettingsSection({
 export function InfraSettings() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [savingDomain, setSavingDomain] = useState(false)
+  const [savingPdns, setSavingPdns] = useState(false)
 
-  // Network state
+  // Domain state
   const [domainName, setDomainName] = useState("")
-  const [dnsServers, setDnsServers] = useState<string[]>([])
+  const [dnsServers, setDnsServers] = useState<[string, string, string]>(["", "", ""])
+
+  // PowerDNS state
+  const [pdns, setPdns] = useState({ ip: "", port: "", api_key: "", server_id: "" })
 
   // Status messages
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -149,17 +206,27 @@ export function InfraSettings() {
       setLoading(true)
       setError(null)
       const data = await fetchInfraConfig()
-      const network = data.categories.find((c) => c.category === "network")
-      if (network) {
-        setDomainName(network.items.domain_name ?? "")
-        // Collect non-empty DNS servers and always show at least those
-        const servers: string[] = []
-        for (let i = 1; i <= MAX_DNS_SERVERS; i++) {
-          const val = network.items[`dns_server_${i}`]
-          if (val !== undefined) servers.push(val)
-        }
-        // Show at least 1 row if all are empty
-        setDnsServers(servers.length > 0 ? servers : [""])
+
+      // Domain category
+      const domain = data.categories.find((c) => c.category === "domain")
+      if (domain) {
+        setDomainName(domain.items.domain_name ?? "")
+        setDnsServers([
+          domain.items.dns_server_1 ?? "",
+          domain.items.dns_server_2 ?? "",
+          domain.items.dns_server_3 ?? "",
+        ])
+      }
+
+      // PowerDNS category
+      const powerdns = data.categories.find((c) => c.category === "powerdns")
+      if (powerdns) {
+        setPdns({
+          ip: powerdns.items.pdns_ip ?? "",
+          port: powerdns.items.pdns_port ?? "",
+          api_key: powerdns.items.pdns_api_key ?? "",
+          server_id: powerdns.items.pdns_server_id ?? "",
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load configuration")
@@ -177,41 +244,48 @@ export function InfraSettings() {
     setTimeout(() => setStatusMessage(null), 3000)
   }
 
-  async function handleSaveNetwork() {
-    setSaving(true)
+  async function handleSaveDomain() {
+    setSavingDomain(true)
     try {
-      const items: Record<string, string> = {
+      await updateInfraCategory("domain", {
         domain_name: domainName,
-      }
-      for (let i = 0; i < MAX_DNS_SERVERS; i++) {
-        items[`dns_server_${i + 1}`] = dnsServers[i] ?? ""
-      }
-      await updateInfraCategory("network", items)
-      showStatus("success", "Network settings saved successfully")
+        dns_server_1: dnsServers[0],
+        dns_server_2: dnsServers[1],
+        dns_server_3: dnsServers[2],
+      })
+      showStatus("success", "Domain settings saved successfully")
       await loadConfig()
     } catch (err) {
       showStatus("error", err instanceof Error ? err.message : "Failed to save")
     } finally {
-      setSaving(false)
+      setSavingDomain(false)
+    }
+  }
+
+  async function handleSavePdns() {
+    setSavingPdns(true)
+    try {
+      await updateInfraCategory("powerdns", {
+        pdns_ip: pdns.ip,
+        pdns_port: pdns.port,
+        pdns_api_key: pdns.api_key,
+        pdns_server_id: pdns.server_id,
+      })
+      showStatus("success", "PowerDNS settings saved successfully")
+      await loadConfig()
+    } catch (err) {
+      showStatus("error", err instanceof Error ? err.message : "Failed to save")
+    } finally {
+      setSavingPdns(false)
     }
   }
 
   function handleDnsServerChange(index: number, value: string) {
     setDnsServers((prev) => {
-      const next = [...prev]
+      const next: [string, string, string] = [...prev]
       next[index] = value
       return next
     })
-  }
-
-  function handleAddDns() {
-    if (dnsServers.length < MAX_DNS_SERVERS) {
-      setDnsServers((prev) => [...prev, ""])
-    }
-  }
-
-  function handleRemoveDns(index: number) {
-    setDnsServers((prev) => prev.filter((_, i) => i !== index))
   }
 
   if (loading) {
@@ -249,16 +323,24 @@ export function InfraSettings() {
         </div>
       )}
 
-      {/* Network Settings */}
-      <NetworkSettingsSection
+      {/* Domain Settings */}
+      <DomainSettingsSection
         domainName={domainName}
         dnsServers={dnsServers}
         onDomainNameChange={setDomainName}
         onDnsServerChange={handleDnsServerChange}
-        onAddDns={handleAddDns}
-        onRemoveDns={handleRemoveDns}
-        onSave={handleSaveNetwork}
-        saving={saving}
+        onSave={handleSaveDomain}
+        saving={savingDomain}
+      />
+
+      <Separator />
+
+      {/* PowerDNS Settings */}
+      <PowerDnsSettingsSection
+        values={pdns}
+        onChange={(key, value) => setPdns((prev) => ({ ...prev, [key]: value }))}
+        onSave={handleSavePdns}
+        saving={savingPdns}
       />
     </div>
   )
