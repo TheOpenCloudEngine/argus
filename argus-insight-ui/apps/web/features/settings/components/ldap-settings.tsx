@@ -40,11 +40,11 @@ const LDAP_DEFAULTS: LdapState = {
   ldap_bind_password: "",
   user_search_base: "",
   user_object_class: "person",
-  user_search_filter: "",
+  user_search_filter: "(uid={0})",
   user_name_attribute: "uid",
   group_search_base: "",
   group_object_class: "posixGroup",
-  group_search_filter: "",
+  group_search_filter: "(cn={0})",
   group_name_attribute: "cn",
   group_member_attribute: "memberUid",
 }
@@ -62,6 +62,13 @@ export function LdapSettings() {
 
   // Status messages
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const canSave =
+    ldap.ldap_url.trim().length > 0 &&
+    ldap.ldap_bind_user.trim().length > 0 &&
+    ldap.ldap_bind_password.trim().length > 0 &&
+    ldap.user_search_base.trim().length > 0 &&
+    ldap.group_search_base.trim().length > 0
 
   const loadConfig = useCallback(async () => {
     try {
@@ -154,7 +161,7 @@ export function LdapSettings() {
 
       {/* Save button */}
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={saving}>
+        <Button size="sm" onClick={handleSave} disabled={saving || !canSave}>
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
           ) : (
@@ -187,7 +194,7 @@ export function LdapSettings() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="ldap-url">LDAP/AD URL</Label>
+                <Label htmlFor="ldap-url">LDAP/AD URL <span className="text-destructive">*</span></Label>
                 <Input
                   id="ldap-url"
                   value={ldap.ldap_url}
@@ -205,7 +212,7 @@ export function LdapSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ldap-bind-user">LDAP Bind User</Label>
+                <Label htmlFor="ldap-bind-user">LDAP Bind User <span className="text-destructive">*</span></Label>
                 <Input
                   id="ldap-bind-user"
                   value={ldap.ldap_bind_user}
@@ -214,7 +221,7 @@ export function LdapSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ldap-bind-password">LDAP Bind Password</Label>
+                <Label htmlFor="ldap-bind-password">LDAP Bind Password <span className="text-destructive">*</span></Label>
                 <Input
                   id="ldap-bind-password"
                   type="password"
@@ -239,7 +246,7 @@ export function LdapSettings() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="user-search-base">User Search Base</Label>
+              <Label htmlFor="user-search-base">User Search Base <span className="text-destructive">*</span></Label>
               <Input
                 id="user-search-base"
                 value={ldap.user_search_base}
@@ -289,7 +296,7 @@ export function LdapSettings() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="group-search-base">Group Search Base</Label>
+              <Label htmlFor="group-search-base">Group Search Base <span className="text-destructive">*</span></Label>
               <Input
                 id="group-search-base"
                 value={ldap.group_search_base}
