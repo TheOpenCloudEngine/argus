@@ -14,6 +14,12 @@ import {
 import type { StorageEntry } from "./types"
 import { getExtension } from "./utils"
 import { CsvViewer } from "./csv-viewer"
+import { PdfViewer } from "./pdf-viewer"
+import { VideoViewer } from "./video-viewer"
+import { AudioViewer } from "./audio-viewer"
+import { XlsxViewer } from "./xlsx-viewer"
+import { DocxViewer } from "./docx-viewer"
+import { ParquetViewer } from "./parquet-viewer"
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
@@ -24,7 +30,7 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.
   ),
 })
 
-/** Maximum file size in bytes that the viewer can display (20 KB). */
+/** Maximum file size in bytes that the text viewer can display (20 KB). */
 const MAX_VIEW_SIZE = 20 * 1024
 
 /** Map file extensions to Monaco Editor language identifiers. */
@@ -86,11 +92,61 @@ const csvExtensions: Record<string, string> = {
   tsv: "\t",
 }
 
-/** All viewable extensions (code/text + images + csv/tsv). */
+/** PDF extension. */
+const pdfExtensions = new Set(["pdf"])
+
+/** Video extensions. */
+const videoExtensions = new Set(["mp4", "webm", "ogg", "mov", "m4v", "avi", "mkv"])
+
+/** Audio extensions. */
+const audioExtensions = new Set(["mp3", "wav", "m4a", "flac", "aac", "wma"])
+
+/** Spreadsheet extensions handled by SheetJS. */
+const xlsxExtensions = new Set(["xls", "xlsx"])
+
+/** Word document extensions handled by mammoth (.docx only). */
+const docxExtensions = new Set(["docx"])
+
+/** Parquet file extension. */
+const parquetExtensions = new Set(["parquet"])
+
+/** File type category for routing to the correct viewer. */
+type FileCategory =
+  | "text"
+  | "image"
+  | "csv"
+  | "pdf"
+  | "video"
+  | "audio"
+  | "xlsx"
+  | "docx"
+  | "parquet"
+  | null
+
+function getFileCategory(ext: string): FileCategory {
+  if (ext in extensionToLanguage) return "text"
+  if (imageExtensions.has(ext)) return "image"
+  if (ext in csvExtensions) return "csv"
+  if (pdfExtensions.has(ext)) return "pdf"
+  if (videoExtensions.has(ext)) return "video"
+  if (audioExtensions.has(ext)) return "audio"
+  if (xlsxExtensions.has(ext)) return "xlsx"
+  if (docxExtensions.has(ext)) return "docx"
+  if (parquetExtensions.has(ext)) return "parquet"
+  return null
+}
+
+/** All viewable extensions. */
 const viewableExtensions = new Set([
   ...Object.keys(extensionToLanguage),
   ...imageExtensions,
   ...Object.keys(csvExtensions),
+  ...pdfExtensions,
+  ...videoExtensions,
+  ...audioExtensions,
+  ...xlsxExtensions,
+  ...docxExtensions,
+  ...parquetExtensions,
 ])
 
 /** Check whether a file can be viewed. */
@@ -102,6 +158,16 @@ export function isViewableFile(name: string): boolean {
 export function isCsvTsvFile(name: string): boolean {
   return getExtension(name) in csvExtensions
 }
+
+/** Categories that skip the text-specific size limit. */
+const SIZE_UNLIMITED_CATEGORIES = new Set<FileCategory>([
+  "image", "csv", "pdf", "video", "audio", "xlsx", "docx", "parquet",
+])
+
+/** Categories that need a wider dialog. */
+const WIDE_DIALOG_CATEGORIES = new Set<FileCategory>([
+  "csv", "xlsx", "parquet", "video", "pdf",
+])
 
 type FileViewerDialogProps = {
   open: boolean
@@ -118,15 +184,13 @@ export function FileViewerDialog({
   getDownloadUrl,
 }: FileViewerDialogProps) {
   const [content, setContent] = useState<string | null>(null)
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [csvUrl, setCsvUrl] = useState<string | null>(null)
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const reset = useCallback(() => {
     setContent(null)
-    setImageUrl(null)
-    setCsvUrl(null)
+    setMediaUrl(null)
     setIsLoading(false)
     setError(null)
   }, [])
@@ -138,11 +202,15 @@ export function FileViewerDialog({
     }
 
     const ext = getExtension(entry.name)
-    const isImage = imageExtensions.has(ext)
-    const isCsv = ext in csvExtensions
+    const category = getFileCategory(ext)
 
-    // Size check for non-image, non-csv files
-    if (!isImage && !isCsv && entry.size > MAX_VIEW_SIZE) {
+    if (!category) {
+      setError("Unsupported file format.")
+      return
+    }
+
+    // Size check for text files only
+    if (!SIZE_UNLIMITED_CATEGORIES.has(category) && entry.size > MAX_VIEW_SIZE) {
       setError("Only files of 20 KB or smaller can be displayed.")
       return
     }
@@ -152,13 +220,8 @@ export function FileViewerDialog({
 
     getDownloadUrl(entry.key)
       .then((url) => {
-        if (isImage) {
-          setImageUrl(url)
-          setIsLoading(false)
-        } else if (isCsv) {
-          setCsvUrl(url)
-          setIsLoading(false)
-        } else {
+        if (category === "text") {
+          // Text files: fetch content as string for Monaco
           return fetch(url)
             .then((res) => {
               if (!res.ok) throw new Error(`Failed to fetch file (${res.status})`)
@@ -169,6 +232,9 @@ export function FileViewerDialog({
               setIsLoading(false)
             })
         }
+        // All other categories: pass URL to the dedicated viewer
+        setMediaUrl(url)
+        setIsLoading(false)
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load file")
@@ -179,13 +245,13 @@ export function FileViewerDialog({
   if (!entry) return null
 
   const ext = getExtension(entry.name)
-  const isImage = imageExtensions.has(ext)
-  const isCsv = ext in csvExtensions
+  const category = getFileCategory(ext)
   const language = extensionToLanguage[ext] ?? "plaintext"
+  const isWide = WIDE_DIALOG_CATEGORIES.has(category)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`max-h-[85vh] flex flex-col ${isCsv ? "sm:max-w-[1000px]" : "sm:max-w-[800px]"}`}>
+      <DialogContent className={`max-h-[85vh] flex flex-col ${isWide ? "sm:max-w-[1000px]" : "sm:max-w-[800px]"}`}>
         <DialogHeader>
           <DialogTitle className="truncate">{entry.name}</DialogTitle>
         </DialogHeader>
@@ -203,22 +269,55 @@ export function FileViewerDialog({
             </div>
           )}
 
-          {!isLoading && !error && isImage && imageUrl && (
+          {/* Image */}
+          {!isLoading && !error && category === "image" && mediaUrl && (
             <div className="flex items-center justify-center overflow-auto max-h-[70vh]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={imageUrl}
+                src={mediaUrl}
                 alt={entry.name}
                 className="max-w-full max-h-[70vh] object-contain rounded"
               />
             </div>
           )}
 
-          {!isLoading && !error && isCsv && csvUrl && (
-            <CsvViewer url={csvUrl} defaultDelimiter={csvExtensions[ext]} />
+          {/* CSV / TSV */}
+          {!isLoading && !error && category === "csv" && mediaUrl && (
+            <CsvViewer url={mediaUrl} defaultDelimiter={csvExtensions[ext]} />
           )}
 
-          {!isLoading && !error && !isImage && !isCsv && content !== null && (
+          {/* PDF */}
+          {!isLoading && !error && category === "pdf" && mediaUrl && (
+            <PdfViewer url={mediaUrl} />
+          )}
+
+          {/* Video */}
+          {!isLoading && !error && category === "video" && mediaUrl && (
+            <VideoViewer url={mediaUrl} extension={ext} />
+          )}
+
+          {/* Audio */}
+          {!isLoading && !error && category === "audio" && mediaUrl && (
+            <AudioViewer url={mediaUrl} extension={ext} fileName={entry.name} />
+          )}
+
+          {/* XLSX / XLS */}
+          {!isLoading && !error && category === "xlsx" && mediaUrl && (
+            <XlsxViewer url={mediaUrl} />
+          )}
+
+          {/* DOCX */}
+          {!isLoading && !error && category === "docx" && mediaUrl && (
+            <DocxViewer url={mediaUrl} />
+          )}
+
+          {/* Parquet */}
+          {!isLoading && !error && category === "parquet" && mediaUrl && (
+            <ParquetViewer url={mediaUrl} />
+          )}
+
+          {/* Text / Code (Monaco) */}
+          {!isLoading && !error && category === "text" && content !== null && (
             <div className="h-[500px] overflow-hidden">
               <MonacoEditor
                 height="100%"

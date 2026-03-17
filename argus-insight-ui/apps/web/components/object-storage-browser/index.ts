@@ -12,6 +12,12 @@ export { FileViewerDialog } from "./file-viewer-dialog"
 export { CsvViewer } from "./csv-viewer"
 export { CatViewerDialog } from "./cat-viewer-dialog"
 export { HexViewer } from "./hex-viewer"
+export { PdfViewer } from "./pdf-viewer"
+export { VideoViewer } from "./video-viewer"
+export { AudioViewer } from "./audio-viewer"
+export { XlsxViewer } from "./xlsx-viewer"
+export { DocxViewer } from "./docx-viewer"
+export { ParquetViewer } from "./parquet-viewer"
 
 export type {
   StorageFolder,
