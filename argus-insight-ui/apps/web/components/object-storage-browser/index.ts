@@ -5,6 +5,8 @@ export { BrowserTable } from "./browser-table"
 export { CreateFolderDialog } from "./create-folder-dialog"
 export { UploadDialog } from "./upload-dialog"
 export { DeleteDialog } from "./delete-dialog"
+export { PropertiesDialog } from "./properties-dialog"
+export { UploadProgressDialog } from "./upload-progress-dialog"
 
 export type {
   StorageFolder,
@@ -12,6 +14,7 @@ export type {
   StorageEntry,
   ListObjectsResponse,
   BrowserDataSource,
+  UploadProgressCallback,
   SortConfig,
   SortDirection,
 } from "./types"

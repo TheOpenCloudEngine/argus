@@ -37,6 +37,12 @@ export type ListObjectsResponse = {
   isTruncated: boolean
 }
 
+/** Progress callback for a single file upload. */
+export type UploadProgressCallback = (
+  fileIndex: number,
+  progress: number,
+) => void
+
 /** Callbacks that the browser delegates to the parent / data layer. */
 export type BrowserDataSource = {
   /** List objects under a given prefix with optional pagination token. */
@@ -54,6 +60,17 @@ export type BrowserDataSource = {
 
   /** Upload files to the given prefix. Returns when complete. */
   uploadFiles: (bucket: string, prefix: string, files: File[]) => Promise<void>
+
+  /**
+   * Upload a single file with progress reporting.
+   * If provided, the browser uses this for drag-and-drop uploads.
+   */
+  uploadFileWithProgress?: (
+    bucket: string,
+    prefix: string,
+    file: File,
+    onProgress: (progress: number) => void,
+  ) => Promise<void>
 
   /** Get a download URL (presigned) for a given key. */
   getDownloadUrl: (bucket: string, key: string) => Promise<string>

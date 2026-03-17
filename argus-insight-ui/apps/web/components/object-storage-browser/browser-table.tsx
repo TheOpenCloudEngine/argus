@@ -27,6 +27,7 @@ type BrowserTableProps = {
   selectedKeys: Set<string>
   onSelectionChange: (keys: Set<string>) => void
   onFolderOpen: (prefix: string) => void
+  onEntryDoubleClick?: (entry: StorageEntry) => void
   sort: SortConfig
   onSortChange: (sort: SortConfig) => void
   isLoading: boolean
@@ -96,6 +97,7 @@ export function BrowserTable({
   selectedKeys,
   onSelectionChange,
   onFolderOpen,
+  onEntryDoubleClick,
   sort,
   onSortChange,
   isLoading,
@@ -197,8 +199,9 @@ export function BrowserTable({
             return (
               <tr
                 key={entry.key}
+                onDoubleClick={() => onEntryDoubleClick?.(entry)}
                 className={cn(
-                  "hover:bg-muted/50 transition-colors",
+                  "hover:bg-muted/50 transition-colors cursor-pointer",
                   isSelected && "bg-muted/40",
                 )}
               >

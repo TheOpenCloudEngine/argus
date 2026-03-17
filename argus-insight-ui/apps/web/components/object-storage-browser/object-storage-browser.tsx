@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, Upload } from "lucide-react"
 
+import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
 
 import type {
@@ -18,6 +19,8 @@ import { BrowserTable } from "./browser-table"
 import { CreateFolderDialog } from "./create-folder-dialog"
 import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog } from "./delete-dialog"
+import { PropertiesDialog } from "./properties-dialog"
+import { UploadProgressDialog, type FileUploadStatus } from "./upload-progress-dialog"
 
 type ObjectStorageBrowserProps = {
   /** The bucket name to browse. */
@@ -55,6 +58,15 @@ export function ObjectStorageBrowser({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [dialogLoading, setDialogLoading] = useState(false)
+
+  // --- Properties dialog state ---
+  const [propertiesEntry, setPropertiesEntry] = useState<StorageEntry | null>(null)
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
+
+  // --- Drag-and-drop state ---
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<FileUploadStatus[]>([])
+  const [uploadProgressOpen, setUploadProgressOpen] = useState(false)
 
   // --- Data fetching ---
   const fetchData = useCallback(
@@ -199,8 +211,119 @@ export function ObjectStorageBrowser({
     }
   }
 
+  // --- Double-click properties ---
+  function handleEntryDoubleClick(entry: StorageEntry) {
+    // For folders, double-click navigates into them
+    if (entry.kind === "folder") {
+      navigateTo(entry.key)
+      return
+    }
+    // For files, show properties
+    setPropertiesEntry(entry)
+    setPropertiesOpen(true)
+  }
+
+  // --- Drag-and-drop upload with progress ---
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set false if leaving the container (not entering a child)
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false)
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    if (droppedFiles.length === 0) return
+
+    // Initialize progress tracking
+    const initialStatus: FileUploadStatus[] = droppedFiles.map((file) => ({
+      file,
+      progress: 0,
+      status: "pending",
+    }))
+    setUploadProgress(initialStatus)
+    setUploadProgressOpen(true)
+
+    const uploadFn = dataSource.uploadFileWithProgress
+
+    for (let i = 0; i < droppedFiles.length; i++) {
+      // Mark current file as uploading
+      setUploadProgress((prev) =>
+        prev.map((item, idx) =>
+          idx === i ? { ...item, status: "uploading" } : item,
+        ),
+      )
+
+      try {
+        if (uploadFn) {
+          await uploadFn(bucket, prefix, droppedFiles[i], (progress) => {
+            setUploadProgress((prev) =>
+              prev.map((item, idx) =>
+                idx === i ? { ...item, progress } : item,
+              ),
+            )
+          })
+        } else {
+          // Fallback: upload without granular progress
+          await dataSource.uploadFiles(bucket, prefix, [droppedFiles[i]])
+        }
+
+        setUploadProgress((prev) =>
+          prev.map((item, idx) =>
+            idx === i ? { ...item, progress: 100, status: "done" } : item,
+          ),
+        )
+      } catch (err) {
+        setUploadProgress((prev) =>
+          prev.map((item, idx) =>
+            idx === i
+              ? {
+                  ...item,
+                  status: "error",
+                  error: err instanceof Error ? err.message : "Upload failed",
+                }
+              : item,
+          ),
+        )
+      }
+    }
+
+    // Refresh after all uploads
+    await fetchData(prefix)
+  }
+
   return (
-    <div className={className}>
+    <div
+      className={cn("relative", className)}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg">
+          <div className="flex flex-col items-center gap-3 text-primary">
+            <Upload className="h-12 w-12" />
+            <p className="text-lg font-medium">Drop files to upload</p>
+            <p className="text-sm text-muted-foreground">
+              Files will be uploaded to the current directory
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
         {/* Breadcrumb */}
         <BrowserBreadcrumb
@@ -231,6 +354,7 @@ export function ObjectStorageBrowser({
           selectedKeys={selectedKeys}
           onSelectionChange={setSelectedKeys}
           onFolderOpen={navigateTo}
+          onEntryDoubleClick={handleEntryDoubleClick}
           sort={sort}
           onSortChange={setSort}
           isLoading={isLoading}
@@ -285,6 +409,16 @@ export function ObjectStorageBrowser({
         selectedKeys={Array.from(selectedKeys)}
         onConfirm={handleDelete}
         isLoading={dialogLoading}
+      />
+      <PropertiesDialog
+        open={propertiesOpen}
+        onOpenChange={setPropertiesOpen}
+        entry={propertiesEntry}
+      />
+      <UploadProgressDialog
+        open={uploadProgressOpen}
+        onOpenChange={setUploadProgressOpen}
+        items={uploadProgress}
       />
     </div>
   )

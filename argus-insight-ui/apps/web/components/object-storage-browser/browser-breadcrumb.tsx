@@ -20,7 +20,7 @@ export function BrowserBreadcrumb({
     .filter(Boolean)
 
   return (
-    <nav className="flex items-center gap-1 text-sm overflow-x-auto py-1">
+    <nav className="flex items-center gap-1 text-base overflow-x-auto py-1">
       <button
         type="button"
         onClick={() => onNavigate("")}

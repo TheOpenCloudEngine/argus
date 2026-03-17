@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import {
   Download,
   FolderPlus,
@@ -77,21 +78,43 @@ export function BrowserToolbar({
   onRefresh,
   isLoading,
 }: BrowserToolbarProps) {
+  const [localSearch, setLocalSearch] = useState(searchValue)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync external → local when parent resets (e.g. navigation)
+  useEffect(() => {
+    setLocalSearch(searchValue)
+  }, [searchValue])
+
+  function handleChange(value: string) {
+    setLocalSearch(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onSearchChange(value)
+    }, 3000)
+  }
+
+  function handleClear() {
+    setLocalSearch("")
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    onSearchChange("")
+  }
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2 flex-1">
-        <div className="relative w-[220px]">
+        <div className="relative w-[286px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Filter by name..."
-            value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={localSearch}
+            onChange={(e) => handleChange(e.target.value)}
             className="h-8 pl-8 pr-8 text-sm"
           />
-          {searchValue && (
+          {localSearch && (
             <button
               type="button"
-              onClick={() => onSearchChange("")}
+              onClick={handleClear}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />

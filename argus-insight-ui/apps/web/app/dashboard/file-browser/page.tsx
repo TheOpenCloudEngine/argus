@@ -8,6 +8,7 @@ import {
   deleteObjects,
   createFolder,
   uploadFiles,
+  uploadFileWithProgress,
   getDownloadUrl,
 } from "@/features/object-storage/api"
 
@@ -16,6 +17,7 @@ const dataSource: BrowserDataSource = {
   deleteObjects,
   createFolder,
   uploadFiles,
+  uploadFileWithProgress,
   getDownloadUrl,
 }
 

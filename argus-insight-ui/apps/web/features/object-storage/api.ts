@@ -117,6 +117,50 @@ export async function uploadFiles(
 }
 
 /**
+ * Upload a single file with progress tracking via XMLHttpRequest.
+ */
+export function uploadFileWithProgress(
+  bucket: string,
+  prefix: string,
+  file: File,
+  onProgress: (progress: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const key = prefix + file.name
+    const params = new URLSearchParams()
+    params.set("bucket", bucket)
+    params.set("key", key)
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${BASE}/objects/upload?${params.toString()}`)
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    })
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100)
+        resolve()
+      } else {
+        reject(new Error(`Failed to upload ${file.name}: ${xhr.status}`))
+      }
+    })
+
+    xhr.addEventListener("error", () => {
+      reject(new Error(`Network error uploading ${file.name}`))
+    })
+
+    xhr.send(formData)
+  })
+}
+
+/**
  * Get a presigned download URL for a given key.
  */
 export async function getDownloadUrl(
