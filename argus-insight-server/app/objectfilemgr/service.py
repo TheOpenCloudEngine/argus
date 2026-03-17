@@ -758,6 +758,49 @@ async def get_filebrowser_config(session: AsyncSession) -> FilebrowserConfigResp
     return FilebrowserConfigResponse(browser=browser, preview=preview)
 
 
+async def update_browser_settings(session: AsyncSession, settings_map: dict[str, int]) -> None:
+    """Update browser-level key-value settings."""
+    for key, value in settings_map.items():
+        result = await session.execute(
+            select(ArgusConfigurationFilebrowser).where(
+                ArgusConfigurationFilebrowser.config_key == key
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.config_value = str(value)
+        else:
+            session.add(ArgusConfigurationFilebrowser(
+                config_key=key, config_value=str(value),
+            ))
+    await session.commit()
+    logger.info("UpdateBrowserSettings: keys=%s", list(settings_map.keys()))
+
+
+async def update_preview_category(
+    session: AsyncSession,
+    category: str,
+    max_file_size: int,
+    max_preview_rows: int | None,
+) -> None:
+    """Update a single preview category's limits."""
+    result = await session.execute(
+        select(ArgusConfigurationFilebrowserPreview).where(
+            ArgusConfigurationFilebrowserPreview.category == category
+        )
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise ValueError(f"Preview category not found: {category}")
+    row.max_file_size = max_file_size
+    row.max_preview_rows = max_preview_rows
+    await session.commit()
+    logger.info(
+        "UpdatePreviewCategory: category=%s max_file_size=%d max_preview_rows=%s",
+        category, max_file_size, max_preview_rows,
+    )
+
+
 def _serialize_value(val):
     """Convert a cell value to a JSON-safe type."""
     if val is None:

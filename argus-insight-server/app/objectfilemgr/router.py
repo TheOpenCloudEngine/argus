@@ -43,6 +43,8 @@ from app.objectfilemgr.schemas import (
     S3SelectResponse,
     TablePreviewResponse,
     TaggingResponse,
+    UpdateBrowserSettingsRequest,
+    UpdatePreviewCategoryRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,6 +69,36 @@ async def get_configuration(session: AsyncSession = Depends(get_session)):
         return await service.get_filebrowser_config(session)
     except Exception as e:
         logger.error("get_configuration error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/configuration/browser", status_code=204)
+async def update_browser_settings(
+    body: UpdateBrowserSettingsRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update browser-level settings (sort_disable_threshold, max_keys_per_page, etc.)."""
+    try:
+        await service.update_browser_settings(session, body.browser)
+    except Exception as e:
+        logger.error("update_browser_settings error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/configuration/preview", status_code=204)
+async def update_preview_category(
+    body: UpdatePreviewCategoryRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update a preview category's limits (max_file_size, max_preview_rows)."""
+    try:
+        await service.update_preview_category(
+            session, body.category, body.max_file_size, body.max_preview_rows,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("update_preview_category error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

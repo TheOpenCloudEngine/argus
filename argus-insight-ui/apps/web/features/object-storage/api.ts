@@ -32,6 +32,36 @@ export async function fetchFilebrowserConfig(): Promise<FilebrowserConfig> {
 }
 
 /**
+ * Update browser-level settings (sort_disable_threshold, max_keys_per_page, etc.).
+ */
+export async function updateBrowserSettings(
+  browser: Record<string, number>,
+): Promise<void> {
+  const res = await fetch(`${BASE}/configuration/browser`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ browser }),
+  })
+  if (!res.ok) throw new Error(`Failed to update browser settings: ${res.status}`)
+}
+
+/**
+ * Update a single preview category's limits.
+ */
+export async function updatePreviewCategory(
+  category: string,
+  max_file_size: number,
+  max_preview_rows: number | null,
+): Promise<void> {
+  const res = await fetch(`${BASE}/configuration/preview`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, max_file_size, max_preview_rows }),
+  })
+  if (!res.ok) throw new Error(`Failed to update preview category: ${res.status}`)
+}
+
+/**
  * List objects and folders under a prefix.
  * Maps the server response to the UI's ListObjectsResponse shape.
  */
