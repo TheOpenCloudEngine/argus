@@ -10,6 +10,7 @@ import {
   uploadFiles,
   uploadFileWithProgress,
   getDownloadUrl,
+  copyObject,
 } from "@/features/object-storage/api"
 
 const dataSource: BrowserDataSource = {
@@ -19,6 +20,7 @@ const dataSource: BrowserDataSource = {
   uploadFiles,
   uploadFileWithProgress,
   getDownloadUrl,
+  copyObject,
 }
 
 export default function FileBrowserPage() {

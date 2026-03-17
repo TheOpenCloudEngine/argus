@@ -14,13 +14,26 @@ import {
   Folder,
   FileSpreadsheet,
   FileType,
+  Pencil,
+  Trash2,
+  FolderInput,
+  Info,
 } from "lucide-react"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Checkbox } from "@workspace/ui/components/checkbox"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@workspace/ui/components/context-menu"
 
 import type { StorageEntry, SortConfig, SortDirection } from "./types"
 import { formatBytes, formatDate, getFileCategory } from "./utils"
+
+export type EntryContextAction = "rename" | "delete" | "move" | "properties"
 
 type BrowserTableProps = {
   entries: StorageEntry[]
@@ -28,6 +41,7 @@ type BrowserTableProps = {
   onSelectionChange: (keys: Set<string>) => void
   onFolderOpen: (prefix: string) => void
   onEntryDoubleClick?: (entry: StorageEntry) => void
+  onContextAction?: (action: EntryContextAction, entry: StorageEntry) => void
   sort: SortConfig
   onSortChange: (sort: SortConfig) => void
   isLoading: boolean
@@ -98,6 +112,7 @@ export function BrowserTable({
   onSelectionChange,
   onFolderOpen,
   onEntryDoubleClick,
+  onContextAction,
   sort,
   onSortChange,
   isLoading,
@@ -197,53 +212,78 @@ export function BrowserTable({
             const isSelected = selectedKeys.has(entry.key)
 
             return (
-              <tr
-                key={entry.key}
-                onDoubleClick={() => onEntryDoubleClick?.(entry)}
-                className={cn(
-                  "hover:bg-muted/50 transition-colors cursor-pointer",
-                  isSelected && "bg-muted/40",
-                )}
-              >
-                <td className="px-3 py-1.5">
-                  <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={() => toggleOne(entry.key)}
-                    aria-label={`Select ${entry.name}`}
-                  />
-                </td>
-                <td className="px-3 py-1.5">
-                  {isFolder ? (
-                    <button
-                      type="button"
-                      onClick={() => onFolderOpen(entry.key)}
-                      className="flex items-center gap-2 hover:text-primary transition-colors group"
-                    >
-                      <Folder className="h-4 w-4 text-blue-500 shrink-0" />
-                      <span className="group-hover:underline truncate">
-                        {entry.name}
-                      </span>
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <FileIcon
-                        name={entry.name}
-                        className="h-4 w-4 text-muted-foreground shrink-0"
+              <ContextMenu key={entry.key}>
+                <ContextMenuTrigger asChild>
+                  <tr
+                    onDoubleClick={() => onEntryDoubleClick?.(entry)}
+                    className={cn(
+                      "hover:bg-muted/50 transition-colors cursor-pointer",
+                      isSelected && "bg-muted/40",
+                    )}
+                  >
+                    <td className="px-3 py-1.5">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleOne(entry.key)}
+                        aria-label={`Select ${entry.name}`}
                       />
-                      <span className="truncate">{entry.name}</span>
-                    </div>
-                  )}
-                </td>
-                <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
-                  {isFolder ? "-" : formatBytes(entry.size)}
-                </td>
-                <td className="px-3 py-1.5 text-muted-foreground">
-                  {isFolder ? "-" : formatDate(entry.lastModified)}
-                </td>
-                <td className="px-3 py-1.5 text-muted-foreground">
-                  {isFolder ? "-" : (entry.storageClass ?? "STANDARD")}
-                </td>
-              </tr>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {isFolder ? (
+                        <button
+                          type="button"
+                          onClick={() => onFolderOpen(entry.key)}
+                          className="flex items-center gap-2 hover:text-primary transition-colors group"
+                        >
+                          <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                          <span className="group-hover:underline truncate">
+                            {entry.name}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <FileIcon
+                            name={entry.name}
+                            className="h-4 w-4 text-muted-foreground shrink-0"
+                          />
+                          <span className="truncate">{entry.name}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                      {isFolder ? "-" : formatBytes(entry.size)}
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {isFolder ? "-" : formatDate(entry.lastModified)}
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {isFolder ? "-" : (entry.storageClass ?? "STANDARD")}
+                    </td>
+                  </tr>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onClick={() => onContextAction?.("rename", entry)}>
+                    <Pencil className="h-4 w-4" />
+                    Rename
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    variant="destructive"
+                    onClick={() => onContextAction?.("delete", entry)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => onContextAction?.("move", entry)}>
+                    <FolderInput className="h-4 w-4" />
+                    Move
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => onContextAction?.("properties", entry)}>
+                    <Info className="h-4 w-4" />
+                    Properties
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             )
           })}
         </tbody>

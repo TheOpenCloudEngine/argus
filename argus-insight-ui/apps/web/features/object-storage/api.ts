@@ -117,6 +117,28 @@ export async function uploadFiles(
 }
 
 /**
+ * Copy an object to a new key (used for rename/move).
+ */
+export async function copyObject(
+  bucket: string,
+  sourceKey: string,
+  destinationKey: string,
+): Promise<void> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+
+  const res = await fetch(`${BASE}/objects/copy?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source_key: sourceKey,
+      destination_key: destinationKey,
+    }),
+  })
+  if (!res.ok) throw new Error(`Failed to copy object: ${res.status}`)
+}
+
+/**
  * Upload a single file with progress tracking via XMLHttpRequest.
  */
 export function uploadFileWithProgress(

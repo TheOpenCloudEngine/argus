@@ -88,7 +88,10 @@ export function PropertiesDialog({
 
           {!isFolder && (
             <>
-              <PropertyRow label="Size" value={formatBytes(entry.size)} />
+              <PropertyRow
+                label="Size"
+                value={`${formatBytes(entry.size)} (${entry.size.toLocaleString()} Bytes)`}
+              />
               <PropertyRow
                 label="Last Modified"
                 value={formatDate(entry.lastModified)}

@@ -74,6 +74,13 @@ export type BrowserDataSource = {
 
   /** Get a download URL (presigned) for a given key. */
   getDownloadUrl: (bucket: string, key: string) => Promise<string>
+
+  /** Copy an object to a new key. Used for rename/move (copy + delete). */
+  copyObject?: (
+    bucket: string,
+    sourceKey: string,
+    destinationKey: string,
+  ) => Promise<void>
 }
 
 /** Sort direction. */

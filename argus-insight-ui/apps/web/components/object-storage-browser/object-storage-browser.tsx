@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Loader2, Upload } from "lucide-react"
 
 import { cn } from "@workspace/ui/lib/utils"
@@ -15,11 +15,13 @@ import type {
 } from "./types"
 import { BrowserBreadcrumb } from "./browser-breadcrumb"
 import { BrowserToolbar } from "./browser-toolbar"
-import { BrowserTable } from "./browser-table"
+import { BrowserTable, type EntryContextAction } from "./browser-table"
 import { CreateFolderDialog } from "./create-folder-dialog"
 import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog } from "./delete-dialog"
 import { PropertiesDialog } from "./properties-dialog"
+import { RenameDialog } from "./rename-dialog"
+import { MoveDialog } from "./move-dialog"
 import { UploadProgressDialog, type FileUploadStatus } from "./upload-progress-dialog"
 
 type ObjectStorageBrowserProps = {
@@ -38,6 +40,8 @@ export function ObjectStorageBrowser({
 }: ObjectStorageBrowserProps) {
   // --- Navigation state ---
   const [prefix, setPrefix] = useState("")
+  const prefixRef = useRef(prefix)
+  prefixRef.current = prefix
   const [navigationHistory, setNavigationHistory] = useState<string[]>([])
 
   // --- Data state ---
@@ -63,10 +67,17 @@ export function ObjectStorageBrowser({
   const [propertiesEntry, setPropertiesEntry] = useState<StorageEntry | null>(null)
   const [propertiesOpen, setPropertiesOpen] = useState(false)
 
+  // --- Context menu dialog state ---
+  const [contextEntry, setContextEntry] = useState<StorageEntry | null>(null)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [contextDeleteOpen, setContextDeleteOpen] = useState(false)
+
   // --- Drag-and-drop state ---
   const [isDragOver, setIsDragOver] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<FileUploadStatus[]>([])
   const [uploadProgressOpen, setUploadProgressOpen] = useState(false)
+  const uploadNeedsRefresh = useRef(false)
 
   // --- Data fetching ---
   const fetchData = useCallback(
@@ -223,6 +234,71 @@ export function ObjectStorageBrowser({
     setPropertiesOpen(true)
   }
 
+  // --- Context menu actions ---
+  function handleContextAction(action: EntryContextAction, entry: StorageEntry) {
+    setContextEntry(entry)
+    switch (action) {
+      case "rename":
+        setRenameOpen(true)
+        break
+      case "delete":
+        setSelectedKeys(new Set([entry.key]))
+        setContextDeleteOpen(true)
+        break
+      case "move":
+        setMoveOpen(true)
+        break
+      case "properties":
+        setPropertiesEntry(entry)
+        setPropertiesOpen(true)
+        break
+    }
+  }
+
+  async function handleRename(newName: string) {
+    if (!contextEntry || !dataSource.copyObject) return
+    setDialogLoading(true)
+    try {
+      // Build new key: same parent prefix + new name
+      const oldKey = contextEntry.key
+      const isFolder = contextEntry.kind === "folder"
+      const parentPrefix = oldKey.substring(0, oldKey.lastIndexOf("/", isFolder ? oldKey.length - 2 : oldKey.length) + 1)
+      const newKey = parentPrefix + newName + (isFolder ? "/" : "")
+
+      await dataSource.copyObject(bucket, oldKey, newKey)
+      await dataSource.deleteObjects(bucket, [oldKey])
+      setRenameOpen(false)
+      await fetchData(prefixRef.current)
+    } finally {
+      setDialogLoading(false)
+    }
+  }
+
+  async function handleMove(destinationKey: string) {
+    if (!contextEntry || !dataSource.copyObject) return
+    setDialogLoading(true)
+    try {
+      await dataSource.copyObject(bucket, contextEntry.key, destinationKey)
+      await dataSource.deleteObjects(bucket, [contextEntry.key])
+      setMoveOpen(false)
+      await fetchData(prefixRef.current)
+    } finally {
+      setDialogLoading(false)
+    }
+  }
+
+  async function handleContextDelete() {
+    setDialogLoading(true)
+    try {
+      await dataSource.deleteObjects(bucket, Array.from(selectedKeys))
+      setContextDeleteOpen(false)
+      setSelectedKeys(new Set())
+      await fetchData(prefixRef.current)
+    } finally {
+      setDialogLoading(false)
+    }
+  }
+
   // --- Drag-and-drop upload with progress ---
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -247,6 +323,9 @@ export function ObjectStorageBrowser({
     const droppedFiles = Array.from(e.dataTransfer.files)
     if (droppedFiles.length === 0) return
 
+    // Capture current prefix for upload paths
+    const uploadPrefix = prefixRef.current
+
     // Initialize progress tracking
     const initialStatus: FileUploadStatus[] = droppedFiles.map((file) => ({
       file,
@@ -255,6 +334,7 @@ export function ObjectStorageBrowser({
     }))
     setUploadProgress(initialStatus)
     setUploadProgressOpen(true)
+    uploadNeedsRefresh.current = true
 
     const uploadFn = dataSource.uploadFileWithProgress
 
@@ -268,7 +348,7 @@ export function ObjectStorageBrowser({
 
       try {
         if (uploadFn) {
-          await uploadFn(bucket, prefix, droppedFiles[i], (progress) => {
+          await uploadFn(bucket, uploadPrefix, droppedFiles[i], (progress) => {
             setUploadProgress((prev) =>
               prev.map((item, idx) =>
                 idx === i ? { ...item, progress } : item,
@@ -277,7 +357,7 @@ export function ObjectStorageBrowser({
           })
         } else {
           // Fallback: upload without granular progress
-          await dataSource.uploadFiles(bucket, prefix, [droppedFiles[i]])
+          await dataSource.uploadFiles(bucket, uploadPrefix, [droppedFiles[i]])
         }
 
         setUploadProgress((prev) =>
@@ -299,9 +379,14 @@ export function ObjectStorageBrowser({
         )
       }
     }
+  }
 
-    // Refresh after all uploads
-    await fetchData(prefix)
+  function handleUploadProgressClose(open: boolean) {
+    setUploadProgressOpen(open)
+    if (!open && uploadNeedsRefresh.current) {
+      uploadNeedsRefresh.current = false
+      fetchData(prefixRef.current)
+    }
   }
 
   return (
@@ -355,6 +440,7 @@ export function ObjectStorageBrowser({
           onSelectionChange={setSelectedKeys}
           onFolderOpen={navigateTo}
           onEntryDoubleClick={handleEntryDoubleClick}
+          onContextAction={handleContextAction}
           sort={sort}
           onSortChange={setSort}
           isLoading={isLoading}
@@ -417,8 +503,29 @@ export function ObjectStorageBrowser({
       />
       <UploadProgressDialog
         open={uploadProgressOpen}
-        onOpenChange={setUploadProgressOpen}
+        onOpenChange={handleUploadProgressClose}
         items={uploadProgress}
+      />
+      <RenameDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        currentName={contextEntry?.name ?? ""}
+        onConfirm={handleRename}
+        isLoading={dialogLoading}
+      />
+      <MoveDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        currentKey={contextEntry?.key ?? ""}
+        onConfirm={handleMove}
+        isLoading={dialogLoading}
+      />
+      <DeleteDialog
+        open={contextDeleteOpen}
+        onOpenChange={setContextDeleteOpen}
+        selectedKeys={contextEntry ? [contextEntry.key] : []}
+        onConfirm={handleContextDelete}
+        isLoading={dialogLoading}
       />
     </div>
   )

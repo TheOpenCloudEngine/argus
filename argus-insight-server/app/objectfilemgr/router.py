@@ -135,16 +135,22 @@ async def put_object(
     key: str = Query(..., description="Destination object key"),
     bucket: str | None = Query(None),
 ):
-    """Upload a file (PutObject)."""
-    body = await file.read()
+    """Upload a file (PutObject).
+
+    For files larger than the multipart threshold, the file is streamed to S3
+    using multipart upload to avoid loading the entire file into memory.
+    """
     content_type = file.content_type or mimetypes.guess_type(key)[0] or "application/octet-stream"
+    threshold = settings.s3_multipart_threshold  # default 8 MB
 
     try:
-        result = await service.put_object(
+        result = await service.put_object_stream(
             bucket=_bucket(bucket),
             key=key,
-            body=body,
+            file=file,
             content_type=content_type,
+            multipart_threshold=threshold,
+            chunk_size=settings.s3_multipart_chunksize,
         )
         return result
     except Exception as e:

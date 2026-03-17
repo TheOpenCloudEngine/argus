@@ -6,6 +6,8 @@ export { CreateFolderDialog } from "./create-folder-dialog"
 export { UploadDialog } from "./upload-dialog"
 export { DeleteDialog } from "./delete-dialog"
 export { PropertiesDialog } from "./properties-dialog"
+export { RenameDialog } from "./rename-dialog"
+export { MoveDialog } from "./move-dialog"
 export { UploadProgressDialog } from "./upload-progress-dialog"
 
 export type {

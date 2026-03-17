@@ -109,6 +109,96 @@ async def put_object(
     return {"key": key, "etag": etag}
 
 
+async def put_object_stream(
+    bucket: str,
+    key: str,
+    file,
+    content_type: str = "application/octet-stream",
+    multipart_threshold: int = 8 * 1024 * 1024,
+    chunk_size: int = 8 * 1024 * 1024,
+) -> dict:
+    """Upload a file using streaming. Uses multipart upload for large files.
+
+    For files smaller than *multipart_threshold* the content is read into memory
+    and uploaded with a single PutObject call. For larger files the content is
+    streamed in *chunk_size* chunks via multipart upload so that only one chunk
+    needs to be in memory at any time.
+    """
+    # Read first chunk to decide strategy
+    first_chunk = await file.read(multipart_threshold + 1)
+
+    if len(first_chunk) <= multipart_threshold:
+        # Small file: single PutObject
+        async with get_s3_client() as s3:
+            resp = await s3.put_object(
+                Bucket=bucket, Key=key, Body=first_chunk, ContentType=content_type,
+            )
+        etag = resp.get("ETag", "").strip('"')
+        logger.info("PutObject: bucket=%s key=%s size=%d", bucket, key, len(first_chunk))
+        return {"key": key, "etag": etag}
+
+    # Large file: multipart upload
+    async with get_s3_client() as s3:
+        mpu = await s3.create_multipart_upload(
+            Bucket=bucket, Key=key, ContentType=content_type,
+        )
+        upload_id = mpu["UploadId"]
+        parts: list[dict] = []
+        part_number = 1
+        total_size = 0
+
+        try:
+            # Upload first chunk (already read, may be > threshold)
+            offset = 0
+            while offset < len(first_chunk):
+                end = min(offset + chunk_size, len(first_chunk))
+                chunk = first_chunk[offset:end]
+                resp = await s3.upload_part(
+                    Bucket=bucket, Key=key, UploadId=upload_id,
+                    PartNumber=part_number, Body=chunk,
+                )
+                parts.append({
+                    "PartNumber": part_number,
+                    "ETag": resp["ETag"],
+                })
+                total_size += len(chunk)
+                part_number += 1
+                offset = end
+
+            # Stream remaining chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                resp = await s3.upload_part(
+                    Bucket=bucket, Key=key, UploadId=upload_id,
+                    PartNumber=part_number, Body=chunk,
+                )
+                parts.append({
+                    "PartNumber": part_number,
+                    "ETag": resp["ETag"],
+                })
+                total_size += len(chunk)
+                part_number += 1
+
+            result = await s3.complete_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=upload_id,
+                MultipartUpload={"Parts": parts},
+            )
+            etag = result.get("ETag", "").strip('"')
+            logger.info(
+                "PutObject(multipart): bucket=%s key=%s size=%d parts=%d",
+                bucket, key, total_size, len(parts),
+            )
+            return {"key": key, "etag": etag}
+
+        except Exception:
+            await s3.abort_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=upload_id,
+            )
+            raise
+
+
 async def delete_object(bucket: str, key: str) -> None:
     """Delete a single object."""
     async with get_s3_client() as s3:
