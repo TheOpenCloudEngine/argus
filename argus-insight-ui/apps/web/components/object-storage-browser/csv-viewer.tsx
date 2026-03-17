@@ -100,18 +100,18 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
   }, [rows])
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col gap-3 h-full text-sm">
       {/* Controls */}
       <div className="flex items-end gap-3 flex-wrap">
         <div className="space-y-1">
-          <Label className="text-xs">Encoding</Label>
+          <Label className="text-sm">Encoding</Label>
           <Select value={encoding} onValueChange={setEncoding}>
-            <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectTrigger className="w-[130px] h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {ENCODINGS.map((enc) => (
-                <SelectItem key={enc} value={enc} className="text-xs">
+                <SelectItem key={enc} value={enc} className="text-sm">
                   {enc}
                 </SelectItem>
               ))}
@@ -120,7 +120,7 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Delimiter</Label>
+          <Label className="text-sm">Delimiter</Label>
           <Select
             value={isCustom ? "__custom__" : delimiter}
             onValueChange={(v) => {
@@ -132,16 +132,16 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
               }
             }}
           >
-            <SelectTrigger className="w-[150px] h-8 text-xs">
+            <SelectTrigger className="w-[150px] h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {DELIMITER_PRESETS.map((p) => (
-                <SelectItem key={p.value} value={p.value} className="text-xs">
+                <SelectItem key={p.value} value={p.value} className="text-sm">
                   {p.label}
                 </SelectItem>
               ))}
-              <SelectItem value="__custom__" className="text-xs">
+              <SelectItem value="__custom__" className="text-sm">
                 Custom...
               </SelectItem>
             </SelectContent>
@@ -150,12 +150,12 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
 
         {isCustom && (
           <div className="space-y-1">
-            <Label className="text-xs">Custom</Label>
+            <Label className="text-sm">Custom</Label>
             <Input
               value={customDelimiter}
               onChange={(e) => setCustomDelimiter(e.target.value)}
               placeholder="e.g. :"
-              className="w-[80px] h-8 text-xs font-mono"
+              className="w-[80px] h-8 text-sm font-[D2Coding,monospace]"
             />
           </div>
         )}
@@ -173,7 +173,7 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
         </Button>
 
         {!isLoading && rows.length > 0 && (
-          <span className="text-xs text-muted-foreground ml-auto">
+          <span className="text-sm text-muted-foreground ml-auto">
             {dataRows.length} rows · {columnCount} columns
           </span>
         )}
@@ -194,7 +194,7 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
 
       {!isLoading && !error && rows.length > 0 && (
         <div className="border rounded overflow-auto flex-1 min-h-0 max-h-[500px]">
-          <table className="w-full text-xs font-mono border-collapse">
+          <table className="w-full text-sm font-[D2Coding,monospace] border-collapse">
             <thead className="bg-muted/60 sticky top-0 z-10">
               <tr>
                 <th className="px-2 py-1.5 text-right text-muted-foreground border-r w-10 font-medium">
