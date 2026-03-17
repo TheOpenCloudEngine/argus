@@ -18,6 +18,8 @@ type MoveDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentKey: string
+  /** Set of all existing keys (folders + objects) used for duplicate detection. */
+  existingKeys: Set<string>
   onConfirm: (destinationKey: string) => Promise<void>
   isLoading: boolean
 }
@@ -26,6 +28,7 @@ export function MoveDialog({
   open,
   onOpenChange,
   currentKey,
+  existingKeys,
   onConfirm,
   isLoading,
 }: MoveDialogProps) {
@@ -51,6 +54,10 @@ export function MoveDialog({
       setError("Destination is the same as the current path.")
       return
     }
+    if (existingKeys.has(trimmed)) {
+      setError("This path is unavailable. It already exists.")
+      return
+    }
     setError("")
     await onConfirm(trimmed)
   }
@@ -74,11 +81,17 @@ export function MoveDialog({
               <Input
                 id="move-input"
                 value={destination}
-                onChange={(e) => setDestination(e.target.value)}
+                onChange={(e) => {
+                  setDestination(e.target.value)
+                  setError("")
+                }}
                 autoFocus
                 disabled={isLoading}
                 className="font-mono"
               />
+              {destination.trim() && destination.trim() !== currentKey && existingKeys.has(destination.trim()) && (
+                <p className="text-xs text-destructive">This path is unavailable. It already exists.</p>
+              )}
             </div>
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>

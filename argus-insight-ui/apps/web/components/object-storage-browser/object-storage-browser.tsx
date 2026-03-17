@@ -582,6 +582,7 @@ export function ObjectStorageBrowser({
         open={moveOpen}
         onOpenChange={setMoveOpen}
         currentKey={contextEntry?.key ?? ""}
+        existingKeys={useMemo(() => new Set([...folders.map((f) => f.key), ...objects.map((o) => o.key)]), [folders, objects])}
         onConfirm={handleMove}
         isLoading={dialogLoading}
       />
