@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/part-of: argus-insight
+data:
+  # ─── Hostname ──────────────────────────────────────────────────────────────
+  KC_HOSTNAME: "sso.argus.local"
+  KC_HOSTNAME_STRICT: "false"
+  # ─── Database ──────────────────────────────────────────────────────────────
+  KC_DB: "postgres"
+  KC_DB_URL: "jdbc:postgresql://keycloak-postgresql:5432/keycloak"
+  # ─── HTTP ──────────────────────────────────────────────────────────────────
+  KC_HTTP_ENABLED: "true"
+  KC_PROXY_HEADERS: "xforwarded"
+  # ─── Health & Metrics ──────────────────────────────────────────────────────
+  KC_HEALTH_ENABLED: "true"
+  KC_METRICS_ENABLED: "true"
+  # ─── Logging ───────────────────────────────────────────────────────────────
+  KC_LOG_LEVEL: "info"
