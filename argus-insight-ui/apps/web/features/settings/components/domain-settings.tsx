@@ -99,7 +99,9 @@ function DomainSettingsSection({
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Label htmlFor="infra-domain-name">Domain Name</Label>
+            <Label htmlFor="infra-domain-name">
+              Domain Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="infra-domain-name"
               value={domainName}
@@ -184,7 +186,7 @@ function DnsServersSection({
             return (
               <div key={i} className="space-y-1.5">
                 <Label htmlFor={`dns-server-${i + 1}`}>
-                  DNS Server {i + 1}
+                  DNS Server {i + 1}{i === 0 && <span className="text-destructive"> *</span>}
                 </Label>
                 <Input
                   id={`dns-server-${i + 1}`}
