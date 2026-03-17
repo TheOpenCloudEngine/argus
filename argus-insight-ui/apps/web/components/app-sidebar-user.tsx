@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronUp, LogOut, Mail, Phone, Settings, Shield, User, User2 } from "lucide-react"
+import { ChevronUp, LogOut, Mail, Phone, Settings, Shield, ShieldCheck, User, User2 } from "lucide-react"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
+import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar"
 import {
   Dialog,
   DialogContent,
@@ -29,16 +29,15 @@ function getDisplayName(user: SessionUser): string {
   return `${user.lastName}${user.firstName}`.trim() || user.username
 }
 
-function getInitials(user: SessionUser): string {
-  const last = user.lastName.charAt(0)
-  const first = user.firstName.charAt(0)
-  return (last + first).trim().toUpperCase() || user.username.charAt(0).toUpperCase()
+function isAdmin(user: SessionUser): boolean {
+  return user.role.toLowerCase() === "admin"
 }
 
 export function AppSidebarUser({ user }: AppSidebarUserProps) {
   const [profileOpen, setProfileOpen] = useState(false)
   const displayName = getDisplayName(user)
-  const initials = getInitials(user)
+  const admin = isAdmin(user)
+  const RoleIcon = admin ? ShieldCheck : User
 
   return (
     <>
@@ -51,7 +50,9 @@ export function AppSidebarUser({ user }: AppSidebarUserProps) {
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">
+                    <RoleIcon className="size-4" />
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{displayName}</span>
@@ -92,7 +93,9 @@ export function AppSidebarUser({ user }: AppSidebarUserProps) {
 
           <div className="flex flex-col items-center gap-4 py-2">
             <Avatar className="h-16 w-16 rounded-full">
-              <AvatarFallback className="rounded-full text-xl">{initials}</AvatarFallback>
+              <AvatarFallback className="rounded-full">
+                <RoleIcon className="size-7" />
+              </AvatarFallback>
             </Avatar>
             <div className="text-center">
               <p className="text-lg font-semibold">{displayName}</p>
