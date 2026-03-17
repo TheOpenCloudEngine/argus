@@ -21,22 +21,29 @@ import {
 // Helpers
 // --------------------------------------------------------------------------- //
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B"
-  const units = ["B", "KB", "MB", "GB"]
-  const k = 1024
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  const val = bytes / Math.pow(k, i)
-  return `${Number.isInteger(val) ? val : val.toFixed(1)} ${units[i]}`
+const SIZE_UNITS = ["B", "KB", "MB", "GB"] as const
+type SizeUnit = (typeof SIZE_UNITS)[number]
+
+const UNIT_MULTIPLIERS: Record<SizeUnit, number> = {
+  B: 1,
+  KB: 1024,
+  MB: 1024 * 1024,
+  GB: 1024 * 1024 * 1024,
 }
 
-function parseSizeToBytes(value: string): number | null {
-  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)?$/i)
-  if (!match) return null
-  const num = parseFloat(match[1]!)
-  const unit = (match[2] ?? "B").toUpperCase()
-  const multipliers: Record<string, number> = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024 }
-  return Math.round(num * (multipliers[unit] ?? 1))
+/** Split raw bytes into a numeric value + best-fit unit. */
+function bytesToSizeParts(bytes: number): { value: number; unit: SizeUnit } {
+  if (bytes === 0) return { value: 0, unit: "B" }
+  const k = 1024
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), SIZE_UNITS.length - 1)
+  const unit = SIZE_UNITS[i]!
+  const value = bytes / Math.pow(k, i)
+  return { value: Number.isInteger(value) ? value : parseFloat(value.toFixed(1)), unit }
+}
+
+/** Combine numeric value + unit back to raw bytes. */
+function sizePartsToBytes(value: number, unit: SizeUnit): number {
+  return Math.round(value * UNIT_MULTIPLIERS[unit])
 }
 
 // --------------------------------------------------------------------------- //
@@ -135,26 +142,24 @@ function PreviewCategoryRow({
   onSave: (category: string, maxFileSize: number, maxPreviewRows: number | null) => void
   saving: string | null
 }) {
-  const [maxFileSize, setMaxFileSize] = useState(formatBytes(category.max_file_size))
+  const initial = bytesToSizeParts(category.max_file_size)
+  const [sizeValue, setSizeValue] = useState(initial.value)
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>(initial.unit)
   const [maxPreviewRows, setMaxPreviewRows] = useState(
     category.max_preview_rows?.toString() ?? "",
   )
-  const [sizeError, setSizeError] = useState<string | null>(null)
   const isSaving = saving === category.category
 
   // Sync state when category prop changes (after parent reload)
   useEffect(() => {
-    setMaxFileSize(formatBytes(category.max_file_size))
+    const parts = bytesToSizeParts(category.max_file_size)
+    setSizeValue(parts.value)
+    setSizeUnit(parts.unit)
     setMaxPreviewRows(category.max_preview_rows?.toString() ?? "")
   }, [category.max_file_size, category.max_preview_rows])
 
   function handleSave() {
-    const bytes = parseSizeToBytes(maxFileSize)
-    if (bytes === null || bytes <= 0) {
-      setSizeError("Invalid size. Use format like: 20 KB, 50 MB, 1 GB")
-      return
-    }
-    setSizeError(null)
+    const bytes = sizePartsToBytes(sizeValue, sizeUnit)
     const rows = maxPreviewRows ? parseInt(maxPreviewRows, 10) : null
     onSave(category.category, bytes, rows)
   }
@@ -183,19 +188,29 @@ function PreviewCategoryRow({
           <Label htmlFor={`size-${category.category}`} className="text-xs">
             Max File Size
           </Label>
-          <Input
-            id={`size-${category.category}`}
-            value={maxFileSize}
-            onChange={(e) => {
-              setMaxFileSize(e.target.value)
-              setSizeError(null)
-            }}
-            placeholder="e.g. 50 MB"
-            className="h-8 text-sm"
-          />
-          {sizeError && (
-            <p className="text-xs text-destructive">{sizeError}</p>
-          )}
+          <div className="flex gap-1.5">
+            <Input
+              id={`size-${category.category}`}
+              type="number"
+              min={0}
+              step="any"
+              value={sizeValue}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v)) setSizeValue(v)
+              }}
+              className="h-8 text-sm flex-1"
+            />
+            <select
+              value={sizeUnit}
+              onChange={(e) => setSizeUnit(e.target.value as SizeUnit)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              {SIZE_UNITS.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="space-y-1.5">
