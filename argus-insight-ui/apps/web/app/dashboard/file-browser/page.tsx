@@ -12,6 +12,7 @@ import {
   getDownloadUrl,
   copyObject,
   previewFile,
+  fetchFilebrowserConfig,
 } from "@/features/object-storage/api"
 
 const dataSource: BrowserDataSource = {
@@ -23,6 +24,7 @@ const dataSource: BrowserDataSource = {
   getDownloadUrl,
   copyObject,
   previewFile,
+  fetchConfiguration: fetchFilebrowserConfig,
 }
 
 export default function FileBrowserPage() {

@@ -2,6 +2,35 @@ import type { ListObjectsResponse } from "@/components/object-storage-browser"
 
 const BASE = "/api/v1/objectfilemgr"
 
+// --------------------------------------------------------------------------- //
+// File Browser Configuration
+// --------------------------------------------------------------------------- //
+
+/** A single preview category with its extensions and limits. */
+export type PreviewCategoryConfig = {
+  category: string
+  label: string
+  extensions: string[]
+  max_file_size: number
+  max_preview_rows: number | null
+}
+
+/** Full File Browser configuration from the server. */
+export type FilebrowserConfig = {
+  browser: Record<string, number>
+  preview: PreviewCategoryConfig[]
+}
+
+/**
+ * Fetch File Browser configuration (browser settings + preview limits).
+ * Called once when the File Browser first mounts.
+ */
+export async function fetchFilebrowserConfig(): Promise<FilebrowserConfig> {
+  const res = await fetch(`${BASE}/configuration`)
+  if (!res.ok) throw new Error(`Failed to fetch filebrowser config: ${res.status}`)
+  return res.json()
+}
+
 /**
  * List objects and folders under a prefix.
  * Maps the server response to the UI's ListObjectsResponse shape.

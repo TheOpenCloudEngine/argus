@@ -8,6 +8,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import type {
   BrowserDataSource,
+  FilebrowserConfig,
   SortConfig,
   StorageEntry,
   StorageFolder,
@@ -88,6 +89,19 @@ const [contextDeleteOpen, setContextDeleteOpen] = useState(false)
   const [uploadProgressOpen, setUploadProgressOpen] = useState(false)
   const uploadNeedsRefresh = useRef(false)
 
+  // --- File Browser configuration ---
+  const [fbConfig, setFbConfig] = useState<FilebrowserConfig | null>(null)
+
+  useEffect(() => {
+    if (dataSource.fetchConfiguration) {
+      dataSource.fetchConfiguration()
+        .then(setFbConfig)
+        .catch((err) => {
+          console.error("Failed to fetch filebrowser config:", err)
+        })
+    }
+  }, [dataSource])
+
   // --- Data fetching ---
   const fetchData = useCallback(
     async (targetPrefix: string, token?: string) => {
@@ -150,9 +164,9 @@ const [contextDeleteOpen, setContextDeleteOpen] = useState(false)
         )
       : all
 
-    // Skip sorting when directory has >= 300 entries for performance
-    const SORT_DISABLE_THRESHOLD = 300
-    if (all.length >= SORT_DISABLE_THRESHOLD) {
+    // Skip sorting when directory has >= threshold entries for performance
+    const sortThreshold = fbConfig?.browser?.sort_disable_threshold ?? 300
+    if (all.length >= sortThreshold) {
       const unsortedFolders = filtered.filter((e): e is StorageFolder => e.kind === "folder")
       const unsortedObjects = filtered.filter((e): e is StorageObject => e.kind === "object")
       return [...unsortedFolders, ...unsortedObjects]
@@ -514,6 +528,7 @@ async function handleContextDelete() {
           sort={sort}
           onSortChange={setSort}
           isLoading={isLoading}
+          sortDisableThreshold={fbConfig?.browser?.sort_disable_threshold ?? 300}
         />
 
         {/* Load more / status bar */}
@@ -600,6 +615,7 @@ async function handleContextDelete() {
             ? (key, options) => dataSource.previewFile!(bucket, key, options)
             : undefined
         }
+        config={fbConfig}
       />
       <CatViewerDialog
         open={catViewerOpen}

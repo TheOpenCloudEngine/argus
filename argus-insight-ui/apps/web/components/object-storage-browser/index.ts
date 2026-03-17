@@ -27,6 +27,8 @@ export type {
   ListObjectsResponse,
   BrowserDataSource,
   UploadProgressCallback,
+  FilebrowserConfig,
+  PreviewCategoryConfig,
   SortConfig,
   SortDirection,
 } from "./types"

@@ -52,6 +52,7 @@ async def lifespan(app: FastAPI):
     await init_database()
     # Ensure ORM tables exist (import models so they are registered with Base)
     import app.agent.models  # noqa: F401
+    import app.objectfilemgr.models  # noqa: F401
     import app.usermgr.models  # noqa: F401
 
     async with engine.begin() as conn:

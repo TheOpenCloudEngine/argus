@@ -56,13 +56,9 @@ type BrowserTableProps = {
   sort: SortConfig
   onSortChange: (sort: SortConfig) => void
   isLoading: boolean
+  /** Threshold from server config. Sorting is disabled when entries >= this value. */
+  sortDisableThreshold?: number
 }
-
-/**
- * Sorting is disabled when the directory has 300 or more entries (folders + objects)
- * to prevent performance issues with large directories.
- */
-const SORT_DISABLE_THRESHOLD = 300
 
 const fileIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   image: FileImage,
@@ -172,6 +168,7 @@ export function BrowserTable({
   sort,
   onSortChange,
   isLoading,
+  sortDisableThreshold = 300,
 }: BrowserTableProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const hideToast = useCallback(() => setToastMessage(null), [])
@@ -185,8 +182,8 @@ export function BrowserTable({
     }
   }
 
-  // Disable sorting when the directory has >= 300 entries for performance
-  const sortDisabled = totalEntryCount >= SORT_DISABLE_THRESHOLD
+  // Disable sorting when the directory has >= threshold entries for performance
+  const sortDisabled = totalEntryCount >= sortDisableThreshold
   const allSelectableKeys = entries.map((e) => entryId(e.kind, e.key))
   const allSelected =
     allSelectableKeys.length > 0 &&
