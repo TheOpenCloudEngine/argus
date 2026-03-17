@@ -96,6 +96,24 @@ export type BrowserDataSource = {
     key: string,
     options?: { sheet?: string; maxRows?: number },
   ) => Promise<unknown>
+
+  /** Fetch File Browser configuration from the server. */
+  fetchConfiguration?: () => Promise<FilebrowserConfig>
+}
+
+/** A single preview category configuration from the server. */
+export type PreviewCategoryConfig = {
+  category: string
+  label: string
+  extensions: string[]
+  max_file_size: number
+  max_preview_rows: number | null
+}
+
+/** File Browser configuration from the server. */
+export type FilebrowserConfig = {
+  browser: Record<string, number>
+  preview: PreviewCategoryConfig[]
 }
 
 /** Sort direction. */

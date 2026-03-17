@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 
-import type { StorageEntry } from "./types"
+import type { FilebrowserConfig, StorageEntry } from "./types"
 import { getExtension } from "./utils"
 import { CsvViewer } from "./csv-viewer"
 import { PdfViewer } from "./pdf-viewer"
@@ -175,6 +175,27 @@ type FileViewerDialogProps = {
     key: string,
     options?: { sheet?: string; maxRows?: number },
   ) => Promise<unknown>
+  /** File Browser configuration from the server. */
+  config?: FilebrowserConfig | null
+}
+
+/** Look up the max file size for a given extension from server config. */
+function getMaxFileSizeFromConfig(
+  config: FilebrowserConfig | null | undefined,
+  ext: string,
+): number | null {
+  if (!config) return null
+  // Find the preview category that contains this extension
+  const cat = config.preview.find((p) => p.extensions.includes(ext))
+  if (cat) return cat.max_file_size
+  return null
+}
+
+/** Format bytes as a human-readable string for error messages. */
+function formatSizeLimit(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
 }
 
 export function FileViewerDialog({
@@ -183,6 +204,7 @@ export function FileViewerDialog({
   entry,
   getDownloadUrl,
   previewFile,
+  config,
 }: FileViewerDialogProps) {
   const [content, setContent] = useState<string | null>(null)
   const [mediaUrl, setMediaUrl] = useState<string | null>(null)
@@ -212,9 +234,11 @@ export function FileViewerDialog({
       return
     }
 
-    // Size check for text files only
-    if (!SIZE_UNLIMITED_CATEGORIES.has(category) && entry.size > MAX_VIEW_SIZE) {
-      setError("Only files of 20 KB or smaller can be displayed.")
+    // Size check: use server config if available, otherwise fall back to hardcoded limits
+    const configLimit = getMaxFileSizeFromConfig(config, ext)
+    const sizeLimit = configLimit ?? (SIZE_UNLIMITED_CATEGORIES.has(category) ? null : MAX_VIEW_SIZE)
+    if (sizeLimit !== null && entry.size > sizeLimit) {
+      setError(`Only files of ${formatSizeLimit(sizeLimit)} or smaller can be displayed.`)
       return
     }
 
@@ -256,7 +280,7 @@ export function FileViewerDialog({
         setError(err instanceof Error ? err.message : "Failed to load file")
         setIsLoading(false)
       })
-  }, [open, entry, getDownloadUrl, previewFile, reset])
+  }, [open, entry, getDownloadUrl, previewFile, reset, config])
 
   if (!entry) return null
 

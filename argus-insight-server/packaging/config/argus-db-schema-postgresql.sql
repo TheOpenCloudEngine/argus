@@ -106,6 +106,158 @@ COMMENT ON COLUMN argus_users.role_id IS 'Foreign key to argus_roles(id)';
 COMMENT ON COLUMN argus_users.created_at IS 'Account creation timestamp';
 COMMENT ON COLUMN argus_users.updated_at IS 'Account last update timestamp';
 
+-- ---------------------------------------------------------------------------
+-- File Browser configuration tables
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_configuration_filebrowser (
+    id              SERIAL          PRIMARY KEY,
+    config_key      VARCHAR(100)    NOT NULL UNIQUE,
+    config_value    VARCHAR(255)    NOT NULL,
+    description     VARCHAR(255),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_configuration_filebrowser IS 'File Browser global settings (key-value)';
+COMMENT ON COLUMN argus_configuration_filebrowser.id IS 'Auto-incremented identifier';
+COMMENT ON COLUMN argus_configuration_filebrowser.config_key IS 'Unique setting key';
+COMMENT ON COLUMN argus_configuration_filebrowser.config_value IS 'Setting value';
+COMMENT ON COLUMN argus_configuration_filebrowser.description IS 'Human-readable description';
+COMMENT ON COLUMN argus_configuration_filebrowser.created_at IS 'Record creation timestamp';
+COMMENT ON COLUMN argus_configuration_filebrowser.updated_at IS 'Record last update timestamp';
+
+CREATE TABLE IF NOT EXISTS argus_configuration_filebrowser_preview (
+    id               SERIAL          PRIMARY KEY,
+    category         VARCHAR(50)     NOT NULL UNIQUE,
+    label            VARCHAR(100)    NOT NULL,
+    max_file_size    BIGINT          NOT NULL,
+    max_preview_rows INTEGER,
+    description      VARCHAR(255),
+    created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_configuration_filebrowser_preview IS 'File Browser per-category preview limits';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.id IS 'Auto-incremented identifier';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.category IS 'Category identifier (e.g. text, csv, image)';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.label IS 'UI display name';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.max_file_size IS 'Maximum preview file size in bytes';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.max_preview_rows IS 'Maximum preview rows for tabular data';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.description IS 'Category description';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.created_at IS 'Record creation timestamp';
+COMMENT ON COLUMN argus_configuration_filebrowser_preview.updated_at IS 'Record last update timestamp';
+
+CREATE TABLE IF NOT EXISTS argus_configuration_filebrowser_extension (
+    id              SERIAL          PRIMARY KEY,
+    preview_id      INTEGER         NOT NULL REFERENCES argus_configuration_filebrowser_preview(id),
+    extension       VARCHAR(20)     NOT NULL UNIQUE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_configuration_filebrowser_extension IS 'File extension to preview category mapping';
+COMMENT ON COLUMN argus_configuration_filebrowser_extension.id IS 'Auto-incremented identifier';
+COMMENT ON COLUMN argus_configuration_filebrowser_extension.preview_id IS 'Foreign key to preview category';
+COMMENT ON COLUMN argus_configuration_filebrowser_extension.extension IS 'File extension without dot (e.g. csv, xlsx)';
+COMMENT ON COLUMN argus_configuration_filebrowser_extension.created_at IS 'Record creation timestamp';
+
+-- Seed File Browser global settings
+INSERT INTO argus_configuration_filebrowser (config_key, config_value, description) VALUES
+('sort_disable_threshold', '300',  'Disable sorting when directory has N or more entries'),
+('max_keys_per_page',      '1000', 'Maximum objects per list request'),
+('max_delete_keys',        '1000', 'Maximum objects per delete request')
+ON CONFLICT (config_key) DO NOTHING;
+
+-- Seed File Browser preview categories
+INSERT INTO argus_configuration_filebrowser_preview
+    (id, category, label, max_file_size, max_preview_rows, description) VALUES
+( 1, 'text',         'Text / Code',     20480,     NULL, 'Text and source code files (20 KB)'),
+( 2, 'csv',          'CSV / TSV',       52428800,  NULL, 'Comma/tab-separated value files (50 MB)'),
+( 3, 'image',        'Image',           20971520,  NULL, 'Image files (20 MB)'),
+( 4, 'pdf',          'PDF',             104857600, NULL, 'PDF documents (100 MB)'),
+( 5, 'video',        'Video',           524288000, NULL, 'Video files (500 MB)'),
+( 6, 'audio',        'Audio',           104857600, NULL, 'Audio files (100 MB)'),
+( 7, 'spreadsheet',  'Spreadsheet',     52428800,  1000, 'Excel spreadsheet files (50 MB, 1000 rows)'),
+( 8, 'document',     'Document',        52428800,  NULL, 'Word document files (50 MB)'),
+( 9, 'presentation', 'Presentation',    52428800,  NULL, 'PowerPoint files (50 MB)'),
+(10, 'data',         'Data (Parquet)',   104857600, 1000, 'Parquet data files (100 MB, 1000 rows)')
+ON CONFLICT (category) DO NOTHING;
+
+-- Seed File Browser extension mappings
+INSERT INTO argus_configuration_filebrowser_extension (preview_id, extension) VALUES
+-- text (id=1)
+(1,'py'),(1,'java'),(1,'ipynb'),(1,'c'),(1,'cpp'),(1,'h'),(1,'hpp'),
+(1,'html'),(1,'htm'),(1,'css'),(1,'js'),(1,'ts'),(1,'go'),(1,'rs'),
+(1,'sh'),(1,'bash'),(1,'zsh'),(1,'json'),(1,'yaml'),(1,'yml'),
+(1,'xml'),(1,'ini'),(1,'conf'),(1,'config'),(1,'md'),(1,'log'),(1,'env'),(1,'txt'),
+-- csv (id=2)
+(2,'csv'),(2,'tsv'),
+-- image (id=3)
+(3,'jpg'),(3,'jpeg'),(3,'png'),(3,'gif'),(3,'svg'),(3,'webp'),(3,'bmp'),(3,'ico'),(3,'tiff'),
+-- pdf (id=4)
+(4,'pdf'),
+-- video (id=5)
+(5,'mp4'),(5,'webm'),(5,'ogg'),(5,'mov'),(5,'m4v'),(5,'avi'),(5,'mkv'),
+-- audio (id=6)
+(6,'mp3'),(6,'wav'),(6,'m4a'),(6,'flac'),(6,'aac'),(6,'wma'),
+-- spreadsheet (id=7)
+(7,'xls'),(7,'xlsx'),
+-- document (id=8)
+(8,'docx'),
+-- presentation (id=9)
+(9,'pptx'),
+-- data (id=10)
+(10,'parquet')
+ON CONFLICT (extension) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Infrastructure configuration table
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_configuration_infra (
+    id              SERIAL          PRIMARY KEY,
+    category        VARCHAR(50)     NOT NULL,
+    config_key      VARCHAR(100)    NOT NULL UNIQUE,
+    config_value    VARCHAR(500)    NOT NULL DEFAULT '',
+    description     VARCHAR(255),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_configuration_infra IS 'Infrastructure configuration (key-value, grouped by category)';
+COMMENT ON COLUMN argus_configuration_infra.category IS 'Category grouping (e.g. domain, powerdns)';
+COMMENT ON COLUMN argus_configuration_infra.config_key IS 'Unique setting key';
+COMMENT ON COLUMN argus_configuration_infra.config_value IS 'Setting value';
+COMMENT ON COLUMN argus_configuration_infra.description IS 'Human-readable description';
+
+-- Seed Infrastructure configuration
+INSERT INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
+('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
+('domain', 'dns_server_1',   '', 'Primary DNS server'),
+('domain', 'dns_server_2',   '', 'Secondary DNS server'),
+('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
+('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
+('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
+('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
+('powerdns', 'pdns_server_id', '', 'PowerDNS server ID'),
+('ldap', 'enable_ldap_auth',      'false',             'Enable LDAP authentication'),
+('ldap', 'ldap_url',              'ldap://<SERVER>:389','LDAP/AD server URL'),
+('ldap', 'enable_ldap_tls',       'false',             'Enable LDAP TLS'),
+('ldap', 'ad_domain',             '',                   'Active Directory domain'),
+('ldap', 'ldap_bind_user',        '',                   'LDAP bind user DN'),
+('ldap', 'ldap_bind_password',    '',                   'LDAP bind password'),
+('ldap', 'user_search_base',      '',                   'User search base DN'),
+('ldap', 'user_object_class',     'person',             'User object class'),
+('ldap', 'user_search_filter',    '',                   'User search filter'),
+('ldap', 'user_name_attribute',   'uid',                'User name attribute'),
+('ldap', 'group_search_base',     '',                   'Group search base DN'),
+('ldap', 'group_object_class',    'posixGroup',         'Group object class'),
+('ldap', 'group_search_filter',   '',                   'Group search filter'),
+('ldap', 'group_name_attribute',  'cn',                 'Group name attribute'),
+('ldap', 'group_member_attribute','memberUid',           'Group member attribute'),
+('command', 'openssl_path',      '/usr/bin/openssl',    'Path to OpenSSL binary')
+ON CONFLICT (config_key) DO NOTHING;
+
 -- Seed default roles
 INSERT INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access') ON CONFLICT (name) DO NOTHING;
 INSERT INTO argus_roles (name, description) VALUES ('User', 'Standard user with limited access') ON CONFLICT (name) DO NOTHING;

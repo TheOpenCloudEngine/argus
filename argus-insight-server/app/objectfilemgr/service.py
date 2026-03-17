@@ -8,13 +8,23 @@ Capabilities:
   3. Large file support: Multipart Upload (initiate, sign parts, complete, abort)
   4. S3 Select: SQL query on CSV/JSON/Parquet objects
   5. Object Tagging: Get/Put/Delete tags
+  6. File Browser Configuration: Dynamic configuration from database
 """
 
 import logging
+from collections import defaultdict
 from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.s3 import get_s3_client
+from app.objectfilemgr.models import (
+    ArgusConfigurationFilebrowser,
+    ArgusConfigurationFilebrowserExtension,
+    ArgusConfigurationFilebrowserPreview,
+)
 from app.objectfilemgr.schemas import (
     CompletedPart,
     CompleteMultipartResponse,
@@ -22,6 +32,7 @@ from app.objectfilemgr.schemas import (
     CreateFolderResponse,
     DeleteObjectsResponse,
     DocumentPreviewResponse,
+    FilebrowserConfigResponse,
     FolderInfo,
     HeadObjectResponse,
     ListObjectsResponse,
@@ -31,6 +42,7 @@ from app.objectfilemgr.schemas import (
     ObjectInfo,
     PresignedUploadUrlResponse,
     PresignedUrlResponse,
+    PreviewCategoryResponse,
     S3SelectResponse,
     TablePreviewResponse,
     Tag,
@@ -691,6 +703,101 @@ async def preview_pptx(bucket: str, key: str) -> DocumentPreviewResponse:
         format="pptx",
         html="\n".join(html_parts),
         slides=slides,
+    )
+
+
+# =========================================================================== #
+# 7. File Browser Configuration
+# =========================================================================== #
+
+
+async def get_filebrowser_config(session: AsyncSession) -> FilebrowserConfigResponse:
+    """Load File Browser configuration from the database.
+
+    Queries three tables and assembles a single response:
+      - argus_configuration_filebrowser → browser-level key-value settings
+      - argus_configuration_filebrowser_preview → per-category preview limits
+      - argus_configuration_filebrowser_extension → extension-to-category mapping
+    """
+    # 1) Browser global settings
+    result = await session.execute(select(ArgusConfigurationFilebrowser))
+    browser_rows = result.scalars().all()
+    browser: dict[str, int] = {}
+    for row in browser_rows:
+        try:
+            browser[row.config_key] = int(row.config_value)
+        except ValueError:
+            browser[row.config_key] = row.config_value
+
+    # 2) Preview categories
+    result = await session.execute(select(ArgusConfigurationFilebrowserPreview))
+    preview_rows = result.scalars().all()
+
+    # 3) Extensions grouped by preview_id
+    result = await session.execute(select(ArgusConfigurationFilebrowserExtension))
+    ext_rows = result.scalars().all()
+    ext_map: dict[int, list[str]] = defaultdict(list)
+    for ext in ext_rows:
+        ext_map[ext.preview_id].append(ext.extension)
+
+    # Assemble response
+    preview: list[PreviewCategoryResponse] = []
+    for cat in preview_rows:
+        extensions = sorted(ext_map.get(cat.id, []))
+        preview.append(
+            PreviewCategoryResponse(
+                category=cat.category,
+                label=cat.label,
+                extensions=extensions,
+                max_file_size=cat.max_file_size,
+                max_preview_rows=cat.max_preview_rows,
+            )
+        )
+
+    logger.info("FilebrowserConfig: browser_keys=%d categories=%d", len(browser), len(preview))
+    return FilebrowserConfigResponse(browser=browser, preview=preview)
+
+
+async def update_browser_settings(session: AsyncSession, settings_map: dict[str, int]) -> None:
+    """Update browser-level key-value settings."""
+    for key, value in settings_map.items():
+        result = await session.execute(
+            select(ArgusConfigurationFilebrowser).where(
+                ArgusConfigurationFilebrowser.config_key == key
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.config_value = str(value)
+        else:
+            session.add(ArgusConfigurationFilebrowser(
+                config_key=key, config_value=str(value),
+            ))
+    await session.commit()
+    logger.info("UpdateBrowserSettings: keys=%s", list(settings_map.keys()))
+
+
+async def update_preview_category(
+    session: AsyncSession,
+    category: str,
+    max_file_size: int,
+    max_preview_rows: int | None,
+) -> None:
+    """Update a single preview category's limits."""
+    result = await session.execute(
+        select(ArgusConfigurationFilebrowserPreview).where(
+            ArgusConfigurationFilebrowserPreview.category == category
+        )
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise ValueError(f"Preview category not found: {category}")
+    row.max_file_size = max_file_size
+    row.max_preview_rows = max_preview_rows
+    await session.commit()
+    logger.info(
+        "UpdatePreviewCategory: category=%s max_file_size=%d max_preview_rows=%s",
+        category, max_file_size, max_preview_rows,
     )
 
 

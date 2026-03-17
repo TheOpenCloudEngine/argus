@@ -271,3 +271,45 @@ class DocumentPreviewResponse(BaseModel):
     format: str = Field(..., description="Source format: docx, pptx")
     html: str = Field("", description="Converted HTML content")
     slides: list[dict] | None = Field(None, description="Slide data (pptx only)")
+
+
+# --------------------------------------------------------------------------- #
+# File Browser Configuration
+# --------------------------------------------------------------------------- #
+
+
+class PreviewCategoryResponse(BaseModel):
+    """A single preview category with its extensions."""
+
+    category: str
+    label: str
+    extensions: list[str]
+    max_file_size: int = Field(description="Maximum preview file size in bytes")
+    max_preview_rows: int | None = Field(None, description="Maximum preview rows (tabular data)")
+
+
+class FilebrowserConfigResponse(BaseModel):
+    """Full File Browser configuration returned to the UI."""
+
+    browser: dict[str, int] = Field(
+        description="Browser-level settings (sort_disable_threshold, max_keys_per_page, ...)",
+    )
+    preview: list[PreviewCategoryResponse] = Field(
+        description="Per-category preview limits with extensions",
+    )
+
+
+class UpdateBrowserSettingsRequest(BaseModel):
+    """Request to update browser-level key-value settings."""
+
+    browser: dict[str, int] = Field(
+        description="Key-value pairs to update (e.g. sort_disable_threshold, max_keys_per_page)",
+    )
+
+
+class UpdatePreviewCategoryRequest(BaseModel):
+    """Request to update a single preview category's limits."""
+
+    category: str = Field(description="Category identifier (e.g. text, csv, image)")
+    max_file_size: int = Field(description="Maximum preview file size in bytes")
+    max_preview_rows: int | None = Field(None, description="Maximum preview rows (tabular data)")

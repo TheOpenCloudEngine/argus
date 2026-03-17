@@ -2,6 +2,65 @@ import type { ListObjectsResponse } from "@/components/object-storage-browser"
 
 const BASE = "/api/v1/objectfilemgr"
 
+// --------------------------------------------------------------------------- //
+// File Browser Configuration
+// --------------------------------------------------------------------------- //
+
+/** A single preview category with its extensions and limits. */
+export type PreviewCategoryConfig = {
+  category: string
+  label: string
+  extensions: string[]
+  max_file_size: number
+  max_preview_rows: number | null
+}
+
+/** Full File Browser configuration from the server. */
+export type FilebrowserConfig = {
+  browser: Record<string, number>
+  preview: PreviewCategoryConfig[]
+}
+
+/**
+ * Fetch File Browser configuration (browser settings + preview limits).
+ * Called once when the File Browser first mounts.
+ */
+export async function fetchFilebrowserConfig(): Promise<FilebrowserConfig> {
+  const res = await fetch(`${BASE}/configuration`)
+  if (!res.ok) throw new Error(`Failed to fetch filebrowser config: ${res.status}`)
+  return res.json()
+}
+
+/**
+ * Update browser-level settings (sort_disable_threshold, max_keys_per_page, etc.).
+ */
+export async function updateBrowserSettings(
+  browser: Record<string, number>,
+): Promise<void> {
+  const res = await fetch(`${BASE}/configuration/browser`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ browser }),
+  })
+  if (!res.ok) throw new Error(`Failed to update browser settings: ${res.status}`)
+}
+
+/**
+ * Update a single preview category's limits.
+ */
+export async function updatePreviewCategory(
+  category: string,
+  max_file_size: number,
+  max_preview_rows: number | null,
+): Promise<void> {
+  const res = await fetch(`${BASE}/configuration/preview`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, max_file_size, max_preview_rows }),
+  })
+  if (!res.ok) throw new Error(`Failed to update preview category: ${res.status}`)
+}
+
 /**
  * List objects and folders under a prefix.
  * Maps the server response to the UI's ListObjectsResponse shape.
