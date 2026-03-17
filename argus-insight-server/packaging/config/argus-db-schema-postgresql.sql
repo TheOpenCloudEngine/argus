@@ -210,6 +210,34 @@ INSERT INTO argus_configuration_filebrowser_extension (preview_id, extension) VA
 (10,'parquet')
 ON CONFLICT (extension) DO NOTHING;
 
+-- ---------------------------------------------------------------------------
+-- Infrastructure configuration table
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_configuration_infra (
+    id              SERIAL          PRIMARY KEY,
+    category        VARCHAR(50)     NOT NULL,
+    config_key      VARCHAR(100)    NOT NULL UNIQUE,
+    config_value    VARCHAR(500)    NOT NULL DEFAULT '',
+    description     VARCHAR(255),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_configuration_infra IS 'Infrastructure configuration (key-value, grouped by category)';
+COMMENT ON COLUMN argus_configuration_infra.category IS 'Category grouping (e.g. network)';
+COMMENT ON COLUMN argus_configuration_infra.config_key IS 'Unique setting key';
+COMMENT ON COLUMN argus_configuration_infra.config_value IS 'Setting value';
+COMMENT ON COLUMN argus_configuration_infra.description IS 'Human-readable description';
+
+-- Seed Infrastructure configuration
+INSERT INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
+('network', 'domain_name',  '', 'Domain name for this infrastructure'),
+('network', 'dns_server_1', '', 'Primary DNS server'),
+('network', 'dns_server_2', '', 'Secondary DNS server'),
+('network', 'dns_server_3', '', 'Tertiary DNS server')
+ON CONFLICT (config_key) DO NOTHING;
+
 -- Seed default roles
 INSERT INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access') ON CONFLICT (name) DO NOTHING;
 INSERT INTO argus_roles (name, description) VALUES ('User', 'Standard user with limited access') ON CONFLICT (name) DO NOTHING;

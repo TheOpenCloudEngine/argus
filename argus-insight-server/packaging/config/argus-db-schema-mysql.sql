@@ -157,6 +157,27 @@ INSERT IGNORE INTO argus_configuration_filebrowser_extension (preview_id, extens
 -- data (id=10)
 (10,'parquet');
 
+-- ---------------------------------------------------------------------------
+-- Infrastructure configuration table
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_configuration_infra (
+    id              INT             NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    category        VARCHAR(50)     NOT NULL                COMMENT 'Category grouping (e.g. network)',
+    config_key      VARCHAR(100)    NOT NULL UNIQUE         COMMENT 'Unique setting key',
+    config_value    VARCHAR(500)    NOT NULL DEFAULT ''     COMMENT 'Setting value',
+    description     VARCHAR(255)                            COMMENT 'Human-readable description',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT='Infrastructure configuration (key-value, grouped by category)';
+
+-- Seed Infrastructure configuration
+INSERT IGNORE INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
+('network', 'domain_name',  '', 'Domain name for this infrastructure'),
+('network', 'dns_server_1', '', 'Primary DNS server'),
+('network', 'dns_server_2', '', 'Secondary DNS server'),
+('network', 'dns_server_3', '', 'Tertiary DNS server');
+
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access');
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('User', 'Standard user with limited access');
