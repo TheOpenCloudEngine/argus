@@ -394,7 +394,7 @@ ${rows}
                 <Button
                   variant="outline"
                   size="sm"
-                  className="ml-auto h-8 text-sm gap-1.5"
+                  className="ml-auto h-8 text-sm font-normal gap-1.5"
                   disabled={filtered.length === 0}
                 >
                   <Download className="h-3.5 w-3.5" />
