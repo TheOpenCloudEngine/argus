@@ -195,7 +195,7 @@ export function FileViewerDialog({
           )}
 
           {!isLoading && !error && !isImage && content !== null && (
-            <div className="h-[500px] border rounded overflow-hidden">
+            <div className="h-[500px] overflow-hidden">
               <MonacoEditor
                 height="100%"
                 language={language}
@@ -206,6 +206,7 @@ export function FileViewerDialog({
                   minimap: { enabled: false },
                   scrollBeyondLastLine: false,
                   fontSize: 13,
+                  fontFamily: "D2Coding, monospace",
                   lineNumbers: "on",
                   wordWrap: "on",
                   domReadOnly: true,
