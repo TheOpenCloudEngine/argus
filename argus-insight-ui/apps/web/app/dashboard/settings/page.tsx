@@ -2,6 +2,7 @@
 
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { CommandSettings } from "@/features/settings/components/command-settings"
 import { FileBrowserSettings } from "@/features/settings/components/file-browser-settings"
 import { InfraSettings } from "@/features/settings/components/infra-settings"
 import { LdapSettings } from "@/features/settings/components/ldap-settings"
@@ -15,6 +16,7 @@ export default function SettingsPage() {
           <TabsList variant="line">
             <TabsTrigger value="infra">Infra</TabsTrigger>
             <TabsTrigger value="ldap">AD & LDAP</TabsTrigger>
+            <TabsTrigger value="command">Command</TabsTrigger>
             <TabsTrigger value="file-browser">File Browser</TabsTrigger>
           </TabsList>
           <TabsContent value="infra" className="mt-4">
@@ -22,6 +24,9 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="ldap" className="mt-4">
             <LdapSettings />
+          </TabsContent>
+          <TabsContent value="command" className="mt-4">
+            <CommandSettings />
           </TabsContent>
           <TabsContent value="file-browser" className="mt-4">
             <FileBrowserSettings />

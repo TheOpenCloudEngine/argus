@@ -195,7 +195,8 @@ INSERT IGNORE INTO argus_configuration_infra (category, config_key, config_value
 ('ldap', 'group_object_class',    'posixGroup',          'Group object class'),
 ('ldap', 'group_search_filter',   '',                    'Group search filter'),
 ('ldap', 'group_name_attribute',  'cn',                  'Group name attribute'),
-('ldap', 'group_member_attribute','memberUid',            'Group member attribute');
+('ldap', 'group_member_attribute','memberUid',            'Group member attribute'),
+('command', 'openssl_path',      '/usr/bin/openssl',     'Path to OpenSSL binary');
 
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (name, description) VALUES ('Admin', 'Administrator with full access');

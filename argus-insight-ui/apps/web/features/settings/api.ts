@@ -36,3 +36,17 @@ export async function updateInfraCategory(
   })
   if (!res.ok) throw new Error(`Failed to update infra category: ${res.status}`)
 }
+
+/**
+ * Check if a file path exists on the server.
+ */
+export async function checkPath(path: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/check-path`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) throw new Error(`Failed to check path: ${res.status}`)
+  const data = await res.json()
+  return data.exists
+}

@@ -35,3 +35,16 @@ class UpdateInfraCategoryRequest(BaseModel):
     items: dict[str, str] = Field(
         description="Key-value pairs to update",
     )
+
+
+class CheckPathRequest(BaseModel):
+    """Request to check if a file path exists on the server."""
+
+    path: str = Field(description="File path to check")
+
+
+class CheckPathResponse(BaseModel):
+    """Response indicating whether the path exists."""
+
+    path: str
+    exists: bool

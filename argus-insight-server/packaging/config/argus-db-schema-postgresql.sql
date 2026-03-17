@@ -254,7 +254,8 @@ INSERT INTO argus_configuration_infra (category, config_key, config_value, descr
 ('ldap', 'group_object_class',    'posixGroup',         'Group object class'),
 ('ldap', 'group_search_filter',   '',                   'Group search filter'),
 ('ldap', 'group_name_attribute',  'cn',                 'Group name attribute'),
-('ldap', 'group_member_attribute','memberUid',           'Group member attribute')
+('ldap', 'group_member_attribute','memberUid',           'Group member attribute'),
+('command', 'openssl_path',      '/usr/bin/openssl',    'Path to OpenSSL binary')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- Seed default roles
