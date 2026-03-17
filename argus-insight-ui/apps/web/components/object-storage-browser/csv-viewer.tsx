@@ -128,7 +128,18 @@ export function CsvViewer({ url, defaultDelimiter }: CsvViewerProps) {
         const res = await fetch(url)
         if (!res.ok) throw new Error(`Failed to fetch file (${res.status})`)
         const buf = await res.arrayBuffer()
-        const decoded = new TextDecoder(enc).decode(buf)
+        let decoded = new TextDecoder(enc).decode(buf)
+
+        // Normalize line endings to the selected delimiter so PapaParse
+        // strictly respects the user's choice.
+        if (lineDelim === "\n") {
+          // \r\n → \n, then stray \r → \n
+          decoded = decoded.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+        } else {
+          // lineDelim === "\r\n"
+          // First normalize everything to \n, then convert to \r\n
+          decoded = decoded.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n/g, "\r\n")
+        }
 
         const parseConfig: Papa.ParseConfig = {
           delimiter: delim,
