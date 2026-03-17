@@ -1,5 +1,3 @@
-import { cookies } from "next/headers"
-
 export interface SessionUser {
   name: string
   username: string
@@ -18,20 +16,24 @@ export interface Session {
  * TODO: 로그인 구현 시 아래 순서로 작업하세요.
  *   1. 로그인 API 핸들러(예: app/api/auth/login/route.ts)에서 인증 성공 후
  *      cookies().set(SESSION_COOKIE_NAME, <서명된 JWT 또는 세션 토큰>) 으로 쿠키를 설정하세요.
- *   2. 이 함수에서 해당 쿠키 값을 읽어 JWT 검증 또는 세션 스토어 조회를 수행하세요.
+ *   2. 이 함수에서 cookies()를 import하여 쿠키 값을 읽고 JWT 검증 또는 세션 스토어 조회를 수행하세요.
+ *      (주의: cookies() 호출 시 해당 layout이 동적(dynamic) 렌더링으로 전환됩니다.)
  *   3. 유효하지 않은 세션이면 null을 반환하고, 호출 측에서 로그인 페이지로 리다이렉트하세요.
+ *
+ * 참고: 현재는 mock 데이터를 반환하므로 cookies()를 호출하지 않습니다.
+ *       cookies()를 호출하면 dashboard layout이 동적 렌더링이 되어
+ *       dev 모드에서 주기적으로 전체 화면이 재렌더링됩니다.
  */
 export async function getSession(): Promise<Session> {
-  const cookieStore = await cookies()
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
+  // TODO: 실제 인증 구현 시 아래 코드를 활성화하세요.
+  // import { cookies } from "next/headers"
+  // const cookieStore = await cookies()
+  // const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
+  // if (sessionCookie?.value) {
+  //   return verifyJwt(sessionCookie.value)
+  // }
 
-  if (sessionCookie?.value) {
-    // TODO: 실제 구현 시 이 부분에서 JWT 검증 또는 세션 스토어 조회를 수행하세요.
-    // 예: return verifyJwt(sessionCookie.value)
-    //      return sessionStore.get(sessionCookie.value)
-  }
-
-  // 세션 쿠키가 없으면 개발용 mock 데이터를 반환합니다.
+  // 현재는 개발용 mock 데이터를 반환합니다.
   // TODO: 실제 운영 환경에서는 이 fallback을 제거하고 로그인 페이지로 리다이렉트하세요.
   return MOCK_SESSION
 }
