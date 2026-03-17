@@ -21,7 +21,6 @@ import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog } from "./delete-dialog"
 import { PropertiesDialog } from "./properties-dialog"
 import { RenameDialog } from "./rename-dialog"
-import { MoveDialog } from "./move-dialog"
 import { UploadProgressDialog, type FileUploadStatus } from "./upload-progress-dialog"
 import { FileViewerDialog, isViewableFile } from "./file-viewer-dialog"
 import { entryId } from "./utils"
@@ -76,8 +75,7 @@ export function ObjectStorageBrowser({
   // --- Context menu dialog state ---
   const [contextEntry, setContextEntry] = useState<StorageEntry | null>(null)
   const [renameOpen, setRenameOpen] = useState(false)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [contextDeleteOpen, setContextDeleteOpen] = useState(false)
+const [contextDeleteOpen, setContextDeleteOpen] = useState(false)
 
   // --- Drag-and-drop state ---
   const [isDragOver, setIsDragOver] = useState(false)
@@ -286,10 +284,7 @@ export function ObjectStorageBrowser({
         setSelectedKeys(new Set([entryId(entry.kind, entry.key)]))
         setContextDeleteOpen(true)
         break
-      case "move":
-        setMoveOpen(true)
-        break
-      case "properties":
+case "properties":
         setPropertiesEntry(entry)
         setPropertiesOpen(true)
         break
@@ -322,20 +317,7 @@ export function ObjectStorageBrowser({
     }
   }
 
-  async function handleMove(destinationKey: string) {
-    if (!contextEntry || !dataSource.copyObject) return
-    setDialogLoading(true)
-    try {
-      await dataSource.copyObject(bucket, contextEntry.key, destinationKey)
-      await dataSource.deleteObjects(bucket, [contextEntry.key])
-      setMoveOpen(false)
-      await fetchData(prefixRef.current)
-    } finally {
-      setDialogLoading(false)
-    }
-  }
-
-  async function handleContextDelete() {
+async function handleContextDelete() {
     setDialogLoading(true)
     try {
       await dataSource.deleteObjects(bucket, selectedRealKeys())
@@ -592,16 +574,7 @@ export function ObjectStorageBrowser({
         onConfirm={handleRename}
         isLoading={dialogLoading}
       />
-      <MoveDialog
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-        currentKey={contextEntry?.key ?? ""}
-        existingFolderKeys={useMemo(() => new Set(folders.map((f) => f.key)), [folders])}
-        existingObjectKeys={useMemo(() => new Set(objects.map((o) => o.key)), [objects])}
-        onConfirm={handleMove}
-        isLoading={dialogLoading}
-      />
-      <DeleteDialog
+<DeleteDialog
         open={contextDeleteOpen}
         onOpenChange={setContextDeleteOpen}
         selectedKeys={contextEntry ? [contextEntry.key] : []}
