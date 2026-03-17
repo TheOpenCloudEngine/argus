@@ -18,8 +18,10 @@ type MoveDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentKey: string
-  /** Set of all existing keys (folders + objects) used for duplicate detection. */
-  existingKeys: Set<string>
+  /** Set of all existing folder keys (ending with "/"). */
+  existingFolderKeys: Set<string>
+  /** Set of all existing object keys (files). */
+  existingObjectKeys: Set<string>
   onConfirm: (destinationKey: string) => Promise<void>
   isLoading: boolean
 }
@@ -28,7 +30,8 @@ export function MoveDialog({
   open,
   onOpenChange,
   currentKey,
-  existingKeys,
+  existingFolderKeys,
+  existingObjectKeys,
   onConfirm,
   isLoading,
 }: MoveDialogProps) {
@@ -43,6 +46,39 @@ export function MoveDialog({
     onOpenChange(v)
   }
 
+  /** Extract the file/folder name from the current key. */
+  function getSourceName(): string {
+    const isFolder = currentKey.endsWith("/")
+    const key = isFolder ? currentKey.slice(0, -1) : currentKey
+    const lastSlash = key.lastIndexOf("/")
+    const name = lastSlash >= 0 ? key.substring(lastSlash + 1) : key
+    return isFolder ? name + "/" : name
+  }
+
+  /**
+   * Resolve the final destination key.
+   * - If the destination is an existing folder, move into it.
+   * - Otherwise use the destination as-is.
+   */
+  function resolveDestination(trimmed: string): string {
+    if (existingFolderKeys.has(trimmed) || existingFolderKeys.has(trimmed + "/")) {
+      const folder = trimmed.endsWith("/") ? trimmed : trimmed + "/"
+      return folder + getSourceName()
+    }
+    return trimmed
+  }
+
+  /** Check if the destination conflicts with an existing file. */
+  function getConflictError(trimmed: string): string | null {
+    if (!trimmed || trimmed === currentKey) return null
+    const resolved = resolveDestination(trimmed)
+    if (resolved === currentKey) return null
+    if (existingObjectKeys.has(resolved)) {
+      return "This path is unavailable. It already exists."
+    }
+    return null
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = destination.trim()
@@ -54,12 +90,18 @@ export function MoveDialog({
       setError("Destination is the same as the current path.")
       return
     }
-    if (existingKeys.has(trimmed)) {
-      setError("This path is unavailable. It already exists.")
+    const conflict = getConflictError(trimmed)
+    if (conflict) {
+      setError(conflict)
+      return
+    }
+    const resolved = resolveDestination(trimmed)
+    if (resolved === currentKey) {
+      setError("Destination is the same as the current path.")
       return
     }
     setError("")
-    await onConfirm(trimmed)
+    await onConfirm(resolved)
   }
 
   return (
@@ -89,9 +131,10 @@ export function MoveDialog({
                 disabled={isLoading}
                 className="font-mono"
               />
-              {destination.trim() && destination.trim() !== currentKey && existingKeys.has(destination.trim()) && (
-                <p className="text-xs text-destructive">This path is unavailable. It already exists.</p>
-              )}
+              {(() => {
+                const conflict = getConflictError(destination.trim())
+                return conflict ? <p className="text-xs text-destructive">{conflict}</p> : null
+              })()}
             </div>
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
