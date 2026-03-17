@@ -1,64 +1,123 @@
 # GitLab Service
 
-GitLab CE(Community Edition) 17.9.1을 Docker 및 Kubernetes 환경에 배포하는 프로젝트입니다. Argus Insight 플랫폼의 Git 저장소 관리 서비스로, 화면에서 작성한 코드를 Git을 통해 버전 관리하고 CI/CD 파이프라인을 실행합니다. OpenID Connect 기반 SSO 연동을 지원하여 Argus Insight와 통합 인증을 구성할 수 있습니다.
+GitLab CE(Community Edition) 17.9.1을 Docker 및 Kubernetes 환경에 배포하는 프로젝트입니다. Argus Insight 플랫폼의 Git 저장소 관리 서비스로, 화면에서 작성한 코드를 Git을 통해 버전 관리하고 CI/CD 파이프라인을 실행합니다. OpenID Connect 기반 SSO 연동을 지원하여 Argus Insight와 통합 인증을 구성할 수 있습니다. Airgap 환경을 지원하기 위해 공식 이미지를 Dockerfile wrapper로 빌드하여 프라이빗 레지스트리(Zot)에 배포합니다.
 
 ## 프로젝트 구조
 
 ```
 gitlab-service/
 ├── CLAUDE.md                        # 이 파일
+├── Makefile                         # Docker 이미지 빌드/푸시/저장 오케스트레이션
+├── versions.env                     # 컴포넌트 버전 핀
 ├── .gitignore
-├── versions.env                     # GitLab CE 버전 핀
+├── .dockerignore
+├── gitlab-ce/
+│   ├── Dockerfile                   # FROM gitlab/gitlab-ce, gitlab.rb 내장
+│   └── gitlab.rb                    # GitLab Omnibus 기본 설정 (이미지 내장용)
+├── gitlab-runner/
+│   └── Dockerfile                   # FROM gitlab/gitlab-runner
 ├── docker/
 │   ├── docker-compose.yml           # Docker Compose 오케스트레이션
-│   └── gitlab.rb                    # GitLab Omnibus 설정 파일
-└── kubernetes/
-    ├── kustomization.yaml           # Kustomize 엔트리포인트
-    ├── namespace.yaml               # argus-insight 네임스페이스
-    ├── secret.yaml                  # root 비밀번호, Runner 토큰, OIDC secret
-    ├── configmap.yaml               # gitlab.rb를 ConfigMap으로 관리
-    ├── pvc.yaml                     # 영구 볼륨 (config, logs, data)
-    ├── gitlab.yaml                  # GitLab Deployment + Service
-    ├── gitlab-runner.yaml           # GitLab Runner Deployment
-    └── ingress.yaml                 # nginx Ingress
+│   └── gitlab.rb                    # GitLab Omnibus 설정 파일 (bind mount 오버라이드용)
+├── kubernetes/
+│   ├── kustomization.yaml           # Kustomize 엔트리포인트
+│   ├── namespace.yaml               # argus-insight 네임스페이스
+│   ├── secret.yaml                  # root 비밀번호, Runner 토큰, OIDC secret
+│   ├── configmap.yaml               # gitlab.rb를 ConfigMap으로 관리
+│   ├── pvc.yaml                     # 영구 볼륨 (argus-gitlab-config/logs/data)
+│   ├── gitlab.yaml                  # GitLab Deployment + Service
+│   ├── gitlab-runner.yaml           # GitLab Runner Deployment
+│   └── ingress.yaml                 # nginx Ingress
+└── dist/                            # 빌드 산출물 (gitignored)
+    └── gitlab-*.tar.gz              # docker save 이미지
 ```
 
-## 배포 방법
-
-### 1. Docker Compose
+## 빌드 방법
 
 ```bash
+# Docker 이미지 빌드
+make docker                  # gitlab-ce + gitlab-runner 전체 빌드
+make docker-gitlab-ce        # GitLab CE만 빌드
+make docker-gitlab-runner    # GitLab Runner만 빌드
+
+# 프라이빗 레지스트리 푸시
+make docker-push                                                    # 기본 (argus-insight/ prefix)
+make docker-push DOCKER_REGISTRY=zot.argus.local:5000/argus-insight # Zot Registry 지정
+
+# Airgap 환경용 이미지 저장/로드
+make docker-save             # dist/ 에 tar.gz 저장
+make docker-load             # tar.gz 에서 이미지 로드
+
+# 정리
+make clean                   # dist/ 삭제
+
+# Docker Compose
 cd docker
-docker compose --env-file ../versions.env up -d
-```
+docker compose --env-file ../versions.env up --build -d
 
-- GitLab Web UI: `http://localhost:8929`
-- GitLab SSH: `localhost:2224`
-- GitLab HTTPS: `localhost:8443`
-- 초기 root 계정: `root` / `Argus!nsight2024`
-- GitLab 최초 기동 시 약 3~5분 소요 (healthcheck `start_period: 300s`)
-
-### 2. Kubernetes (Kustomize)
-
-```bash
-# 배포 전 secret.yaml의 값을 실제 값으로 변경 필수
+# Kubernetes
 kubectl apply -k kubernetes/
-kubectl get all -n argus-insight -l app.kubernetes.io/name=gitlab    # 상태 확인
+kubectl get all -n argus-insight -l app.kubernetes.io/name=gitlab
 ```
+
+## 초기 관리자 계정
+
+| 항목 | 값 |
+|---|---|
+| 사용자명 | `root` (GitLab CE 고정, 변경 불가) |
+| 비밀번호 | `Argus!nsight2026` |
+
+- 최초 로그인 후 반드시 비밀번호를 변경하세요
+- 비밀번호는 `gitlab.rb`의 `initial_root_password`, Kubernetes에서는 `secret.yaml`의 `initial_root_password`에서 설정
+- GitLab 비밀번호 정책: 최소 8자 이상
 
 ## 버전 관리
 
-`versions.env` 파일에서 GitLab CE 버전을 관리합니다. 공식 Docker 이미지 태그를 사용합니다.
+`versions.env` 파일에서 모든 컴포넌트 버전을 관리합니다. 버전 변경 후 `make docker`로 재빌드합니다.
 
 ```
 GITLAB_VERSION=17.9.1-ce.0
+GITLAB_RUNNER_VERSION=v17.9.1
 ```
+
+## Docker 이미지
+
+Airgap 환경을 지원하기 위해 공식 이미지를 Dockerfile wrapper로 빌드하여 기본 설정(`gitlab.rb`)을 이미지에 내장합니다. 런타임에 bind mount 또는 ConfigMap으로 설정을 오버라이드할 수 있습니다.
+
+| 공식 이미지 | Argus 이미지 | 설명 |
+|---|---|---|
+| `gitlab/gitlab-ce:17.9.1-ce.0` | `argus-insight/gitlab-ce:17.9.1-ce.0` | GitLab CE + 기본 gitlab.rb 내장 |
+| `gitlab/gitlab-runner:v17.9.1` | `argus-insight/gitlab-runner:v17.9.1` | GitLab Runner |
+
+### Airgap 배포 흐름
+
+```
+인터넷 환경                          Airgap 환경
+┌─────────────────┐                ┌──────────────────┐
+│ make docker     │                │ make docker-load │
+│ make docker-save│ ──USB/SCP──▶  │ docker tag ...   │
+│ (dist/*.tar.gz) │                │ docker push ...  │
+└─────────────────┘                │   → Zot Registry │
+                                   └──────────────────┘
+```
+
+1. 인터넷 환경에서 `make docker && make docker-save`
+2. `dist/*.tar.gz` 파일을 Airgap 환경으로 전달 (USB, SCP 등)
+3. Airgap 환경에서 `make docker-load`
+4. 필요시 `docker tag` + `docker push`로 Zot Registry에 등록
 
 ## 설정 파일
 
 ### gitlab.rb
 
-GitLab Omnibus의 전체 설정을 관리하는 Ruby 파일입니다. Docker 환경에서는 `docker/gitlab.rb`를, Kubernetes 환경에서는 `configmap.yaml`에 인라인으로 포함됩니다.
+GitLab Omnibus의 전체 설정을 관리하는 Ruby 파일입니다. 두 곳에 존재합니다:
+
+| 파일 | 용도 |
+|---|---|
+| `gitlab-ce/gitlab.rb` | Docker 이미지 빌드 시 내장되는 기본 설정 |
+| `docker/gitlab.rb` | Docker Compose에서 bind mount로 오버라이드하는 설정 |
+
+Kubernetes 환경에서는 `configmap.yaml`에 인라인으로 포함됩니다.
 
 #### 주요 설정 섹션
 
@@ -67,7 +126,7 @@ GitLab Omnibus의 전체 설정을 관리하는 Ruby 파일입니다. Docker 환
 | External URL | `external_url` | `http://gitlab.argus.local` | GitLab 접근 URL (실제 도메인으로 변경 필요) |
 | Rails | `time_zone` | `Asia/Seoul` | 시간대 |
 | Rails | `gitlab_shell_ssh_port` | `2224` (Docker) / `22` (K8s) | SSH 포트 |
-| Rails | `initial_root_password` | `Argus!nsight2024` | 초기 root 비밀번호 (최초 로그인 후 변경) |
+| Rails | `initial_root_password` | `Argus!nsight2026` | 초기 root 비밀번호 (최초 로그인 후 변경) |
 | Nginx | `listen_port` | `80` | 내부 HTTP 포트 |
 | Nginx | `listen_https` | `false` | HTTPS 비활성화 (리버스 프록시에서 TLS 종료) |
 | PostgreSQL | `shared_buffers` | `256MB` | 내장 PostgreSQL 버퍼 크기 |
@@ -119,17 +178,17 @@ GitLab의 OmniAuth를 통해 OpenID Connect 기반 SSO를 지원합니다. `gitl
 
 | 서비스 | 이미지 | 포트 매핑 | 설명 |
 |---|---|---|---|
-| `gitlab` | `gitlab/gitlab-ce:17.9.1-ce.0` | `8929:80`, `8443:443`, `2224:22` | GitLab CE 서버 |
-| `gitlab-runner` | `gitlab/gitlab-runner:latest` | - | CI/CD Runner |
+| `gitlab` | `argus-insight/gitlab-ce:17.9.1-ce.0` | `8929:80`, `8443:443`, `2224:22` | GitLab CE 서버 |
+| `gitlab-runner` | `argus-insight/gitlab-runner:v17.9.1` | - | CI/CD Runner |
 
 ### Docker 볼륨
 
 | 볼륨 이름 | 컨테이너 경로 | 용도 |
 |---|---|---|
-| `gitlab-config` | `/etc/gitlab` | GitLab 설정 파일 |
-| `gitlab-logs` | `/var/log/gitlab` | 로그 파일 |
-| `gitlab-data` | `/var/opt/gitlab` | Git 저장소, DB, 업로드 등 전체 데이터 |
-| `gitlab-runner-config` | `/etc/gitlab-runner` | Runner 설정 |
+| `argus-gitlab-config` | `/etc/gitlab` | GitLab 설정 파일 |
+| `argus-gitlab-logs` | `/var/log/gitlab` | 로그 파일 |
+| `argus-gitlab-data` | `/var/opt/gitlab` | Git 저장소, DB, 업로드 등 전체 데이터 |
+| `argus-gitlab-runner-config` | `/etc/gitlab-runner` | Runner 설정 |
 
 ### 헬스체크
 
@@ -164,9 +223,9 @@ Registration Token은 GitLab Admin > CI/CD > Runners 에서 확인합니다.
 | Namespace | `argus-insight` | 전용 네임스페이스 (다른 서비스와 공유) |
 | Secret | `gitlab-secrets` | root 비밀번호, Runner 토큰, OIDC secret |
 | ConfigMap | `gitlab-config` | gitlab.rb 설정 파일 |
-| PVC | `gitlab-config` | 설정 파일 (1Gi, ReadWriteOnce) |
-| PVC | `gitlab-logs` | 로그 파일 (5Gi, ReadWriteOnce) |
-| PVC | `gitlab-data` | 데이터 (50Gi, ReadWriteOnce) |
+| PVC | `argus-gitlab-config` | 설정 파일 (1Gi, ReadWriteOnce) |
+| PVC | `argus-gitlab-logs` | 로그 파일 (5Gi, ReadWriteOnce) |
+| PVC | `argus-gitlab-data` | 데이터 (50Gi, ReadWriteOnce) |
 | Deployment + Service | `gitlab` | 포트 80 (HTTP), 443 (HTTPS), 22 (SSH) |
 | Deployment | `gitlab-runner` | CI/CD Runner |
 | Ingress | `gitlab` | nginx Ingress (`gitlab.argus.local`) |
@@ -177,6 +236,7 @@ Registration Token은 GitLab Admin > CI/CD > Runners 에서 확인합니다.
 2. **configmap.yaml**: `external_url`을 실제 도메인으로 변경
 3. **ingress.yaml**: `host`를 실제 도메인으로 변경, TLS 필요 시 `tls` 섹션 주석 해제
 4. **pvc.yaml**: 스토리지 크기 조정 (기본 data 50Gi)
+5. **gitlab.yaml, gitlab-runner.yaml**: 이미지 경로를 프라이빗 레지스트리 주소로 변경
 
 ### 리소스 요구사항
 
@@ -249,6 +309,67 @@ docker compose exec gitlab gitlab-backup restore BACKUP=<timestamp>
 kubectl exec -n argus-insight deploy/gitlab -- gitlab-backup restore BACKUP=<timestamp>
 ```
 
+## 네이밍 규칙
+
+### Docker 이미지
+
+| 규칙 | 패턴 | 예시 |
+|---|---|---|
+| 이미지 이름 | `argus-insight/<component>:<version>` | `argus-insight/gitlab-ce:17.9.1-ce.0` |
+| 레지스트리 포함 | `<registry>/argus-insight/<component>:<version>` | `zot.argus.local:5000/argus-insight/gitlab-ce:17.9.1-ce.0` |
+| 저장 파일명 | `<component>-<version>.tar.gz` | `gitlab-ce-17.9.1-ce.0.tar.gz` |
+
+### Docker 볼륨
+
+| 규칙 | 패턴 | 예시 |
+|---|---|---|
+| Docker Compose | `argus-gitlab-<용도>` | `argus-gitlab-config`, `argus-gitlab-logs`, `argus-gitlab-data` |
+| Runner | `argus-gitlab-runner-<용도>` | `argus-gitlab-runner-config` |
+
+### Kubernetes 리소스
+
+| 리소스 | 패턴 | 예시 |
+|---|---|---|
+| PVC | `argus-gitlab-<용도>` | `argus-gitlab-config`, `argus-gitlab-logs`, `argus-gitlab-data` |
+| Secret | `gitlab-secrets` | — |
+| ConfigMap | `gitlab-config` | — |
+| Deployment | `gitlab`, `gitlab-runner` | — |
+| Service | `gitlab` | — |
+| Ingress | `gitlab` | — |
+
+### Kubernetes 라벨
+
+| 라벨 | 값 | 설명 |
+|---|---|---|
+| `app.kubernetes.io/name` | `gitlab` 또는 `gitlab-runner` | 컴포넌트 식별 |
+| `app.kubernetes.io/component` | `config`, `logs`, `data` | PVC 용도 구분 |
+| `app.kubernetes.io/part-of` | `argus-insight` | 플랫폼 소속 |
+
+### 호스트명 및 URL
+
+| 항목 | 패턴 | 예시 |
+|---|---|---|
+| External URL | `http://gitlab.<도메인>` | `http://gitlab.argus.local` |
+| Ingress Host | `gitlab.<도메인>` | `gitlab.argus.local` |
+| K8s 내부 DNS | `gitlab.argus-insight.svc.cluster.local` | — |
+| SSH Clone URL | `ssh://git@gitlab.<도메인>:<port>/<group>/<project>.git` | `ssh://git@gitlab.argus.local:2224/argus/my-repo.git` |
+| HTTP Clone URL | `http://gitlab.<도메인>/<group>/<project>.git` | `http://gitlab.argus.local/argus/my-repo.git` |
+
+### 포트 할당
+
+| 프로토콜 | Docker 호스트 포트 | 컨테이너 포트 | 설명 |
+|---|---|---|---|
+| HTTP | `8929` | `80` | GitLab Web UI |
+| HTTPS | `8443` | `443` | GitLab Web UI (TLS) |
+| SSH | `2224` | `22` | Git SSH |
+
+## 코드 컨벤션
+
+- Dockerfile의 `LABEL maintainer`: `Open Cloud Engine <fharenheit@gmail.com>`
+- 패키지 라이선스: Apache-2.0
+- `versions.env`에서 모든 컴포넌트 버전을 중앙 관리
+- Makefile의 `DOCKER_REGISTRY` 변수로 레지스트리 주소를 주입 (기본값: `argus-insight`)
+
 ## 주의사항
 
 - GitLab CE는 리소스를 많이 소비합니다 (최소 CPU 2코어, RAM 4GB 권장)
@@ -256,3 +377,4 @@ kubectl exec -n argus-insight deploy/gitlab -- gitlab-backup restore BACKUP=<tim
 - `external_url`은 반드시 실제 접근 가능한 URL로 설정해야 합니다 (SSH clone URL, 이메일 링크 등에 사용)
 - 내장 PostgreSQL을 사용하므로 별도의 외부 DB가 필요하지 않습니다
 - Kubernetes 환경에서는 Deployment strategy가 `Recreate`로 설정되어 있습니다 (데이터 볼륨 동시 접근 방지)
+- Airgap 환경에서는 `make docker-save`로 이미지를 저장한 후 물리적으로 전달하여 `make docker-load`로 로드합니다

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: gitlab-config
+  name: argus-gitlab-config
   namespace: argus-insight
   labels:
     app.kubernetes.io/name: gitlab
@@ -17,7 +17,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: gitlab-logs
+  name: argus-gitlab-logs
   namespace: argus-insight
   labels:
     app.kubernetes.io/name: gitlab
@@ -33,7 +33,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: gitlab-data
+  name: argus-gitlab-data
   namespace: argus-insight
   labels:
     app.kubernetes.io/name: gitlab

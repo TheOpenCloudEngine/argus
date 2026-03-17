@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: gitlab-runner
-          image: gitlab/gitlab-runner:latest
+          image: argus-insight/gitlab-runner:v17.9.1
           env:
             - name: CI_SERVER_URL
               value: "http://gitlab.argus-insight.svc.cluster.local"

@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: gitlab
-          image: gitlab/gitlab-ce:17.9.1-ce.0
+          image: argus-insight/gitlab-ce:17.9.1-ce.0
           env:
             - name: GITLAB_OMNIBUS_CONFIG
               value: "from_file('/etc/gitlab/gitlab.rb')"
@@ -74,11 +74,11 @@ spec:
             - name: config-volume
               mountPath: /etc/gitlab/gitlab.rb
               subPath: gitlab.rb
-            - name: gitlab-config
+            - name: argus-gitlab-config
               mountPath: /etc/gitlab
-            - name: gitlab-logs
+            - name: argus-gitlab-logs
               mountPath: /var/log/gitlab
-            - name: gitlab-data
+            - name: argus-gitlab-data
               mountPath: /var/opt/gitlab
       volumes:
         - name: config-volume
@@ -87,15 +87,15 @@ spec:
             items:
               - key: gitlab.rb
                 path: gitlab.rb
-        - name: gitlab-config
+        - name: argus-gitlab-config
           persistentVolumeClaim:
-            claimName: gitlab-config
-        - name: gitlab-logs
+            claimName: argus-gitlab-config
+        - name: argus-gitlab-logs
           persistentVolumeClaim:
-            claimName: gitlab-logs
-        - name: gitlab-data
+            claimName: argus-gitlab-logs
+        - name: argus-gitlab-data
           persistentVolumeClaim:
-            claimName: gitlab-data
+            claimName: argus-gitlab-data
 ---
 apiVersion: v1
 kind: Service

@@ -1,16 +1,19 @@
 services:
   gitlab:
-    image: gitlab/gitlab-ce:${GITLAB_VERSION}
+    build:
+      context: ../gitlab-ce
+      args:
+        GITLAB_VERSION: ${GITLAB_VERSION}
+    image: argus-insight/gitlab-ce:${GITLAB_VERSION}
     hostname: gitlab.argus.local
     ports:
       - "8929:80"
       - "8443:443"
       - "2224:22"
     volumes:
-      - gitlab-config:/etc/gitlab
-      - gitlab-logs:/var/log/gitlab
-      - gitlab-data:/var/opt/gitlab
-      - ./gitlab.rb:/etc/gitlab/gitlab.rb:ro
+      - argus-gitlab-config:/etc/gitlab
+      - argus-gitlab-logs:/var/log/gitlab
+      - argus-gitlab-data:/var/opt/gitlab
     environment:
       GITLAB_OMNIBUS_CONFIG: "from_file('/etc/gitlab/gitlab.rb')"
     shm_size: "256m"
@@ -27,9 +30,13 @@ services:
       start_period: 300s
 
   gitlab-runner:
-    image: gitlab/gitlab-runner:latest
+    build:
+      context: ../gitlab-runner
+      args:
+        GITLAB_RUNNER_VERSION: ${GITLAB_RUNNER_VERSION}
+    image: argus-insight/gitlab-runner:${GITLAB_RUNNER_VERSION}
     volumes:
-      - gitlab-runner-config:/etc/gitlab-runner
+      - argus-gitlab-runner-config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       gitlab:
@@ -37,7 +44,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  gitlab-config:
-  gitlab-logs:
-  gitlab-data:
-  gitlab-runner-config:
+  argus-gitlab-config:
+  argus-gitlab-logs:
+  argus-gitlab-data:
+  argus-gitlab-runner-config:
