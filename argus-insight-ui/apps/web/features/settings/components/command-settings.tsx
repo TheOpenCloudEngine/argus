@@ -192,13 +192,13 @@ export function CommandSettings() {
           {cmd.checkResult === "exists" && (
             <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              파일이 존재합니다
+              File exists
             </div>
           )}
           {cmd.checkResult === "not_found" && (
             <div className="flex items-center gap-1.5 text-xs text-destructive">
               <XCircle className="h-3.5 w-3.5" />
-              파일이 존재하지 않습니다
+              File not found
             </div>
           )}
         </div>
