@@ -11,6 +11,12 @@ import logging
 import time
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.schemas import UserInfo
+from app.usermgr.models import ArgusRole, ArgusUser
+
 logger = logging.getLogger(__name__)
 
 # Secret key for token signing - should be configured via settings in production
@@ -79,3 +85,33 @@ def verify_token(token: str) -> dict | None:
         return payload
     except Exception:
         return None
+
+
+async def get_current_user_info(session: AsyncSession) -> UserInfo:
+    """Return the current user information.
+
+    FIXME: 현재는 인증 없이 argus_users.id=1 사용자를 강제로 조회하여 반환합니다.
+           실제 인증이 구현되면 Authorization 헤더의 토큰에서 사용자를 추출하고,
+           토큰의 username으로 사용자를 조회하도록 변경해야 합니다.
+    """
+    logger.info("Fetching current user info: forcing argus_users.id=1")
+    result = await session.execute(
+        select(ArgusUser, ArgusRole.name.label("role_name"))
+        .join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
+        .where(ArgusUser.id == 1)
+    )
+    row = result.one_or_none()
+    if row is None:
+        logger.error("Default user (id=1) not found in argus_users")
+        raise ValueError("Default user not found")
+
+    user, role_name = row
+    logger.info("Current user resolved: username=%s, role=%s", user.username, role_name)
+    return UserInfo(
+        username=user.username,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone_number=user.phone_number or "",
+        role=role_name,
+    )
