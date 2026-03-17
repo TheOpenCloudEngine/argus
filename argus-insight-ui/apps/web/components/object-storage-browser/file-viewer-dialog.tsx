@@ -23,8 +23,8 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.
   ),
 })
 
-/** Maximum file size in bytes that the viewer can display (10 KB). */
-const MAX_VIEW_SIZE = 10 * 1024
+/** Maximum file size in bytes that the viewer can display (20 KB). */
+const MAX_VIEW_SIZE = 20 * 1024
 
 /** Map file extensions to Monaco Editor language identifiers. */
 const extensionToLanguage: Record<string, string> = {
@@ -127,7 +127,7 @@ export function FileViewerDialog({
 
     // Size check for non-image files
     if (!isImage && entry.size > MAX_VIEW_SIZE) {
-      setError("Only files of 10 KB or smaller can be displayed.")
+      setError("Only files of 20 KB or smaller can be displayed.")
       return
     }
 
@@ -200,7 +200,7 @@ export function FileViewerDialog({
                 height="100%"
                 language={language}
                 value={content}
-                theme="vs-dark"
+                theme="light"
                 options={{
                   readOnly: true,
                   minimap: { enabled: false },
