@@ -5,6 +5,10 @@ export type StorageFolder = {
   key: string
   /** Display name (last segment, e.g. "2026"). */
   name: string
+  /** Owner of the folder (from metadata). */
+  owner?: string
+  /** Group of the folder (from metadata). */
+  group?: string
 }
 
 /** Represents a single object (file) in the object storage. */
@@ -20,6 +24,10 @@ export type StorageObject = {
   lastModified: string
   /** S3 storage class (e.g. "STANDARD", "GLACIER"). */
   storageClass?: string
+  /** Owner of the object (from metadata). */
+  owner?: string
+  /** Group of the object (from metadata). */
+  group?: string
 }
 
 /** Union type for items displayed in the browser table. */

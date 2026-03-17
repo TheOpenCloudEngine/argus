@@ -37,6 +37,11 @@ export type EntryContextAction = "rename" | "delete" | "move" | "properties"
 
 type BrowserTableProps = {
   entries: StorageEntry[]
+  /**
+   * Total number of entries (folders + objects) before filtering.
+   * Used to disable sorting when >= 300 items for performance.
+   */
+  totalEntryCount: number
   selectedKeys: Set<string>
   onSelectionChange: (keys: Set<string>) => void
   onFolderOpen: (prefix: string) => void
@@ -46,6 +51,12 @@ type BrowserTableProps = {
   onSortChange: (sort: SortConfig) => void
   isLoading: boolean
 }
+
+/**
+ * Sorting is disabled when the directory has 300 or more entries (folders + objects)
+ * to prevent performance issues with large directories.
+ */
+const SORT_DISABLE_THRESHOLD = 300
 
 const fileIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   image: FileImage,
@@ -70,30 +81,36 @@ function SortButton({
   label,
   currentSort,
   onSortChange,
+  disabled,
   className,
 }: {
   column: SortConfig["column"]
   label: string
   currentSort: SortConfig
   onSortChange: (sort: SortConfig) => void
+  disabled?: boolean
   className?: string
 }) {
-  const isActive = currentSort.column === column
+  const isActive = !disabled && currentSort.column === column
   const nextDirection: SortDirection =
     isActive && currentSort.direction === "asc" ? "desc" : "asc"
 
   return (
     <button
       type="button"
-      onClick={() => onSortChange({ column, direction: nextDirection })}
+      onClick={() => !disabled && onSortChange({ column, direction: nextDirection })}
+      disabled={disabled}
       className={cn(
-        "flex items-center gap-1 hover:text-foreground transition-colors",
-        isActive ? "text-foreground" : "text-muted-foreground",
+        "flex items-center gap-1 transition-colors",
+        disabled
+          ? "text-muted-foreground cursor-default"
+          : "hover:text-foreground",
+        !disabled && isActive ? "text-foreground" : "text-muted-foreground",
         className,
       )}
     >
       {label}
-      {isActive ? (
+      {disabled ? null : isActive ? (
         currentSort.direction === "asc" ? (
           <ArrowUp className="h-3.5 w-3.5" />
         ) : (
@@ -108,6 +125,7 @@ function SortButton({
 
 export function BrowserTable({
   entries,
+  totalEntryCount,
   selectedKeys,
   onSelectionChange,
   onFolderOpen,
@@ -117,6 +135,8 @@ export function BrowserTable({
   onSortChange,
   isLoading,
 }: BrowserTableProps) {
+  // Disable sorting when the directory has >= 300 entries for performance
+  const sortDisabled = totalEntryCount >= SORT_DISABLE_THRESHOLD
   const allSelectableKeys = entries.map((e) => e.key)
   const allSelected =
     allSelectableKeys.length > 0 &&
@@ -182,6 +202,7 @@ export function BrowserTable({
                 label="Name"
                 currentSort={sort}
                 onSortChange={onSortChange}
+                disabled={sortDisabled}
               />
             </th>
             <th className="text-right px-3 py-2 font-medium w-28">
@@ -190,6 +211,7 @@ export function BrowserTable({
                 label="Size"
                 currentSort={sort}
                 onSortChange={onSortChange}
+                disabled={sortDisabled}
                 className="justify-end"
               />
             </th>
@@ -199,6 +221,7 @@ export function BrowserTable({
                 label="Last Modified"
                 currentSort={sort}
                 onSortChange={onSortChange}
+                disabled={sortDisabled}
               />
             </th>
             <th className="text-left px-3 py-2 font-medium w-32">
@@ -235,7 +258,7 @@ export function BrowserTable({
                           onClick={() => onFolderOpen(entry.key)}
                           className="flex items-center gap-2 hover:text-primary transition-colors group"
                         >
-                          <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                          <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
                           <span className="group-hover:underline truncate">
                             {entry.name}
                           </span>
@@ -266,10 +289,7 @@ export function BrowserTable({
                     <Pencil className="h-4 w-4" />
                     Rename
                   </ContextMenuItem>
-                  <ContextMenuItem
-                    variant="destructive"
-                    onClick={() => onContextAction?.("delete", entry)}
-                  >
+                  <ContextMenuItem onClick={() => onContextAction?.("delete", entry)}>
                     <Trash2 className="h-4 w-4" />
                     Delete
                   </ContextMenuItem>

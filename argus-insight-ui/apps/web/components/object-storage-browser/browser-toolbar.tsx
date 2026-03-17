@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import {
   Download,
   FolderPlus,
+  Info,
+  Pencil,
   RefreshCw,
   Search,
   Trash2,
@@ -13,12 +15,6 @@ import {
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@workspace/ui/components/tooltip"
 
 type BrowserToolbarProps = {
   searchValue: string
@@ -28,43 +24,14 @@ type BrowserToolbarProps = {
   onCreateFolder: () => void
   onDelete: () => void
   onDownload: () => void
+  onRename: () => void
+  onProperties: () => void
   onRefresh: () => void
   isLoading: boolean
 }
 
-function ToolbarButton({
-  icon: Icon,
-  label,
-  onClick,
-  disabled,
-  variant = "outline",
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  onClick: () => void
-  disabled?: boolean
-  variant?: "outline" | "destructive"
-}) {
-  return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={variant}
-            size="sm"
-            onClick={onClick}
-            disabled={disabled}
-            className="h-8 px-2.5"
-          >
-            <Icon className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{label}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
+function ToolbarSeparator() {
+  return <div className="w-px h-5 bg-border mx-0.5" />
 }
 
 export function BrowserToolbar({
@@ -75,6 +42,8 @@ export function BrowserToolbar({
   onCreateFolder,
   onDelete,
   onDownload,
+  onRename,
+  onProperties,
   onRefresh,
   isLoading,
 }: BrowserToolbarProps) {
@@ -100,6 +69,13 @@ export function BrowserToolbar({
     onSearchChange("")
   }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      onSearchChange(localSearch)
+    }
+  }
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2 flex-1">
@@ -109,6 +85,7 @@ export function BrowserToolbar({
             placeholder="Filter by name..."
             value={localSearch}
             onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="h-8 pl-8 pr-8 text-sm"
           />
           {localSearch && (
@@ -130,41 +107,77 @@ export function BrowserToolbar({
       </div>
 
       <div className="flex items-center gap-1.5">
-        <ToolbarButton
-          icon={RefreshCw}
-          label="Refresh"
-          onClick={onRefresh}
-          disabled={isLoading}
-        />
-
-        <div className="w-px h-5 bg-border mx-0.5" />
-
-        <ToolbarButton
-          icon={Upload}
-          label="Upload files"
-          onClick={onUpload}
-        />
-        <ToolbarButton
-          icon={FolderPlus}
-          label="Create folder"
-          onClick={onCreateFolder}
-        />
-
-        <div className="w-px h-5 bg-border mx-0.5" />
-
-        <ToolbarButton
-          icon={Download}
-          label="Download selected"
+        {/* Upload / Download */}
+        <Button variant="outline" size="sm" onClick={onUpload} className="h-8 gap-1.5">
+          <Upload className="h-4 w-4" />
+          Upload
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onDownload}
           disabled={selectedCount === 0}
-        />
-        <ToolbarButton
-          icon={Trash2}
-          label="Delete selected"
+          className="h-8 gap-1.5"
+        >
+          <Download className="h-4 w-4" />
+          Download
+        </Button>
+
+        <ToolbarSeparator />
+
+        {/* Create / Delete / Rename */}
+        <Button variant="outline" size="sm" onClick={onCreateFolder} className="h-8 gap-1.5">
+          <FolderPlus className="h-4 w-4" />
+          Create
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onDelete}
           disabled={selectedCount === 0}
-          variant="destructive"
-        />
+          className="h-8 gap-1.5"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRename}
+          disabled={selectedCount !== 1}
+          className="h-8 gap-1.5"
+        >
+          <Pencil className="h-4 w-4" />
+          Rename
+        </Button>
+
+        <ToolbarSeparator />
+
+        {/* Properties */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onProperties}
+          disabled={selectedCount !== 1}
+          className="h-8 gap-1.5"
+        >
+          <Info className="h-4 w-4" />
+          Properties
+        </Button>
+
+        <ToolbarSeparator />
+
+        {/* Refresh */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="h-8 gap-1.5"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
     </div>
   )

@@ -75,7 +75,7 @@ export function PropertiesDialog({
           <DialogTitle className="flex items-center gap-2">
             <EntryIcon
               entry={entry}
-              className={`h-5 w-5 shrink-0 ${isFolder ? "text-blue-500" : "text-muted-foreground"}`}
+              className={`h-5 w-5 shrink-0 ${isFolder ? "text-muted-foreground" : "text-muted-foreground"}`}
             />
             <span className="truncate">{entry.name}</span>
           </DialogTitle>
@@ -108,6 +108,9 @@ export function PropertiesDialog({
               />
             </>
           )}
+
+          <PropertyRow label="Owner" value={entry.owner ?? ""} />
+          <PropertyRow label="Group" value={entry.group ?? ""} />
         </div>
       </DialogContent>
     </Dialog>

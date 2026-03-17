@@ -141,6 +141,14 @@ export function ObjectStorageBrowser({
         )
       : all
 
+    // Skip sorting when directory has >= 300 entries for performance
+    const SORT_DISABLE_THRESHOLD = 300
+    if (all.length >= SORT_DISABLE_THRESHOLD) {
+      const unsortedFolders = filtered.filter((e): e is StorageFolder => e.kind === "folder")
+      const unsortedObjects = filtered.filter((e): e is StorageObject => e.kind === "object")
+      return [...unsortedFolders, ...unsortedObjects]
+    }
+
     // Sort: folders always first, then sort within each group
     const sortedFolders = filtered
       .filter((e): e is StorageFolder => e.kind === "folder")
@@ -429,6 +437,22 @@ export function ObjectStorageBrowser({
           onCreateFolder={() => setCreateFolderOpen(true)}
           onDelete={() => setDeleteOpen(true)}
           onDownload={handleDownload}
+          onRename={() => {
+            const key = Array.from(selectedKeys)[0]
+            const entry = entries.find((e) => e.key === key)
+            if (entry) {
+              setContextEntry(entry)
+              setRenameOpen(true)
+            }
+          }}
+          onProperties={() => {
+            const key = Array.from(selectedKeys)[0]
+            const entry = entries.find((e) => e.key === key)
+            if (entry) {
+              setPropertiesEntry(entry)
+              setPropertiesOpen(true)
+            }
+          }}
           onRefresh={() => fetchData(prefix)}
           isLoading={isLoading}
         />
@@ -436,6 +460,7 @@ export function ObjectStorageBrowser({
         {/* Table */}
         <BrowserTable
           entries={entries}
+          totalEntryCount={folders.length + objects.length}
           selectedKeys={selectedKeys}
           onSelectionChange={setSelectedKeys}
           onFolderOpen={navigateTo}
