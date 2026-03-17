@@ -419,7 +419,7 @@ export function SecuritySettings() {
 
   function handleOpenGenerate() {
     if (!certDir.trim()) {
-      showError("CA Certificate Directory를 위한 경로를 지정해주십시오.")
+      showError("Please specify the CA Certificate Directory path. This operation will delete all existing CA certificates and replace them with newly generated Self-Signed CA certificate and key.")
       return
     }
     setGenerateDialog(true)

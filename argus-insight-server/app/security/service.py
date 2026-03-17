@@ -16,8 +16,8 @@ CA_CERT_FILENAME = "ca.crt"
 CA_KEY_FILENAME = "ca.key"
 DEFAULT_CERT_DIR = "/opt/argus-insight-server/certs"
 OPENSSL_PATH_ERROR = (
-    "Command Tab의 OpenSSL Absolute Path에 "
-    "openssl의 절대경로를 지정해주십시오."
+    "Please specify the absolute path to OpenSSL "
+    "in the Command Tab's OpenSSL Absolute Path."
 )
 
 
