@@ -179,7 +179,7 @@ export function BrowserTable({
   async function handleCopyPath(entry: StorageEntry) {
     try {
       await copyToClipboard(entry.key)
-      setToastMessage("Copied to clipboard.")
+      setToastMessage("Copied to clipboard. (May not work without HTTPS)")
     } catch {
       setToastMessage("Failed to copy.")
     }
