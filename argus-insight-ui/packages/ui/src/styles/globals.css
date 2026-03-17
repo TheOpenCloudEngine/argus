@@ -129,14 +129,15 @@
 
 /* BlockNote editor styles */
 .bn-editor {
-  font-family: 'D2Coding', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: 'Roboto Condensed', sans-serif;
   font-size: 0.875rem;
 }
-.bn-editor code {
+.bn-editor code,
+.bn-editor pre {
   font-family: 'D2Coding', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 .bn-editor [data-content-type="codeBlock"] {
-  background: #CCCCCC !important;
+  background: #BBBBBB !important;
   border-radius: 0.375rem;
 }
 
