@@ -1,9 +1,11 @@
 """Authentication API endpoints."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import service
 from app.auth.schemas import LoginRequest, LoginResponse, UserInfo
+from app.core.database import get_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,11 +22,13 @@ async def login(req: LoginRequest):
 
 
 @router.get("/me", response_model=UserInfo)
-async def get_current_user():
+async def get_current_user(
+    session: AsyncSession = Depends(get_session),
+):
     """Get current user information.
 
-    Note: In production, this should extract the user from the
-    Authorization header token. Currently returns a placeholder.
+    FIXME: 현재는 인증 없이 argus_users.id=1 사용자를 강제로 조회하여 반환합니다.
+           실제 인증이 구현되면 Authorization 헤더의 토큰에서 사용자를 추출하도록
+           변경해야 합니다.
     """
-    # TODO: Extract user from token in Authorization header
-    return UserInfo(username="admin", role="admin")
+    return await service.get_current_user_info(session)

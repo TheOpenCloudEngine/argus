@@ -101,11 +101,7 @@ export function DataTableToolbar<TData>({
               Clear
             </Button>
           )}
-          {extraActions && (
-            <div className="ml-2">
-              {extraActions}
-            </div>
-          )}
+          {extraActions}
         </div>
       )}
     </div>
