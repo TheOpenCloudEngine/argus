@@ -4,6 +4,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { FileBrowserSettings } from "@/features/settings/components/file-browser-settings"
 import { InfraSettings } from "@/features/settings/components/infra-settings"
+import { LdapSettings } from "@/features/settings/components/ldap-settings"
 
 export default function SettingsPage() {
   return (
@@ -13,10 +14,14 @@ export default function SettingsPage() {
         <Tabs defaultValue="infra">
           <TabsList variant="line">
             <TabsTrigger value="infra">Infra</TabsTrigger>
+            <TabsTrigger value="ldap">AD & LDAP</TabsTrigger>
             <TabsTrigger value="file-browser">File Browser</TabsTrigger>
           </TabsList>
           <TabsContent value="infra" className="mt-4">
             <InfraSettings />
+          </TabsContent>
+          <TabsContent value="ldap" className="mt-4">
+            <LdapSettings />
           </TabsContent>
           <TabsContent value="file-browser" className="mt-4">
             <FileBrowserSettings />

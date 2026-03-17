@@ -239,7 +239,22 @@ INSERT INTO argus_configuration_infra (category, config_key, config_value, descr
 ('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
 ('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
 ('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
-('powerdns', 'pdns_server_id', '', 'PowerDNS server ID')
+('powerdns', 'pdns_server_id', '', 'PowerDNS server ID'),
+('ldap', 'enable_ldap_auth',      'false',             'Enable LDAP authentication'),
+('ldap', 'ldap_url',              'ldap://<SERVER>:389','LDAP/AD server URL'),
+('ldap', 'enable_ldap_tls',       'false',             'Enable LDAP TLS'),
+('ldap', 'ad_domain',             '',                   'Active Directory domain'),
+('ldap', 'ldap_bind_user',        '',                   'LDAP bind user DN'),
+('ldap', 'ldap_bind_password',    '',                   'LDAP bind password'),
+('ldap', 'user_search_base',      '',                   'User search base DN'),
+('ldap', 'user_object_class',     'person',             'User object class'),
+('ldap', 'user_search_filter',    '',                   'User search filter'),
+('ldap', 'user_name_attribute',   'uid',                'User name attribute'),
+('ldap', 'group_search_base',     '',                   'Group search base DN'),
+('ldap', 'group_object_class',    'posixGroup',         'Group object class'),
+('ldap', 'group_search_filter',   '',                   'Group search filter'),
+('ldap', 'group_name_attribute',  'cn',                 'Group name attribute'),
+('ldap', 'group_member_attribute','memberUid',           'Group member attribute')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- Seed default roles
