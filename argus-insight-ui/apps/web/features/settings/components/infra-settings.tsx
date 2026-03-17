@@ -7,7 +7,6 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Separator } from "@workspace/ui/components/separator"
 
 import { fetchInfraConfig, updateInfraCategory } from "@/features/settings/api"
 
@@ -332,8 +331,6 @@ export function InfraSettings() {
         onSave={handleSaveDomain}
         saving={savingDomain}
       />
-
-      <Separator />
 
       {/* PowerDNS Settings */}
       <PowerDnsSettingsSection

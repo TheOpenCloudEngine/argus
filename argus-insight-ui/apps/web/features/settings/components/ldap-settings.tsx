@@ -4,11 +4,9 @@ import { useCallback, useEffect, useState } from "react"
 import { Loader2, Save } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Separator } from "@workspace/ui/components/separator"
 
 import { fetchInfraConfig, updateInfraCategory } from "@/features/settings/api"
 
@@ -159,198 +157,175 @@ export function LdapSettings() {
         </div>
       )}
 
-      {/* Connection Settings */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>LDAP / Active Directory</CardTitle>
-              <CardDescription>
-                LDAP authentication and directory connection settings
-              </CardDescription>
-            </div>
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              ) : (
-                <Save className="h-4 w-4 mr-1.5" />
-              )}
-              Save
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {/* Toggles */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="enable-ldap-auth"
-                  checked={ldap.enable_ldap_auth === "true"}
-                  onCheckedChange={(checked) =>
-                    set("enable_ldap_auth", checked === true ? "true" : "false")
-                  }
-                />
-                <Label htmlFor="enable-ldap-auth">Enable LDAP Authentication</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="enable-ldap-tls"
-                  checked={ldap.enable_ldap_tls === "true"}
-                  onCheckedChange={(checked) =>
-                    set("enable_ldap_tls", checked === true ? "true" : "false")
-                  }
-                />
-                <Label htmlFor="enable-ldap-tls">Enable LDAP TLS</Label>
-              </div>
-            </div>
+      {/* Save button */}
+      <div className="flex justify-end">
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+          ) : (
+            <Save className="h-4 w-4 mr-1.5" />
+          )}
+          Save
+        </Button>
+      </div>
 
-            {/* Connection */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="ldap-url">LDAP/AD URL</Label>
-                <Input
-                  id="ldap-url"
-                  value={ldap.ldap_url}
-                  onChange={(e) => set("ldap_url", e.target.value)}
-                  placeholder="ldap://<SERVER>:389"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ad-domain">Active Directory Domain</Label>
-                <Input
-                  id="ad-domain"
-                  value={ldap.ad_domain}
-                  onChange={(e) => set("ad_domain", e.target.value)}
-                  placeholder="e.g. dev.net"
-                />
-              </div>
-            </div>
+      {/* Toggles */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-3">
+          <Checkbox
+            id="enable-ldap-auth"
+            checked={ldap.enable_ldap_auth === "true"}
+            onCheckedChange={(checked) =>
+              set("enable_ldap_auth", checked === true ? "true" : "false")
+            }
+          />
+          <Label htmlFor="enable-ldap-auth">Enable LDAP Authentication</Label>
+        </div>
+        <div className="flex items-center gap-3">
+          <Checkbox
+            id="enable-ldap-tls"
+            checked={ldap.enable_ldap_tls === "true"}
+            onCheckedChange={(checked) =>
+              set("enable_ldap_tls", checked === true ? "true" : "false")
+            }
+          />
+          <Label htmlFor="enable-ldap-tls">Enable LDAP TLS</Label>
+        </div>
+      </div>
 
-            {/* Bind credentials */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="ldap-bind-user">LDAP Bind User</Label>
-                <Input
-                  id="ldap-bind-user"
-                  value={ldap.ldap_bind_user}
-                  onChange={(e) => set("ldap_bind_user", e.target.value)}
-                  placeholder="e.g. cn=admin,dc=dev,dc=net"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ldap-bind-password">LDAP Bind Password</Label>
-                <Input
-                  id="ldap-bind-password"
-                  type="password"
-                  value={ldap.ldap_bind_password}
-                  onChange={(e) => set("ldap_bind_password", e.target.value)}
-                  placeholder="Bind password"
-                />
-              </div>
-            </div>
+      {/* Connection */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="ldap-url">LDAP/AD URL</Label>
+          <Input
+            id="ldap-url"
+            value={ldap.ldap_url}
+            onChange={(e) => set("ldap_url", e.target.value)}
+            placeholder="ldap://<SERVER>:389"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ad-domain">Active Directory Domain</Label>
+          <Input
+            id="ad-domain"
+            value={ldap.ad_domain}
+            onChange={(e) => set("ad_domain", e.target.value)}
+            placeholder="e.g. dev.net"
+          />
+        </div>
+      </div>
 
-            <Separator />
+      {/* Bind credentials */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="ldap-bind-user">LDAP Bind User</Label>
+          <Input
+            id="ldap-bind-user"
+            value={ldap.ldap_bind_user}
+            onChange={(e) => set("ldap_bind_user", e.target.value)}
+            placeholder="e.g. cn=admin,dc=dev,dc=net"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ldap-bind-password">LDAP Bind Password</Label>
+          <Input
+            id="ldap-bind-password"
+            type="password"
+            value={ldap.ldap_bind_password}
+            onChange={(e) => set("ldap_bind_password", e.target.value)}
+            placeholder="Bind password"
+          />
+        </div>
+      </div>
 
-            {/* User Search */}
-            <div>
-              <h4 className="text-sm font-medium mb-3">User Search</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="user-search-base">User Search Base</Label>
-                  <Input
-                    id="user-search-base"
-                    value={ldap.user_search_base}
-                    onChange={(e) => set("user_search_base", e.target.value)}
-                    placeholder="e.g. ou=People,dc=dev,dc=net"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="user-object-class">User Object Class</Label>
-                  <Input
-                    id="user-object-class"
-                    value={ldap.user_object_class}
-                    onChange={(e) => set("user_object_class", e.target.value)}
-                    placeholder="e.g. person"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="user-search-filter">User Search Filter</Label>
-                  <Input
-                    id="user-search-filter"
-                    value={ldap.user_search_filter}
-                    onChange={(e) => set("user_search_filter", e.target.value)}
-                    placeholder="e.g. (uid={0})"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="user-name-attribute">User Name Attribute</Label>
-                  <Input
-                    id="user-name-attribute"
-                    value={ldap.user_name_attribute}
-                    onChange={(e) => set("user_name_attribute", e.target.value)}
-                    placeholder="e.g. uid"
-                  />
-                </div>
-              </div>
-            </div>
+      {/* User Search */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="user-search-base">User Search Base</Label>
+          <Input
+            id="user-search-base"
+            value={ldap.user_search_base}
+            onChange={(e) => set("user_search_base", e.target.value)}
+            placeholder="e.g. ou=People,dc=dev,dc=net"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="user-object-class">User Object Class</Label>
+          <Input
+            id="user-object-class"
+            value={ldap.user_object_class}
+            onChange={(e) => set("user_object_class", e.target.value)}
+            placeholder="e.g. person"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="user-search-filter">User Search Filter</Label>
+          <Input
+            id="user-search-filter"
+            value={ldap.user_search_filter}
+            onChange={(e) => set("user_search_filter", e.target.value)}
+            placeholder="e.g. (uid={0})"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="user-name-attribute">User Name Attribute</Label>
+          <Input
+            id="user-name-attribute"
+            value={ldap.user_name_attribute}
+            onChange={(e) => set("user_name_attribute", e.target.value)}
+            placeholder="e.g. uid"
+          />
+        </div>
+      </div>
 
-            <Separator />
-
-            {/* Group Search */}
-            <div>
-              <h4 className="text-sm font-medium mb-3">Group Search</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="group-search-base">Group Search Base</Label>
-                  <Input
-                    id="group-search-base"
-                    value={ldap.group_search_base}
-                    onChange={(e) => set("group_search_base", e.target.value)}
-                    placeholder="e.g. ou=Group,dc=dev,dc=net"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="group-object-class">Group Object Class</Label>
-                  <Input
-                    id="group-object-class"
-                    value={ldap.group_object_class}
-                    onChange={(e) => set("group_object_class", e.target.value)}
-                    placeholder="e.g. posixGroup"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="group-search-filter">Group Search Filter</Label>
-                  <Input
-                    id="group-search-filter"
-                    value={ldap.group_search_filter}
-                    onChange={(e) => set("group_search_filter", e.target.value)}
-                    placeholder="e.g. (cn={0})"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="group-name-attribute">Group Name Attribute</Label>
-                  <Input
-                    id="group-name-attribute"
-                    value={ldap.group_name_attribute}
-                    onChange={(e) => set("group_name_attribute", e.target.value)}
-                    placeholder="e.g. cn"
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="group-member-attribute">Group Member Attribute</Label>
-                  <Input
-                    id="group-member-attribute"
-                    value={ldap.group_member_attribute}
-                    onChange={(e) => set("group_member_attribute", e.target.value)}
-                    placeholder="e.g. memberUid"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Group Search */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="group-search-base">Group Search Base</Label>
+          <Input
+            id="group-search-base"
+            value={ldap.group_search_base}
+            onChange={(e) => set("group_search_base", e.target.value)}
+            placeholder="e.g. ou=Group,dc=dev,dc=net"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="group-object-class">Group Object Class</Label>
+          <Input
+            id="group-object-class"
+            value={ldap.group_object_class}
+            onChange={(e) => set("group_object_class", e.target.value)}
+            placeholder="e.g. posixGroup"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="group-search-filter">Group Search Filter</Label>
+          <Input
+            id="group-search-filter"
+            value={ldap.group_search_filter}
+            onChange={(e) => set("group_search_filter", e.target.value)}
+            placeholder="e.g. (cn={0})"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="group-name-attribute">Group Name Attribute</Label>
+          <Input
+            id="group-name-attribute"
+            value={ldap.group_name_attribute}
+            onChange={(e) => set("group_name_attribute", e.target.value)}
+            placeholder="e.g. cn"
+          />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="group-member-attribute">Group Member Attribute</Label>
+          <Input
+            id="group-member-attribute"
+            value={ldap.group_member_attribute}
+            onChange={(e) => set("group_member_attribute", e.target.value)}
+            placeholder="e.g. memberUid"
+          />
+        </div>
+      </div>
     </div>
   )
 }
