@@ -8,7 +8,6 @@ import {
 } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { Separator } from "@workspace/ui/components/separator"
 import { useCreateBlockNote } from "@blocknote/react"
 import { BlockNoteView } from "@blocknote/shadcn"
 import "@blocknote/core/style.css"
@@ -107,10 +106,9 @@ export function PageEditor() {
         <Input
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
-          className="h-8 font-semibold text-lg border-none shadow-none focus-visible:ring-0 px-1"
+          className="h-8 font-semibold text-base border-none shadow-none focus-visible:ring-0 px-1"
           placeholder="Page title"
         />
-        <Separator orientation="vertical" className="h-5" />
         <Button
           variant="ghost"
           size="sm"
@@ -118,7 +116,7 @@ export function PageEditor() {
           onClick={() => setShowVersions(true)}
         >
           <History className="h-3.5 w-3.5 mr-1" />
-          v{currentPage.currentVersion}
+          History
         </Button>
         <Button
           size="sm"
