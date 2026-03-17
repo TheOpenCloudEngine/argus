@@ -1,0 +1,239 @@
+import type { ListObjectsResponse } from "@/components/object-storage-browser"
+
+const BASE = "/api/v1/objectfilemgr"
+
+/**
+ * List objects and folders under a prefix.
+ * Maps the server response to the UI's ListObjectsResponse shape.
+ */
+export async function listObjects(
+  bucket: string,
+  prefix: string,
+  continuationToken?: string,
+): Promise<ListObjectsResponse> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+  params.set("prefix", prefix)
+  params.set("delimiter", "/")
+  params.set("max_keys", "1000")
+  if (continuationToken) {
+    params.set("continuation_token", continuationToken)
+  }
+
+  const res = await fetch(`${BASE}/objects?${params.toString()}`)
+  if (!res.ok) throw new Error(`Failed to list objects: ${res.status}`)
+  const data = await res.json()
+
+  return {
+    folders: (data.folders ?? []).map(
+      (f: { prefix: string; name: string }) => ({
+        kind: "folder" as const,
+        key: f.prefix,
+        name: f.name,
+      }),
+    ),
+    objects: (data.objects ?? []).map(
+      (o: {
+        key: string
+        size: number
+        last_modified: string
+        storage_class?: string
+      }) => ({
+        kind: "object" as const,
+        key: o.key,
+        name: o.key.split("/").filter(Boolean).pop() ?? o.key,
+        size: o.size,
+        lastModified: o.last_modified,
+        storageClass: o.storage_class,
+      }),
+    ),
+    nextContinuationToken: data.next_continuation_token ?? undefined,
+    isTruncated: data.is_truncated ?? false,
+  }
+}
+
+/**
+ * Delete one or more objects.
+ */
+export async function deleteObjects(
+  bucket: string,
+  keys: string[],
+): Promise<void> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+
+  const res = await fetch(`${BASE}/objects/delete?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys }),
+  })
+  if (!res.ok) throw new Error(`Failed to delete objects: ${res.status}`)
+}
+
+/**
+ * Create a virtual folder (0-byte object with trailing slash).
+ */
+export async function createFolder(
+  bucket: string,
+  key: string,
+): Promise<void> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+
+  const res = await fetch(`${BASE}/folders?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key }),
+  })
+  if (!res.ok) throw new Error(`Failed to create folder: ${res.status}`)
+}
+
+/**
+ * Upload files to the given prefix via multipart form data.
+ */
+export async function uploadFiles(
+  bucket: string,
+  prefix: string,
+  files: File[],
+): Promise<void> {
+  for (const file of files) {
+    const key = prefix + file.name
+    const params = new URLSearchParams()
+    params.set("bucket", bucket)
+    params.set("key", key)
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const res = await fetch(
+      `${BASE}/objects/upload?${params.toString()}`,
+      {
+        method: "POST",
+        body: formData,
+      },
+    )
+    if (!res.ok) throw new Error(`Failed to upload ${file.name}: ${res.status}`)
+  }
+}
+
+/**
+ * Copy an object to a new key (used for rename/move).
+ */
+export async function copyObject(
+  bucket: string,
+  sourceKey: string,
+  destinationKey: string,
+): Promise<void> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+
+  const res = await fetch(`${BASE}/objects/copy?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source_key: sourceKey,
+      destination_key: destinationKey,
+    }),
+  })
+  if (!res.ok) throw new Error(`Failed to copy object: ${res.status}`)
+}
+
+/**
+ * Upload a single file with progress tracking via XMLHttpRequest.
+ */
+export function uploadFileWithProgress(
+  bucket: string,
+  prefix: string,
+  file: File,
+  onProgress: (progress: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const key = prefix + file.name
+    const params = new URLSearchParams()
+    params.set("bucket", bucket)
+    params.set("key", key)
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${BASE}/objects/upload?${params.toString()}`)
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    })
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100)
+        resolve()
+      } else {
+        reject(new Error(`Failed to upload ${file.name}: ${xhr.status}`))
+      }
+    })
+
+    xhr.addEventListener("error", () => {
+      reject(new Error(`Network error uploading ${file.name}`))
+    })
+
+    xhr.send(formData)
+  })
+}
+
+/** Tabular preview response (parquet, xlsx, xls). */
+export type TablePreviewResponse = {
+  format: string
+  columns: string[]
+  rows: unknown[][]
+  total_rows: number
+  sheet_names: string[]
+  active_sheet: string
+}
+
+/** Document preview response (docx, pptx). */
+export type DocumentPreviewResponse = {
+  format: string
+  html: string
+  slides?: { slide_number: number; texts: string[]; notes: string }[] | null
+}
+
+/**
+ * Request server-side file preview (parquet, xlsx, xls, docx, pptx).
+ */
+export async function previewFile(
+  bucket: string,
+  key: string,
+  options?: { sheet?: string; maxRows?: number },
+): Promise<TablePreviewResponse | DocumentPreviewResponse> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+  params.set("key", key)
+  if (options?.sheet) params.set("sheet", options.sheet)
+  if (options?.maxRows) params.set("max_rows", String(options.maxRows))
+
+  const res = await fetch(`${BASE}/objects/preview?${params.toString()}`)
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "")
+    throw new Error(`Preview failed (${res.status}): ${detail}`)
+  }
+  return res.json()
+}
+
+/**
+ * Get a presigned download URL for a given key.
+ */
+export async function getDownloadUrl(
+  bucket: string,
+  key: string,
+): Promise<string> {
+  const params = new URLSearchParams()
+  params.set("bucket", bucket)
+  params.set("key", key)
+
+  const res = await fetch(`${BASE}/objects/download-url?${params.toString()}`)
+  if (!res.ok) throw new Error(`Failed to get download URL: ${res.status}`)
+  const data = await res.json()
+  return data.url
+}

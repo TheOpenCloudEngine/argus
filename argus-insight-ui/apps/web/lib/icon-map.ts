@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Bell,
+  FolderOpen,
   HelpCircle,
   LayoutDashboard,
   Monitor,
@@ -18,6 +19,7 @@ import type { LucideIcon } from "lucide-react"
 const iconMap: Record<string, LucideIcon> = {
   BarChart3,
   Bell,
+  FolderOpen,
   LayoutDashboard,
   Monitor,
   Server,

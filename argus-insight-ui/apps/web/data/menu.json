@@ -33,6 +33,12 @@
           "title": "Terminal",
           "url": "/dashboard/terminal",
           "icon": "Terminal"
+        },
+        {
+          "id": "file-browser",
+          "title": "File Browser",
+          "url": "/dashboard/file-browser",
+          "icon": "FolderOpen"
         }
       ]
     },
