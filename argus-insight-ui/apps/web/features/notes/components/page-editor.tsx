@@ -137,7 +137,6 @@ export function PageEditor() {
           editor={editor}
           onChange={handleEditorChange}
           theme="light"
-          data-theming-css-variables-demo
         />
       </div>
 
