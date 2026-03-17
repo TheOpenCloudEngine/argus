@@ -1,10 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  Eye,
-  Columns2,
-  Pencil,
   Save,
   History,
   FileText,
@@ -12,73 +9,74 @@ import {
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Separator } from "@workspace/ui/components/separator"
-import Editor, { type Monaco } from "@monaco-editor/react"
-import { MarkdownPreview } from "./markdown-preview"
+import { useCreateBlockNote } from "@blocknote/react"
+import { BlockNoteView } from "@blocknote/shadcn"
+import "@blocknote/core/style.css"
+import "@blocknote/shadcn/style.css"
 import { VersionHistory } from "./version-history"
 import { useNotes } from "./notes-provider"
 
-type ViewMode = "edit" | "split" | "preview"
-
 export function PageEditor() {
   const { currentPage, savePage } = useNotes()
-  const [viewMode, setViewMode] = useState<ViewMode>("split")
   const [title, setTitle] = useState("")
-  const [content, setContent] = useState("")
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
+  const contentRef = useRef("")
+  const isLoadingRef = useRef(false)
 
-  // Sync with currentPage when it changes
+  const editor = useCreateBlockNote()
+
+  // Load content from currentPage into BlockNote
   useEffect(() => {
-    if (currentPage) {
-      setTitle(currentPage.title)
-      setContent(currentPage.content)
-      setDirty(false)
-    }
-  }, [currentPage])
+    if (!currentPage || !editor) return
+    isLoadingRef.current = true
+    setTitle(currentPage.title)
+    contentRef.current = currentPage.content
+    setDirty(false)
 
-  const handleContentChange = useCallback(
-    (value: string | undefined) => {
-      const newContent = value ?? ""
-      setContent(newContent)
-      if (currentPage && (newContent !== currentPage.content || title !== currentPage.title)) {
-        setDirty(true)
+    const loadContent = async () => {
+      try {
+        if (currentPage.content) {
+          const blocks = await editor.tryParseMarkdownToBlocks(currentPage.content)
+          editor.replaceBlocks(editor.document, blocks)
+        } else {
+          editor.replaceBlocks(editor.document, [])
+        }
+      } finally {
+        isLoadingRef.current = false
       }
-    },
-    [currentPage, title],
-  )
+    }
+    loadContent()
+  }, [currentPage, editor])
+
+  const handleEditorChange = useCallback(async () => {
+    if (isLoadingRef.current || !editor || !currentPage) return
+    const md = await editor.blocksToMarkdownLossy(editor.document)
+    contentRef.current = md
+    setDirty(true)
+  }, [editor, currentPage])
 
   const handleTitleChange = useCallback(
     (value: string) => {
       setTitle(value)
-      if (currentPage && (value !== currentPage.title || content !== currentPage.content)) {
+      if (currentPage && value !== currentPage.title) {
         setDirty(true)
       }
     },
-    [currentPage, content],
+    [currentPage],
   )
 
   const handleSave = useCallback(async () => {
     if (!currentPage || !dirty) return
     setSaving(true)
     try {
-      await savePage(currentPage.id, title, content)
+      await savePage(currentPage.id, title, contentRef.current)
       setDirty(false)
     } finally {
       setSaving(false)
     }
-  }, [currentPage, title, content, dirty, savePage])
-
-  const handleEditorBeforeMount = useCallback((monaco: Monaco) => {
-    monaco.editor.defineTheme("argus-light", {
-      base: "vs",
-      inherit: true,
-      rules: [],
-      colors: {
-        "editor.background": "#EEEEEE",
-      },
-    })
-  }, [])
+  }, [currentPage, title, dirty, savePage])
 
   // Ctrl+S to save
   useEffect(() => {
@@ -113,36 +111,6 @@ export function PageEditor() {
           placeholder="Page title"
         />
         <Separator orientation="vertical" className="h-5" />
-        <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
-          <Button
-            variant={viewMode === "edit" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setViewMode("edit")}
-            title="Edit only"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant={viewMode === "split" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setViewMode("split")}
-            title="Split view"
-          >
-            <Columns2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant={viewMode === "preview" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setViewMode("preview")}
-            title="Preview only"
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <Separator orientation="vertical" className="h-5" />
         <Button
           variant="ghost"
           size="sm"
@@ -163,34 +131,14 @@ export function PageEditor() {
         </Button>
       </div>
 
-      {/* Editor / Preview Area */}
-      <div className="flex-1 min-h-0 flex">
-        {(viewMode === "edit" || viewMode === "split") && (
-          <div className={viewMode === "split" ? "w-1/2 border-r" : "w-full"}>
-            <Editor
-              height="100%"
-              defaultLanguage="markdown"
-              value={content}
-              onChange={handleContentChange}
-              beforeMount={handleEditorBeforeMount}
-              theme="argus-light"
-              options={{
-                minimap: { enabled: false },
-                lineNumbers: "on",
-                wordWrap: "on",
-                fontSize: 18,
-                fontFamily: "'D2Coding', monospace",
-                scrollBeyondLastLine: false,
-                padding: { top: 12 },
-              }}
-            />
-          </div>
-        )}
-        {(viewMode === "preview" || viewMode === "split") && (
-          <div className={viewMode === "split" ? "w-1/2 overflow-auto" : "w-full overflow-auto"}>
-            <MarkdownPreview content={content} />
-          </div>
-        )}
+      {/* BlockNote Editor */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        <BlockNoteView
+          editor={editor}
+          onChange={handleEditorChange}
+          theme="light"
+          data-theming-css-variables-demo
+        />
       </div>
 
       {/* Status bar */}
