@@ -12,6 +12,10 @@ from app.security.schemas import (
     CaCertStatusResponse,
     CaCertUploadResponse,
     CaCertViewResponse,
+    CaKeyDeleteResponse,
+    CaKeyStatusResponse,
+    CaKeyUploadResponse,
+    CaKeyViewResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,3 +74,61 @@ async def ca_cert_delete(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return CaCertDeleteResponse(**result)
+
+
+# --------------------------------------------------------------------------- #
+# CA Key endpoints
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/ca-key/status", response_model=CaKeyStatusResponse)
+async def ca_key_status(
+    session: AsyncSession = Depends(get_session),
+) -> CaKeyStatusResponse:
+    """Check if the CA key file exists."""
+    result = await service.get_ca_key_status(session)
+    return CaKeyStatusResponse(**result)
+
+
+@router.post("/ca-key/upload", response_model=CaKeyUploadResponse)
+async def ca_key_upload(
+    file: UploadFile,
+    session: AsyncSession = Depends(get_session),
+) -> CaKeyUploadResponse:
+    """Upload a CA key file."""
+    logger.info("CA key upload requested: filename=%s", file.filename)
+    content = await file.read()
+    try:
+        result = await service.upload_ca_key(session, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return CaKeyUploadResponse(**result)
+
+
+@router.get("/ca-key/view", response_model=CaKeyViewResponse)
+async def ca_key_view(
+    session: AsyncSession = Depends(get_session),
+) -> CaKeyViewResponse:
+    """View the CA key content and decoded information."""
+    try:
+        result = await service.view_ca_key(session)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CaKeyViewResponse(**result)
+
+
+@router.delete("/ca-key", response_model=CaKeyDeleteResponse)
+async def ca_key_delete(
+    session: AsyncSession = Depends(get_session),
+) -> CaKeyDeleteResponse:
+    """Delete the CA key file."""
+    logger.info("CA key deletion requested")
+    try:
+        result = await service.delete_ca_key(session)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return CaKeyDeleteResponse(**result)

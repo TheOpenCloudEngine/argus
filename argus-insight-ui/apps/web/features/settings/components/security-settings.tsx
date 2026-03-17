@@ -17,13 +17,17 @@ import { Label } from "@workspace/ui/components/label"
 
 import {
   deleteCaCert,
+  deleteCaKey,
   fetchCaCertStatus,
+  fetchCaKeyStatus,
   fetchInfraConfig,
   updateInfraCategory,
   uploadCaCert,
+  uploadCaKey,
   viewCaCert,
+  viewCaKey,
 } from "@/features/settings/api"
-import type { CaCertViewData } from "@/features/settings/api"
+import type { CaCertViewData, CaKeyViewData } from "@/features/settings/api"
 
 // --------------------------------------------------------------------------- //
 // Error Dialog
@@ -75,17 +79,60 @@ function ViewCertDialog({
           <DialogTitle>CA Certificate</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
-          {/* Raw PEM content */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Certificate (PEM)</Label>
             <pre className="rounded-md border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
               {data?.raw ?? ""}
             </pre>
           </div>
-          {/* Decoded openssl output */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">
               Decoded (openssl x509 -text -noout)
+            </Label>
+            <pre className="rounded-md border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
+              {data?.decoded ?? ""}
+            </pre>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// --------------------------------------------------------------------------- //
+// View Key Dialog
+// --------------------------------------------------------------------------- //
+
+function ViewKeyDialog({
+  open,
+  data,
+  onClose,
+}: {
+  open: boolean
+  data: CaKeyViewData | null
+  onClose: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>CA Key</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Key (PEM)</Label>
+            <pre className="rounded-md border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+              {data?.raw ?? ""}
+            </pre>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Decoded (openssl rsa -text -noout)
             </Label>
             <pre className="rounded-md border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
               {data?.decoded ?? ""}
@@ -116,17 +163,26 @@ export function SecuritySettings() {
 
   // CA cert file state
   const [certFilename, setCertFilename] = useState("")
-  const [uploading, setUploading] = useState(false)
+  const [uploadingCert, setUploadingCert] = useState(false)
+
+  // CA key file state
+  const [keyFilename, setKeyFilename] = useState("")
+  const [uploadingKey, setUploadingKey] = useState(false)
 
   // Dialogs
   const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
     open: false,
     message: "",
   })
-  const [viewDialog, setViewDialog] = useState<{
+  const [viewCertDialog, setViewCertDialog] = useState<{
     open: boolean
     loading: boolean
     data: CaCertViewData | null
+  }>({ open: false, loading: false, data: null })
+  const [viewKeyDialog, setViewKeyDialog] = useState<{
+    open: boolean
+    loading: boolean
+    data: CaKeyViewData | null
   }>({ open: false, loading: false, data: null })
 
   // Status messages
@@ -135,7 +191,8 @@ export function SecuritySettings() {
     text: string
   } | null>(null)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const certFileInputRef = useRef<HTMLInputElement>(null)
+  const keyFileInputRef = useRef<HTMLInputElement>(null)
 
   function showStatus(type: "success" | "error", text: string) {
     setStatusMessage({ type, text })
@@ -158,9 +215,13 @@ export function SecuritySettings() {
         setCertDir(securityCat.items.ca_cert_dir)
       }
 
-      // Load CA cert status
-      const status = await fetchCaCertStatus()
-      setCertFilename(status.filename)
+      // Load CA cert and key status
+      const [certStatus, keyStatus] = await Promise.all([
+        fetchCaCertStatus(),
+        fetchCaKeyStatus(),
+      ])
+      setCertFilename(certStatus.filename)
+      setKeyFilename(keyStatus.filename)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load configuration")
     } finally {
@@ -185,53 +246,89 @@ export function SecuritySettings() {
     }
   }
 
-  // Upload CA cert
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ---- CA Certificate handlers ----
+
+  async function handleUploadCert(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
-    // Reset file input so the same file can be re-selected
     e.target.value = ""
 
-    setUploading(true)
+    setUploadingCert(true)
     try {
       await uploadCaCert(file)
       showStatus("success", "CA certificate uploaded successfully")
-      // Refresh status
       const status = await fetchCaCertStatus()
       setCertFilename(status.filename)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed"
-      showError(msg)
+      showError(err instanceof Error ? err.message : "Upload failed")
     } finally {
-      setUploading(false)
+      setUploadingCert(false)
     }
   }
 
-  // View CA cert
-  async function handleView() {
-    setViewDialog({ open: true, loading: true, data: null })
+  async function handleViewCert() {
+    setViewCertDialog({ open: true, loading: true, data: null })
     try {
       const data = await viewCaCert()
-      setViewDialog({ open: true, loading: false, data })
+      setViewCertDialog({ open: true, loading: false, data })
     } catch (err) {
-      setViewDialog({ open: false, loading: false, data: null })
-      const msg = err instanceof Error ? err.message : "Failed to view certificate"
-      showError(msg)
+      setViewCertDialog({ open: false, loading: false, data: null })
+      showError(err instanceof Error ? err.message : "Failed to view certificate")
     }
   }
 
-  // Delete CA cert
-  async function handleDelete() {
+  async function handleDeleteCert() {
     try {
       await deleteCaCert()
       setCertFilename("")
       showStatus("success", "CA certificate deleted successfully")
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to delete certificate"
-      showError(msg)
+      showError(err instanceof Error ? err.message : "Failed to delete certificate")
     }
   }
+
+  // ---- CA Key handlers ----
+
+  async function handleUploadKey(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+
+    setUploadingKey(true)
+    try {
+      await uploadCaKey(file)
+      showStatus("success", "CA key uploaded successfully")
+      const status = await fetchCaKeyStatus()
+      setKeyFilename(status.filename)
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploadingKey(false)
+    }
+  }
+
+  async function handleViewKey() {
+    setViewKeyDialog({ open: true, loading: true, data: null })
+    try {
+      const data = await viewCaKey()
+      setViewKeyDialog({ open: true, loading: false, data })
+    } catch (err) {
+      setViewKeyDialog({ open: false, loading: false, data: null })
+      showError(err instanceof Error ? err.message : "Failed to view key")
+    }
+  }
+
+  async function handleDeleteKey() {
+    try {
+      await deleteCaKey()
+      setKeyFilename("")
+      showStatus("success", "CA key deleted successfully")
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to delete key")
+    }
+  }
+
+  // ---- Render ----
 
   if (loading) {
     return (
@@ -275,9 +372,17 @@ export function SecuritySettings() {
             <div>
               <CardTitle>CA (Certificate Authority)</CardTitle>
               <CardDescription>
-                Manage the CA certificate used for TLS/SSL operations
+                Manage the CA certificate and key used for TLS/SSL operations
               </CardDescription>
             </div>
+            <Button size="sm" onClick={handleSaveDir} disabled={savingDir}>
+              {savingDir ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="h-4 w-4 mr-1.5" />
+              )}
+              Save
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -285,23 +390,12 @@ export function SecuritySettings() {
             {/* CA Certificate Directory */}
             <div className="space-y-2">
               <Label htmlFor="ca-cert-dir">CA Certificate Directory</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="ca-cert-dir"
-                  value={certDir}
-                  onChange={(e) => setCertDir(e.target.value)}
-                  placeholder="/opt/argus-insight-server/certs"
-                  className="flex-1"
-                />
-                <Button size="sm" className="h-9" onClick={handleSaveDir} disabled={savingDir}>
-                  {savingDir ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-1.5" />
-                  )}
-                  Save
-                </Button>
-              </div>
+              <Input
+                id="ca-cert-dir"
+                value={certDir}
+                onChange={(e) => setCertDir(e.target.value)}
+                placeholder="/opt/argus-insight-server/certs"
+              />
               <p className="text-xs text-muted-foreground">
                 Absolute path on the Argus Insight Server where CA certificates are stored
               </p>
@@ -318,23 +412,22 @@ export function SecuritySettings() {
                   placeholder="No certificate uploaded"
                   className="flex-1"
                 />
-                {/* Hidden file input */}
                 <input
-                  ref={fileInputRef}
+                  ref={certFileInputRef}
                   type="file"
                   accept=".crt,.pem,.cer"
                   className="hidden"
-                  onChange={handleUpload}
+                  onChange={handleUploadCert}
                 />
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className="h-9 px-3"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingCert}
+                  onClick={() => certFileInputRef.current?.click()}
                 >
-                  {uploading ? (
+                  {uploadingCert ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                   ) : (
                     <Upload className="h-4 w-4 mr-1.5" />
@@ -347,7 +440,7 @@ export function SecuritySettings() {
                   variant="outline"
                   className="h-9 px-3"
                   disabled={!certFilename}
-                  onClick={handleView}
+                  onClick={handleViewCert}
                 >
                   <Eye className="h-4 w-4 mr-1.5" />
                   View
@@ -358,7 +451,7 @@ export function SecuritySettings() {
                   variant="outline"
                   className="h-9 px-3 text-destructive hover:text-destructive"
                   disabled={!certFilename}
-                  onClick={handleDelete}
+                  onClick={handleDeleteCert}
                 >
                   <Trash2 className="h-4 w-4 mr-1.5" />
                   Delete
@@ -366,6 +459,67 @@ export function SecuritySettings() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Upload a CA certificate file. The file will be validated using OpenSSL and saved as ca.crt.
+              </p>
+            </div>
+
+            {/* CA Key File */}
+            <div className="space-y-2">
+              <Label htmlFor="ca-key-file">CA Key</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="ca-key-file"
+                  value={keyFilename}
+                  readOnly
+                  placeholder="No key uploaded"
+                  className="flex-1"
+                />
+                <input
+                  ref={keyFileInputRef}
+                  type="file"
+                  accept=".key,.pem"
+                  className="hidden"
+                  onChange={handleUploadKey}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-3"
+                  disabled={uploadingKey}
+                  onClick={() => keyFileInputRef.current?.click()}
+                >
+                  {uploadingKey ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1.5" />
+                  )}
+                  Upload
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-3"
+                  disabled={!keyFilename}
+                  onClick={handleViewKey}
+                >
+                  <Eye className="h-4 w-4 mr-1.5" />
+                  View
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-3 text-destructive hover:text-destructive"
+                  disabled={!keyFilename}
+                  onClick={handleDeleteKey}
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Delete
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Upload a CA key file. The file will be validated using OpenSSL and saved as ca.key.
               </p>
             </div>
           </div>
@@ -381,18 +535,26 @@ export function SecuritySettings() {
 
       {/* View Certificate Dialog */}
       <ViewCertDialog
-        open={viewDialog.open}
-        data={viewDialog.data}
-        onClose={() => setViewDialog({ open: false, loading: false, data: null })}
+        open={viewCertDialog.open && !viewCertDialog.loading}
+        data={viewCertDialog.data}
+        onClose={() => setViewCertDialog({ open: false, loading: false, data: null })}
       />
 
-      {/* Loading overlay for view dialog */}
-      {viewDialog.open && viewDialog.loading && (
+      {/* View Key Dialog */}
+      <ViewKeyDialog
+        open={viewKeyDialog.open && !viewKeyDialog.loading}
+        data={viewKeyDialog.data}
+        onClose={() => setViewKeyDialog({ open: false, loading: false, data: null })}
+      />
+
+      {/* Loading overlay for view dialogs */}
+      {((viewCertDialog.open && viewCertDialog.loading) ||
+        (viewKeyDialog.open && viewKeyDialog.loading)) && (
         <Dialog open>
           <DialogContent showCloseButton={false} className="max-w-xs">
             <div className="flex items-center justify-center py-6 gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Loading certificate...</span>
+              <span className="text-sm text-muted-foreground">Loading...</span>
             </div>
           </DialogContent>
         </Dialog>

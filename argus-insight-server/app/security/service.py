@@ -12,6 +12,7 @@ from app.infraconfig.models import ArgusConfigurationInfra
 logger = logging.getLogger(__name__)
 
 CA_CERT_FILENAME = "ca.crt"
+CA_KEY_FILENAME = "ca.key"
 DEFAULT_CERT_DIR = "/opt/argus-insight-server/certs"
 
 
@@ -169,3 +170,142 @@ async def delete_ca_cert(session: AsyncSession) -> dict:
     cert_file.unlink()
     logger.info("CA certificate deleted successfully: %s", cert_file)
     return {"success": True, "message": "CA 인증서가 삭제되었습니다."}
+
+
+# --------------------------------------------------------------------------- #
+# CA Key Management
+# --------------------------------------------------------------------------- #
+
+
+async def get_ca_key_status(session: AsyncSession) -> dict:
+    """Check if the CA key file exists."""
+    cert_dir = await get_ca_cert_dir(session)
+    key_path = Path(cert_dir) / CA_KEY_FILENAME
+    exists = key_path.is_file()
+    logger.info("CA key status check: path=%s, exists=%s", key_path, exists)
+    return {
+        "exists": exists,
+        "filename": CA_KEY_FILENAME if exists else "",
+        "cert_path": cert_dir,
+    }
+
+
+async def upload_ca_key(
+    session: AsyncSession, file_content: bytes,
+) -> dict:
+    """Upload and validate a CA key file.
+
+    Steps:
+    1. Resolve the CA cert directory (from config or default).
+    2. Create the directory if it does not exist.
+    3. Write the uploaded content as ca.key.
+    4. Validate with openssl rsa -in ca.key -check -noout.
+    5. Delete the file if validation fails (RSA key ok not in output).
+    """
+    cert_dir = await get_ca_cert_dir(session)
+    openssl_path = await get_openssl_path(session)
+
+    if not openssl_path:
+        logger.error("OpenSSL path is not configured")
+        raise ValueError("OpenSSL Absolute Path를 먼저 지정해주세요.")
+
+    cert_dir_path = Path(cert_dir)
+
+    # Create directory if it doesn't exist
+    logger.info("Ensuring CA key directory exists: %s", cert_dir)
+    try:
+        cert_dir_path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.error("Failed to create CA key directory %s: %s", cert_dir, exc)
+        raise PermissionError("디렉토리를 생성할 수 없습니다.") from exc
+
+    key_file = cert_dir_path / CA_KEY_FILENAME
+
+    # Write the file
+    logger.info("Writing CA key to %s", key_file)
+    try:
+        key_file.write_bytes(file_content)
+    except OSError as exc:
+        logger.error("Failed to write CA key file %s: %s", key_file, exc)
+        raise PermissionError("디렉토리를 생성할 수 없습니다.") from exc
+
+    # Validate with openssl rsa -check
+    logger.info("Validating CA key with openssl: %s", key_file)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            openssl_path, "rsa", "-in", str(key_file), "-check", "-noout",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = stdout.decode() + stderr.decode()
+        if "RSA key ok" not in output:
+            logger.error("CA key validation failed: %s", output)
+            key_file.unlink(missing_ok=True)
+            raise ValueError("유효하지 않은 Key입니다.")
+    except FileNotFoundError:
+        logger.error("OpenSSL binary not found at %s", openssl_path)
+        key_file.unlink(missing_ok=True)
+        raise ValueError("OpenSSL Absolute Path를 먼저 지정해주세요.")
+
+    logger.info("CA key uploaded and validated successfully: %s", key_file)
+    return {
+        "success": True,
+        "filename": CA_KEY_FILENAME,
+        "path": str(key_file),
+    }
+
+
+async def view_ca_key(session: AsyncSession) -> dict:
+    """Read and decode the CA key file.
+
+    Returns both the raw PEM content and the decoded openssl rsa -text output.
+    """
+    cert_dir = await get_ca_cert_dir(session)
+    openssl_path = await get_openssl_path(session)
+
+    if not openssl_path:
+        logger.error("OpenSSL path is not configured")
+        raise ValueError("OpenSSL Absolute Path를 먼저 지정해주세요.")
+
+    key_file = Path(cert_dir) / CA_KEY_FILENAME
+
+    if not key_file.is_file():
+        logger.error("CA key file not found: %s", key_file)
+        raise FileNotFoundError("CA Key 파일이 존재하지 않습니다.")
+
+    # Read raw content
+    logger.info("Reading CA key: %s", key_file)
+    raw = key_file.read_text(encoding="utf-8", errors="replace")
+
+    # Decode with openssl
+    logger.info("Decoding CA key with openssl: %s", key_file)
+    proc = await asyncio.create_subprocess_exec(
+        openssl_path, "rsa", "-in", str(key_file), "-text", "-noout",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        logger.error("Failed to decode CA key: %s", stderr.decode())
+        raise ValueError("Key 디코딩에 실패했습니다.")
+
+    decoded = stdout.decode(encoding="utf-8", errors="replace")
+    logger.info("CA key viewed successfully: %s", key_file)
+    return {"raw": raw, "decoded": decoded}
+
+
+async def delete_ca_key(session: AsyncSession) -> dict:
+    """Delete the CA key file."""
+    cert_dir = await get_ca_cert_dir(session)
+    key_file = Path(cert_dir) / CA_KEY_FILENAME
+
+    if not key_file.is_file():
+        logger.error("CA key file not found for deletion: %s", key_file)
+        raise FileNotFoundError("CA Key 파일이 존재하지 않습니다.")
+
+    logger.info("Deleting CA key: %s", key_file)
+    key_file.unlink()
+    logger.info("CA key deleted successfully: %s", key_file)
+    return {"success": True, "message": "CA Key가 삭제되었습니다."}

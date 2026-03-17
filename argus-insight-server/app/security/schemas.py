@@ -33,6 +33,36 @@ class CaCertDeleteResponse(BaseModel):
     message: str
 
 
+class CaKeyStatusResponse(BaseModel):
+    """Status of the CA key file."""
+
+    exists: bool = Field(description="Whether the CA key file exists")
+    filename: str = Field(default="", description="Name of the CA key file")
+    cert_path: str = Field(default="", description="Full path to the CA certificate directory")
+
+
+class CaKeyViewResponse(BaseModel):
+    """Content of the CA key file."""
+
+    raw: str = Field(description="Raw PEM content of the key")
+    decoded: str = Field(description="Decoded key information (openssl rsa -text)")
+
+
+class CaKeyUploadResponse(BaseModel):
+    """Response after uploading a CA key."""
+
+    success: bool
+    filename: str
+    path: str
+
+
+class CaKeyDeleteResponse(BaseModel):
+    """Response after deleting a CA key."""
+
+    success: bool
+    message: str
+
+
 class ErrorResponse(BaseModel):
     """Error response with detail message."""
 

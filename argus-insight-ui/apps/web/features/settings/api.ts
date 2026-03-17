@@ -117,3 +117,69 @@ export async function deleteCaCert(): Promise<void> {
     throw new Error(data.detail || `Delete failed: ${res.status}`)
   }
 }
+
+// --------------------------------------------------------------------------- //
+// Security / CA Key Management
+// --------------------------------------------------------------------------- //
+
+export type CaKeyStatus = {
+  exists: boolean
+  filename: string
+  cert_path: string
+}
+
+export type CaKeyViewData = {
+  raw: string
+  decoded: string
+}
+
+/**
+ * Check the status of the CA key file.
+ */
+export async function fetchCaKeyStatus(): Promise<CaKeyStatus> {
+  const res = await fetch(`${SECURITY_BASE}/ca-key/status`)
+  if (!res.ok) throw new Error(`Failed to fetch CA key status: ${res.status}`)
+  return res.json()
+}
+
+/**
+ * Upload a CA key file.
+ */
+export async function uploadCaKey(file: File): Promise<{ success: boolean; filename: string; path: string }> {
+  const formData = new FormData()
+  formData.append("file", file)
+  const res = await fetch(`${SECURITY_BASE}/ca-key/upload`, {
+    method: "POST",
+    body: formData,
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: `Upload failed: ${res.status}` }))
+    throw new Error(data.detail || `Upload failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+/**
+ * View the CA key content and decoded information.
+ */
+export async function viewCaKey(): Promise<CaKeyViewData> {
+  const res = await fetch(`${SECURITY_BASE}/ca-key/view`)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: `View failed: ${res.status}` }))
+    throw new Error(data.detail || `View failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+/**
+ * Delete the CA key file.
+ */
+export async function deleteCaKey(): Promise<void> {
+  const res = await fetch(`${SECURITY_BASE}/ca-key`, {
+    method: "DELETE",
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: `Delete failed: ${res.status}` }))
+    throw new Error(data.detail || `Delete failed: ${res.status}`)
+  }
+}
