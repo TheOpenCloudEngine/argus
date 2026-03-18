@@ -54,7 +54,7 @@ define print-deb
 	@echo ""
 endef
 
-.PHONY: all clean download build nfpm rpm deb packages docker docker-push helm-package
+.PHONY: all clean download build nfpm rpm deb packages docker docker-push docker-save docker-load helm-package
 
 all: packages
 
@@ -131,6 +131,16 @@ docker:
 
 docker-push:
 	docker push $(DOCKER_REGISTRY)/unity-catalog:$(UNITY_CATALOG_VERSION)
+
+# ─── Airgap Save / Load ─────────────────────────────────────────────────────
+
+docker-save:
+	@mkdir -p $(DIST_DIR)
+	docker save $(DOCKER_REGISTRY)/unity-catalog:$(UNITY_CATALOG_VERSION) | gzip > $(DIST_DIR)/unity-catalog-$(UNITY_CATALOG_VERSION).tar.gz
+	@echo "Saved: $(DIST_DIR)/unity-catalog-$(UNITY_CATALOG_VERSION).tar.gz"
+
+docker-load:
+	docker load < $(DIST_DIR)/unity-catalog-$(UNITY_CATALOG_VERSION).tar.gz
 
 # ─── Helm ────────────────────────────────────────────────────────────────────
 
