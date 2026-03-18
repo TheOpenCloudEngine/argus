@@ -9,7 +9,7 @@ PLATFORMS        ?= linux/amd64,linux/arm64
 # ─── Docker ──────────────────────────────────────────────────────────────────
 
 docker:
-	docker buildx build --platform $(PLATFORMS) \
+	docker buildx build \
 		--build-arg ZOT_VERSION=$(ZOT_VERSION) \
 		-t $(DOCKER_REGISTRY)/zot-registry:$(ZOT_VERSION) \
 		--load zot-registry/
