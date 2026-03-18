@@ -31,6 +31,8 @@ from workspace_provisioner.workflow.models import (
 from workspace_provisioner.workflow.steps.gitlab_create_project import (
     GitLabCreateProjectStep,
 )
+from workspace_provisioner.workflow.steps.minio_deploy import MinioDeployStep
+from workspace_provisioner.workflow.steps.minio_setup import MinioSetupStep
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,9 @@ def _build_workspace_response(ws: ArgusWorkspace) -> WorkspaceResponse:
         k8s_namespace=ws.k8s_namespace,
         gitlab_project_id=ws.gitlab_project_id,
         gitlab_project_url=ws.gitlab_project_url,
+        minio_endpoint=ws.minio_endpoint,
+        minio_console_endpoint=ws.minio_console_endpoint,
+        minio_default_bucket=ws.minio_default_bucket,
         status=WorkspaceStatus(ws.status),
         created_by=ws.created_by,
         created_at=ws.created_at,
@@ -137,8 +142,9 @@ async def _run_provisioning_workflow(
 
             executor = WorkflowExecutor(session)
             executor.add_step(GitLabCreateProjectStep(gitlab_client))
+            executor.add_step(MinioDeployStep())
+            executor.add_step(MinioSetupStep())
             # Future steps will be added here:
-            # executor.add_step(MinioCreateBucketStep(...))
             # executor.add_step(AirflowDeployStep(...))
             # executor.add_step(DnsRegisterStep(...))
 
@@ -158,6 +164,9 @@ async def _run_provisioning_workflow(
                     workspace.status = WorkspaceStatus.ACTIVE.value
                     workspace.gitlab_project_id = ctx.get("gitlab_project_id")
                     workspace.gitlab_project_url = ctx.get("gitlab_project_url")
+                    workspace.minio_endpoint = ctx.get("minio_external_endpoint")
+                    workspace.minio_console_endpoint = ctx.get("minio_console_endpoint")
+                    workspace.minio_default_bucket = ctx.get("minio_default_bucket")
                 else:
                     workspace.status = WorkspaceStatus.FAILED.value
                 await session.commit()

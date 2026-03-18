@@ -103,6 +103,9 @@ class WorkspaceResponse(BaseModel):
     k8s_namespace: str | None = None
     gitlab_project_id: int | None = None
     gitlab_project_url: str | None = None
+    minio_endpoint: str | None = None
+    minio_console_endpoint: str | None = None
+    minio_default_bucket: str | None = None
     status: WorkspaceStatus
     created_by: int
     created_at: datetime

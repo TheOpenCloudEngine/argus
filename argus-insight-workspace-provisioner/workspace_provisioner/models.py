@@ -27,6 +27,9 @@ class ArgusWorkspace(Base):
         k8s_namespace: Kubernetes namespace for workspace resources.
         gitlab_project_id: GitLab project ID created for this workspace (set after provisioning).
         gitlab_project_url: GitLab project URL (e.g., "https://gitlab-global.argus-insight.dev.net/workspaces/ml-team-dev").
+        minio_endpoint: MinIO API endpoint URL (e.g., "minio-ml-team-dev.argus-insight.dev.net").
+        minio_console_endpoint: MinIO console URL (e.g., "minio-console-ml-team-dev.argus-insight.dev.net").
+        minio_default_bucket: Default bucket name (same as workspace name).
         status:       Workspace status ("provisioning", "active", "failed", "deleting", "deleted").
         created_by:   User ID of the admin who created this workspace.
         created_at:   Timestamp when the workspace was created.
@@ -44,6 +47,9 @@ class ArgusWorkspace(Base):
     k8s_namespace = Column(String(255))
     gitlab_project_id = Column(Integer)
     gitlab_project_url = Column(String(500))
+    minio_endpoint = Column(String(500))
+    minio_console_endpoint = Column(String(500))
+    minio_default_bucket = Column(String(255))
     status = Column(String(20), nullable=False, default="provisioning")
     created_by = Column(Integer, ForeignKey("argus_users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
