@@ -14,7 +14,7 @@ Commands:
     render   - Render K8s manifests without applying (dry-run)
 
 Environment variables:
-    PROVISIONER_DB_URL  Database URL (default: sqlite+aiosqlite:///provisioner.db)
+    PROVISIONER_DB_URL  Database URL (default: postgresql+asyncpg://argus:argus@localhost:5432/argus)
     GITLAB_URL          GitLab server URL (required for create)
     GITLAB_TOKEN        GitLab private token (required for create)
 

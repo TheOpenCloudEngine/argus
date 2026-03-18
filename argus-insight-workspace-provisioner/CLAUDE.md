@@ -418,7 +418,7 @@ cd argus-insight-workspace-provisioner
 
 # 의존성 설치
 pip install -e ".[dev]"
-pip install aiosqlite    # SQLite async 드라이버 (테스트용)
+pip install asyncpg      # PostgreSQL async 드라이버
 
 # kubectl, mc (MinIO Client) 설치 확인
 kubectl version --client
@@ -429,7 +429,7 @@ mc --version
 
 | 변수 | 필수 | 기본값 | 설명 |
 |------|------|--------|------|
-| `PROVISIONER_DB_URL` | N | `sqlite+aiosqlite:///provisioner.db` | 데이터베이스 URL |
+| `PROVISIONER_DB_URL` | N | `postgresql+asyncpg://argus:argus@localhost:5432/argus` | 데이터베이스 URL |
 | `GITLAB_URL` | Y (create) | - | GitLab 서버 URL |
 | `GITLAB_TOKEN` | Y (create) | - | GitLab API 토큰 |
 
@@ -567,7 +567,7 @@ python bin/provisioner-cli.py delete -w 1 --force   # 확인 없이 삭제
 ```
 bin/provisioner-cli.py
     │
-    ├── standalone.py           # 독립 DB 엔진 (SQLite/PostgreSQL)
+    ├── standalone.py           # 독립 DB 엔진 (PostgreSQL)
     │    ├── init_db()          # 테이블 자동 생성
     │    └── get_standalone_session()
     │

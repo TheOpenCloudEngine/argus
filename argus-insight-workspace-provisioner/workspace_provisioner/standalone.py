@@ -15,7 +15,7 @@ The database URL is resolved in the following order:
     1. Explicit `db_url` argument passed to `init_db()`
     2. PROVISIONER_DB_URL environment variable
     3. argus-insight-server config (config.yml + config.properties)
-    4. Fallback: sqlite+aiosqlite:///provisioner.db
+    4. Fallback: postgresql+asyncpg://argus:argus@localhost:5432/argus
 
 Environment variables (used by CLI):
     PROVISIONER_DB_URL: Database URL (overrides server config)
@@ -79,7 +79,7 @@ async def init_db(db_url: str | None = None) -> None:
 
     Args:
         db_url: SQLAlchemy async database URL. If not provided, resolved from
-                env PROVISIONER_DB_URL → server config → SQLite fallback.
+                env PROVISIONER_DB_URL → server config → default PostgreSQL.
     """
     global _engine, _async_session
 
@@ -90,8 +90,8 @@ async def init_db(db_url: str | None = None) -> None:
         db_url = _build_db_url_from_server_config()
 
     if db_url is None:
-        db_url = "sqlite+aiosqlite:///provisioner.db"
-        logger.info("No database configuration found, using SQLite fallback")
+        db_url = "postgresql+asyncpg://argus:argus@localhost:5432/argus"
+        logger.info("No database configuration found, using default PostgreSQL")
 
     # Mask password in log
     masked = db_url
