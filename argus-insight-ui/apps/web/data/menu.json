@@ -39,6 +39,12 @@
           "title": "File Browser",
           "url": "/dashboard/file-browser",
           "icon": "FolderOpen"
+        },
+        {
+          "id": "notes",
+          "title": "My Notes",
+          "url": "/dashboard/notes",
+          "icon": "BookOpen"
         }
       ]
     },

@@ -19,6 +19,7 @@ from app.core.logging import setup_logging
 from app.core.security import SecurityHeadersMiddleware
 from app.dashboard.router import router as dashboard_router
 from app.infraconfig.router import router as infraconfig_router
+from app.notes.router import router as notes_router
 from app.objectfilemgr.router import router as objectfilemgr_router
 from app.proxy.router import router as proxy_router
 from app.security.router import router as security_router
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
     # Ensure ORM tables exist (import models so they are registered with Base)
     import app.agent.models  # noqa: F401
     import app.infraconfig.models  # noqa: F401
+    import app.notes.models  # noqa: F401
     import app.objectfilemgr.models  # noqa: F401
     import app.usermgr.models  # noqa: F401
 
@@ -105,6 +107,7 @@ app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(usermgr_router, prefix="/api/v1")
 app.include_router(servermgr_router, prefix="/api/v1")
 app.include_router(infraconfig_router, prefix="/api/v1")
+app.include_router(notes_router, prefix="/api/v1")
 app.include_router(objectfilemgr_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")
 
