@@ -152,6 +152,8 @@ docker pull localhost:5000/quay.io/prometheus/prometheus:latest
 |---|---|
 | URL | `https://localhost:5000` |
 | 인증 | htpasswd 파일 기반 인증 |
+| 기본 사용자명 | `admin` |
+| 기본 패스워드 | `Argus!insight2026` |
 
 htpasswd 파일에 사용자를 추가합니다:
 ```bash
