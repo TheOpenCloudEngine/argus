@@ -1,90 +1,107 @@
 # Zot Registry Service
 
-Zot는 OCI Distribution Specification을 준수하는 컨테이너 이미지 레지스트리입니다.
-Argus Insight 플랫폼에서 airgap 환경의 프라이빗 레지스트리로 사용됩니다.
+Zot는 OCI Distribution Specification을 준수하는 컨테이너 이미지 레지스트리입니다. Argus Insight 플랫폼에서 airgap 환경의 프라이빗 레지스트리로 사용됩니다. 공식 바이너리를 Dockerfile wrapper로 빌드하여 프라이빗 레지스트리에 배포합니다.
 
 ## 프로젝트 구조
 
 ```
 zot-registry-service/
-├── CLAUDE.md              # 이 파일
-├── config.json            # Zot 메인 설정 파일
-├── credentials.json       # 업스트림 레지스트리 인증 정보
-├── htpasswd               # Zot 접근용 사용자 인증 파일
-├── hosts.txt              # TLS 인증서 생성 대상 호스트 목록
-├── generate_certs.sh      # TLS 인증서 생성 스크립트
-├── zot.service            # systemd 서비스 유닛 파일
-├── Dockerfile             # Rocky Linux 9 기반 Docker 이미지
-├── docker-compose.yml     # Docker Compose 구성
-├── Makefile               # Docker 이미지 빌드 자동화
-└── rpm/
-    ├── build-rpm.sh       # RPM 패키지 빌드 스크립트
-    └── zot.spec           # RPM spec 파일
+├── CLAUDE.md                       # 이 파일
+├── Makefile                        # Docker 이미지 빌드/푸시/저장 오케스트레이션
+├── versions.env                    # 컴포넌트 버전 핀
+├── .gitignore
+├── zot-registry/
+│   └── Dockerfile                  # Rocky Linux 9 기반 Docker 이미지
+├── docker/
+│   └── docker-compose.yml          # Docker Compose 오케스트레이션
+├── kubernetes/
+│   ├── kustomization.yaml          # Kustomize 엔트리포인트
+│   ├── namespace.yaml              # argus-insight 네임스페이스
+│   ├── secret.yaml                 # htpasswd, credentials
+│   ├── configmap.yaml              # config.json
+│   ├── pvc.yaml                    # 이미지 스토리지 볼륨
+│   └── zot-registry.yaml           # Zot Deployment + Service
+├── config.json                     # Zot 메인 설정 파일
+├── credentials.json                # 업스트림 레지스트리 인증 정보
+├── htpasswd                        # Zot 접근용 사용자 인증 파일
+├── hosts.txt                       # TLS 인증서 생성 대상 호스트 목록
+├── generate_certs.sh               # TLS 인증서 생성 스크립트
+├── zot.service                     # systemd 서비스 유닛 파일
+├── list-all-images.sh              # 레지스트리 이미지 목록 조회
+├── registry-migrator/              # 레지스트리 마이그레이션 도구
+│   ├── README.md
+│   ├── config.env.example
+│   └── migrate.sh
+└── rpm/                            # RPM 패키지 빌드
+    ├── build-rpm.sh
+    └── zot.spec
 ```
 
-## 배포 방식
-
-### 1. RPM 패키지 (베어메탈/VM)
-
-`rpm/build-rpm.sh`를 실행하면 zot 바이너리를 다운로드하고 RPM 패키지를 빌드합니다.
+## 빌드 방법
 
 ```bash
-cd rpm
-./build-rpm.sh
+# Docker 이미지 빌드
+make docker                         # zot 바이너리 다운로드 + Docker 이미지 빌드
+
+# 프라이빗 레지스트리 푸시
+make docker-push                                                    # 기본 (argus-insight/ prefix)
+make docker-push DOCKER_REGISTRY=zot.argus.local:5000/argus-insight # Zot Registry 지정
+
+# Airgap 환경용 이미지 저장/로드
+make docker-save                    # dist/ 에 tar.gz 저장
+make docker-load                    # tar.gz 에서 이미지 로드
+
+# 정리
+make clean                          # dist/ 및 다운로드된 바이너리 삭제
+
+# Docker Compose
+cd docker
+docker compose --env-file ../versions.env up --build -d
+
+# Kubernetes
+kubectl apply -k kubernetes/
+kubectl get all -n argus-insight -l app.kubernetes.io/name=zot-registry
 ```
 
-생성된 RPM을 설치하면 다음 경로에 파일이 배치됩니다:
+## 초기 관리자 계정
 
-| 경로 | 설명 |
+### Zot Registry
+
+| 항목 | 값 |
 |---|---|
-| `/usr/local/bin/zot` | zot 바이너리 |
-| `/usr/lib/systemd/system/zot.service` | systemd 서비스 파일 |
-| `/etc/zot/config.json` | 메인 설정 파일 |
-| `/etc/zot/credentials.json` | 업스트림 레지스트리 인증 정보 |
-| `/etc/zot/htpasswd` | 사용자 인증 파일 |
-| `/etc/zot/certs/` | TLS 인증서 디렉토리 |
-| `/var/lib/zot/` | 이미지 스토리지 |
+| URL | `https://localhost:5000` |
+| 인증 | htpasswd 파일 기반 인증 |
 
-설치 후 절차:
-1. `/etc/zot/certs/hosts.txt`에 호스트명 추가
-2. `/etc/zot/certs/generate_certs.sh` 실행하여 인증서 생성
-3. `/etc/zot/config.json`에서 인증서 경로 수정
-4. `/etc/zot/credentials.json`에 업스트림 레지스트리 인증 정보 설정
-5. `systemctl start zot`
-
-### 2. Docker Image
-
-Makefile을 통해 zot 바이너리를 다운로드하고 Docker 이미지를 빌드합니다.
-
+htpasswd 파일에 사용자를 추가합니다:
 ```bash
-make build    # zot 바이너리 다운로드 + Docker 이미지 빌드
-make clean    # 다운로드된 zot 바이너리 삭제
+htpasswd -bB htpasswd <username> <password>
 ```
 
-- 베이스 이미지: `rockylinux:9-minimal`
-- 이미지 이름: `argus-zot`
-- zot 바이너리는 빌드 시 다운로드되며, 저장소에는 포함되지 않음 (`.gitignore`)
+## 버전 관리
 
-### 3. Docker Compose
+`versions.env` 파일에서 Zot 버전을 관리합니다. 버전 변경 후 `make clean && make docker`로 재빌드합니다.
 
-Docker Compose로 실행합니다. 사전에 `make build`로 이미지를 빌드해야 합니다.
-
-```bash
-make build
-docker compose up -d
+```
+ZOT_VERSION=2.1.2
 ```
 
-볼륨 및 마운트 구성:
+## Docker 이미지
 
-| 컨테이너 경로 | 호스트 매핑 | 설명 |
+| 공식 바이너리 | Argus 이미지 | 설명 |
 |---|---|---|
-| `/var/lib/zot` | `argus-zot` (named volume) | 이미지 스토리지 |
-| `/etc/zot/config.json` | `./config.json` | 메인 설정 파일 |
-| `/etc/zot/htpasswd` | `./htpasswd` | 사용자 인증 파일 |
-| `/etc/zot/credentials.json` | `./credentials.json` | 업스트림 인증 정보 |
-| `/etc/zot/certs` | `./certs/` | TLS 인증서 디렉토리 |
+| `zot-linux-amd64` (v2.1.2) | `argus-insight/zot-registry:2.1.2` | OCI 컨테이너 레지스트리 |
 
-포트: `5000:5000`
+### Airgap 배포 흐름
+
+```
+인터넷 환경                          Airgap 환경
+┌─────────────────┐                ┌──────────────────┐
+│ make docker     │                │ make docker-load │
+│ make docker-save│ ──USB/SCP──▶  │ docker tag ...   │
+│ (dist/*.tar.gz) │                │ docker push ...  │
+└─────────────────┘                │   → Zot Registry │
+                                   └──────────────────┘
+```
 
 ## 설정 파일
 
@@ -110,44 +127,121 @@ Zot 메인 설정 파일입니다. 주요 섹션:
 
 업스트림 레지스트리에 접근하기 위한 인증 정보 파일입니다. Docker Hub의 rate limit을 회피하기 위해 인증을 설정합니다.
 
-```json
-{
-  "registry-1.docker.io": {
-    "username": "USERNAME",
-    "password": "ACCESS_TOKEN"
-  }
-}
-```
-
-- `username`: Docker Hub 계정의 사용자명
-- `password`: Docker Hub Access Token (계정 비밀번호가 아닌 Access Token 사용)
-- Access Token 생성: Docker Hub > Account Settings > Security > New Access Token
-
 ### htpasswd
 
 Zot 레지스트리에 push/pull할 때 사용하는 사용자 인증 파일입니다. bcrypt 해시 형식입니다.
 
-사용자 추가:
-```bash
-htpasswd -bB htpasswd <username> <password>
-```
+## 배포 방식
 
-### hosts.txt
+### RPM 패키지 (베어메탈/VM)
 
-TLS 인증서를 생성할 호스트명 목록입니다. 한 줄에 하나씩 기입합니다.
-
-### generate_certs.sh
-
-내부 CA를 생성하고 `hosts.txt`에 나열된 각 호스트에 대해 CA 서명된 TLS 인증서를 생성합니다.
+`rpm/build-rpm.sh`를 실행하면 zot 바이너리를 다운로드하고 RPM 패키지를 빌드합니다.
 
 ```bash
-cd certs   # 또는 인증서를 생성할 디렉토리
-# hosts.txt 파일 준비 후
-./generate_certs.sh
+cd rpm
+./build-rpm.sh
 ```
 
-생성되는 파일:
-- `ca/ca.key`, `ca/ca.crt` — CA 키 및 인증서
-- `<host>/<host>.key` — 서버 개인키
-- `<host>/<host>.crt` — 서버 인증서
-- `<host>/<host>.pem` — 인증서 체인 (서버 + CA)
+생성된 RPM을 설치하면 다음 경로에 파일이 배치됩니다:
+
+| 경로 | 설명 |
+|---|---|
+| `/usr/local/bin/zot` | zot 바이너리 |
+| `/usr/lib/systemd/system/zot.service` | systemd 서비스 파일 |
+| `/etc/zot/config.json` | 메인 설정 파일 |
+| `/etc/zot/credentials.json` | 업스트림 레지스트리 인증 정보 |
+| `/etc/zot/htpasswd` | 사용자 인증 파일 |
+| `/etc/zot/certs/` | TLS 인증서 디렉토리 |
+| `/var/lib/zot/` | 이미지 스토리지 |
+
+## Docker Compose 배포
+
+### 컨테이너 구성
+
+| 서비스 | 이미지 | 포트 매핑 | 설명 |
+|---|---|---|---|
+| `zot-registry` | `argus-insight/zot-registry:2.1.2` | `5000:5000` | OCI 컨테이너 레지스트리 |
+
+### Docker 볼륨
+
+| 볼륨 이름 | 컨테이너 경로 | 용도 |
+|---|---|---|
+| `argus-zot-data` | `/var/lib/zot` | 이미지 스토리지 |
+
+## Kubernetes 배포
+
+### 리소스 구성
+
+| 리소스 | 이름 | 설명 |
+|---|---|---|
+| Namespace | `argus-insight` | 전용 네임스페이스 (다른 서비스와 공유) |
+| Secret | `zot-registry-secrets` | htpasswd, 업스트림 인증 정보 |
+| ConfigMap | `zot-registry-config` | config.json |
+| PVC | `argus-zot-data` | 이미지 스토리지 (50Gi, ReadWriteOnce) |
+| Deployment + Service | `zot-registry` | OCI 레지스트리 (포트 5000) |
+
+### 배포 전 필수 설정
+
+1. **secret.yaml**: `htpasswd` 내용을 실제 값으로 변경, `credentials.json`에 Docker Hub 토큰 설정
+2. **pvc.yaml**: 스토리지 크기 조정 (기본 50Gi)
+3. **zot-registry.yaml**: 이미지 경로를 프라이빗 레지스트리 주소로 변경
+
+### 리소스 요구사항
+
+| 컴포넌트 | CPU 요청 | CPU 제한 | 메모리 요청 | 메모리 제한 |
+|---|---|---|---|---|
+| Zot Registry | 100m | 1 | 256Mi | 1Gi |
+
+## 네이밍 규칙
+
+### Docker 이미지
+
+| 규칙 | 패턴 | 예시 |
+|---|---|---|
+| 이미지 이름 | `argus-insight/<component>:<version>` | `argus-insight/zot-registry:2.1.2` |
+| 레지스트리 포함 | `<registry>/argus-insight/<component>:<version>` | `zot.argus.local:5000/argus-insight/zot-registry:2.1.2` |
+| 저장 파일명 | `<component>-<version>.tar.gz` | `zot-registry-2.1.2.tar.gz` |
+
+### Docker 볼륨
+
+| 규칙 | 패턴 | 예시 |
+|---|---|---|
+| Docker Compose | `argus-zot-<용도>` | `argus-zot-data` |
+
+### Kubernetes 리소스
+
+| 리소스 | 패턴 | 예시 |
+|---|---|---|
+| PVC | `argus-zot-<용도>` | `argus-zot-data` |
+| Secret | `zot-registry-secrets` | — |
+| ConfigMap | `zot-registry-config` | — |
+| Deployment | `zot-registry` | — |
+| Service | `zot-registry` | — |
+
+### Kubernetes 라벨
+
+| 라벨 | 값 | 설명 |
+|---|---|---|
+| `app.kubernetes.io/name` | `zot-registry` | 컴포넌트 식별 |
+| `app.kubernetes.io/component` | `storage` | PVC 용도 구분 |
+| `app.kubernetes.io/part-of` | `argus-insight` | 플랫폼 소속 |
+
+### 포트 할당
+
+| 프로토콜 | Docker 호스트 포트 | 컨테이너 포트 | 설명 |
+|---|---|---|---|
+| HTTPS | `5000` | `5000` | OCI Registry API |
+
+## 코드 컨벤션
+
+- Dockerfile의 `LABEL maintainer`: `Open Cloud Engine <fharenheit@gmail.com>`
+- 패키지 라이선스: Apache-2.0
+- `versions.env`에서 Zot 버전을 중앙 관리
+- Makefile의 `DOCKER_REGISTRY` 변수로 레지스트리 주소를 주입 (기본값: `argus-insight`)
+
+## 주의사항
+
+- zot 바이너리는 빌드 시 GitHub에서 다운로드되며, 저장소에는 포함되지 않음 (`.gitignore`)
+- TLS 인증서는 `generate_certs.sh`로 생성 후 `config.json`에서 경로 지정 필요
+- Kubernetes 배포 시 TLS는 ConfigMap의 config.json에서 TLS 섹션을 제거하고, Ingress/LoadBalancer에서 TLS 종단 권장
+- 업스트림 레지스트리 미러링은 onDemand 모드로, 첫 pull 시 캐싱됨

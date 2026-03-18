@@ -1,14 +1,38 @@
-ZOT_URL := https://github.com/project-zot/zot/releases/latest/download/zot-linux-amd64
-IMAGE_NAME := argus-zot
+include versions.env
 
-.PHONY: build clean
+DIST_DIR         := dist
+DOCKER_REGISTRY  ?= argus-insight
+ZOT_URL          := https://github.com/project-zot/zot/releases/download/v$(ZOT_VERSION)/zot-linux-$(ARCH)
 
-build: zot
-	docker build -t $(IMAGE_NAME) .
+.PHONY: docker docker-push docker-save docker-load clean
 
-zot:
-	curl -Lo zot $(ZOT_URL)
-	chmod +x zot
+# ─── Docker ──────────────────────────────────────────────────────────────────
+
+docker: zot-registry/zot
+	docker build -t $(DOCKER_REGISTRY)/zot-registry:$(ZOT_VERSION) zot-registry/
+
+zot-registry/zot:
+	@echo "Downloading zot $(ZOT_VERSION)..."
+	curl -Lo zot-registry/zot $(ZOT_URL)
+	chmod +x zot-registry/zot
+
+# ─── Registry Push ───────────────────────────────────────────────────────────
+
+docker-push:
+	docker push $(DOCKER_REGISTRY)/zot-registry:$(ZOT_VERSION)
+
+# ─── Airgap Save / Load ─────────────────────────────────────────────────────
+
+docker-save:
+	@mkdir -p $(DIST_DIR)
+	docker save $(DOCKER_REGISTRY)/zot-registry:$(ZOT_VERSION) | gzip > $(DIST_DIR)/zot-registry-$(ZOT_VERSION).tar.gz
+	@echo "Saved: $(DIST_DIR)/zot-registry-$(ZOT_VERSION).tar.gz"
+
+docker-load:
+	docker load < $(DIST_DIR)/zot-registry-$(ZOT_VERSION).tar.gz
+
+# ─── Clean ───────────────────────────────────────────────────────────────────
 
 clean:
-	rm -f zot
+	rm -f zot-registry/zot
+	rm -rf $(DIST_DIR)
