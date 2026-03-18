@@ -288,6 +288,184 @@ class DnsRegisterStep(WorkflowStep):
         pass
 ```
 
+## 스탠드얼론 테스트
+
+argus-insight-server 없이 독립적으로 프로비저닝 워크플로우를 테스트할 수 있습니다.
+
+### 사전 준비
+
+```bash
+cd argus-insight-workspace-provisioner
+
+# 의존성 설치
+pip install -e ".[dev]"
+pip install aiosqlite    # SQLite async 드라이버 (테스트용)
+
+# kubectl, mc (MinIO Client) 설치 확인
+kubectl version --client
+mc --version
+```
+
+### 환경 변수
+
+| 변수 | 필수 | 기본값 | 설명 |
+|------|------|--------|------|
+| `PROVISIONER_DB_URL` | N | `sqlite+aiosqlite:///provisioner.db` | 데이터베이스 URL |
+| `GITLAB_URL` | Y (create) | - | GitLab 서버 URL |
+| `GITLAB_TOKEN` | Y (create) | - | GitLab API 토큰 |
+
+```bash
+export GITLAB_URL=https://gitlab-global.argus-insight.dev.net
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxx
+
+# PostgreSQL 사용 시
+export PROVISIONER_DB_URL=postgresql+asyncpg://user:pass@localhost:5432/provisioner
+```
+
+### CLI 명령어
+
+```
+bin/provisioner-cli.py <command> [options]
+```
+
+| 명령어 | 설명 | 주요 옵션 |
+|--------|------|-----------|
+| `create` | 워크스페이스 생성 + 프로비저닝 실행 | `-f <file>`, `--dry-run` |
+| `status` | 워크플로우 실행 상태 조회 | `-w <workspace_id>`, `-v` |
+| `list` | 워크스페이스 목록 | - |
+| `get` | 워크스페이스 상세 조회 | `-w <workspace_id>` |
+| `delete` | 워크스페이스 삭제 | `-w <workspace_id>`, `--force` |
+| `validate` | 입력 JSON 파일 검증 (dry-run) | `-f <file>` |
+| `render` | K8s 매니페스트 렌더링 (dry-run) | `-f <file>`, `-s <step>` |
+
+### 샘플 입력 파일
+
+`bin/samples/` 디렉토리에 용도별 샘플이 준비되어 있습니다:
+
+| 파일 | 설명 |
+|------|------|
+| `workspace-default.json` | 기본값만 사용하는 최소 요청 |
+| `workspace-minimal.json` | 일부 설정만 오버라이드 |
+| `workspace-full.json` | 모든 설정을 명시적으로 지정 |
+| `workspace-gpu.json` | GPU 학습용 고사양 설정 |
+
+### 테스트 시나리오
+
+#### 1. 입력 파일 검증 (네트워크 불필요)
+
+```bash
+# JSON 스키마 검증 + 설정값 확인
+python bin/provisioner-cli.py validate -f bin/samples/workspace-default.json
+python bin/provisioner-cli.py validate -f bin/samples/workspace-full.json
+```
+
+출력 예시:
+```
+Validation: OK
+
+  name:           ml-team-dev
+  display_name:   ML Team Development
+  domain:         dev.net
+  ...
+  provisioning_config:
+    minio.image:               minio/minio:RELEASE.2025-02-28T09-55-16Z
+    minio.storage_size:         50Gi
+    minio.resources:            250m/512Mi (req) → 2/2Gi (lim)
+    ...
+```
+
+#### 2. K8s 매니페스트 렌더링 확인 (네트워크 불필요)
+
+```bash
+# MinIO 매니페스트 렌더링
+python bin/provisioner-cli.py render -f bin/samples/workspace-full.json -s minio
+
+# Airflow 매니페스트 렌더링
+python bin/provisioner-cli.py render -f bin/samples/workspace-full.json -s airflow
+
+# MLflow 매니페스트 렌더링
+python bin/provisioner-cli.py render -f bin/samples/workspace-full.json -s mlflow
+
+# 파일로 저장 후 kubectl dry-run 검증
+python bin/provisioner-cli.py render -f bin/samples/workspace-full.json -s minio \
+  | kubectl apply --dry-run=client -f -
+```
+
+#### 3. 워크스페이스 생성 Dry-Run (네트워크 불필요)
+
+```bash
+# 입력 검증만 수행, 실제 리소스 생성하지 않음
+python bin/provisioner-cli.py create -f bin/samples/workspace-default.json --dry-run
+```
+
+#### 4. 실제 워크스페이스 생성 (GitLab + K8s 필요)
+
+```bash
+export GITLAB_URL=https://gitlab-global.argus-insight.dev.net
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxx
+
+# 워크스페이스 생성 + 전체 프로비저닝 워크플로우 실행
+python bin/provisioner-cli.py create -f bin/samples/workspace-default.json
+
+# 실행 상태 확인
+python bin/provisioner-cli.py status -w 1
+
+# 상세 결과 포함 확인
+python bin/provisioner-cli.py status -w 1 -v
+```
+
+출력 예시:
+```
+Workspace created: id=1, name=ml-team-dev
+
+Running provisioning workflow...
+2025-03-18 10:00:01 [INFO   ] Step [1/5] gitlab-create-project: starting
+2025-03-18 10:00:03 [INFO   ] Step [1/5] gitlab-create-project: completed
+2025-03-18 10:00:03 [INFO   ] Step [2/5] minio-deploy: starting
+...
+
+Workflow result: completed
+Done.
+```
+
+#### 5. 워크스페이스 관리
+
+```bash
+# 목록 조회
+python bin/provisioner-cli.py list
+
+# 상세 조회
+python bin/provisioner-cli.py get -w 1
+
+# 삭제
+python bin/provisioner-cli.py delete -w 1
+python bin/provisioner-cli.py delete -w 1 --force   # 확인 없이 삭제
+```
+
+### 스탠드얼론 모드 아키텍처
+
+```
+bin/provisioner-cli.py
+    │
+    ├── standalone.py           # 독립 DB 엔진 (SQLite/PostgreSQL)
+    │    ├── init_db()          # 테이블 자동 생성
+    │    └── get_standalone_session()
+    │
+    ├── validate / render       # 네트워크 불필요 (로컬 검증)
+    │    ├── schemas.py         # Pydantic 검증
+    │    └── kubernetes/client.py → render_manifests()
+    │
+    └── create / status / list  # 전체 워크플로우 실행
+         ├── GitLabClient       # GITLAB_URL + GITLAB_TOKEN
+         ├── WorkflowExecutor   # 동기 실행 (background task 아님)
+         └── standalone DB      # PROVISIONER_DB_URL
+```
+
+서버 모드와의 차이점:
+- `app.core.database` 대신 `standalone.py`의 독립 DB 엔진 사용
+- 워크플로우가 background task가 아닌 동기적으로 실행됨 (결과를 즉시 확인)
+- `argus_users` 테이블 FK 제약이 제거됨 (독립 테스트 환경)
+
 ## argus-insight-server 연동
 
 ### 의존성 추가

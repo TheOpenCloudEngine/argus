@@ -19,11 +19,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+standalone = [
+    "aiosqlite>=0.20.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "aiosqlite>=0.20.0",
     "ruff>=0.3.0",
 ]
+
+[project.scripts]
+provisioner-cli = "bin.provisioner_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["workspace_provisioner*"]
