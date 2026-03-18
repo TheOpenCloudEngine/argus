@@ -330,11 +330,11 @@ kubernetes/client.py → render_manifests() → kubectl apply
 | 서비스 | URL |
 |--------|-----|
 | GitLab 프로젝트 | `https://gitlab-global.argus-insight.{domain}/workspaces/{ws}` |
-| MinIO API | `https://minio-{ws}.argus-insight.{domain}` |
-| MinIO Console | `https://minio-console-{ws}.argus-insight.{domain}` |
-| Airflow | `https://airflow-{ws}.argus-insight.{domain}` |
-| MLflow | `https://mlflow-{ws}.argus-insight.{domain}` |
-| KServe | `https://kserve-{ws}.argus-insight.{domain}` |
+| MinIO API | `https://argus-minio-{ws}.argus-insight.{domain}` |
+| MinIO Console | `https://argus-minio-console-{ws}.argus-insight.{domain}` |
+| Airflow | `https://argus-airflow-{ws}.argus-insight.{domain}` |
+| MLflow | `https://argus-mlflow-{ws}.argus-insight.{domain}` |
+| KServe | `https://argus-kserve-{ws}.argus-insight.{domain}` |
 
 ## 새 Step 추가 방법
 

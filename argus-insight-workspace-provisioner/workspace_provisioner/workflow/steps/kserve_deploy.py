@@ -91,23 +91,23 @@ class KServeDeployStep(WorkflowStep):
 
         logger.info("Waiting for KServe controller rollout...")
         ready = await kubectl_rollout_status(
-            f"deployment/kserve-{workspace_name}-controller",
+            f"deployment/argus-kserve-{workspace_name}-controller",
             namespace=namespace,
             timeout=300,
             kubeconfig=kubeconfig,
         )
         if not ready:
             logger.error(
-                "KServe rollout timed out: kserve-%s-controller in %s",
+                "KServe rollout timed out: argus-kserve-%s-controller in %s",
                 workspace_name,
                 namespace,
             )
             raise RuntimeError(
-                f"KServe rollout timed out: kserve-{workspace_name}-controller "
+                f"KServe rollout timed out: argus-kserve-{workspace_name}-controller "
                 f"in {namespace}"
             )
 
-        external_endpoint = f"kserve-{workspace_name}.argus-insight.{domain}"
+        external_endpoint = f"argus-kserve-{workspace_name}.argus-insight.{domain}"
 
         ctx.set("kserve_endpoint", external_endpoint)
         ctx.set("kserve_manifests", manifests)

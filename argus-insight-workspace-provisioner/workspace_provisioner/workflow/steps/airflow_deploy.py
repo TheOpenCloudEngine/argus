@@ -117,7 +117,7 @@ class AirflowDeployStep(WorkflowStep):
         # Wait for DB first, then Airflow
         logger.info("Waiting for Airflow DB rollout...")
         await kubectl_rollout_status(
-            f"deployment/airflow-{workspace_name}-db",
+            f"deployment/argus-airflow-{workspace_name}-db",
             namespace=namespace,
             timeout=120,
             kubeconfig=kubeconfig,
@@ -125,18 +125,18 @@ class AirflowDeployStep(WorkflowStep):
 
         logger.info("Waiting for Airflow rollout...")
         ready = await kubectl_rollout_status(
-            f"statefulset/airflow-{workspace_name}",
+            f"statefulset/argus-airflow-{workspace_name}",
             namespace=namespace,
             timeout=600,
             kubeconfig=kubeconfig,
         )
         if not ready:
-            logger.error("Airflow rollout timed out: airflow-%s in %s", workspace_name, namespace)
+            logger.error("Airflow rollout timed out: argus-airflow-%s in %s", workspace_name, namespace)
             raise RuntimeError(
-                f"Airflow rollout timed out: airflow-{workspace_name} in {namespace}"
+                f"Airflow rollout timed out: argus-airflow-{workspace_name} in {namespace}"
             )
 
-        external_endpoint = f"airflow-{workspace_name}.argus-insight.{domain}"
+        external_endpoint = f"argus-airflow-{workspace_name}.argus-insight.{domain}"
 
         ctx.set("airflow_endpoint", external_endpoint)
         ctx.set("airflow_admin_password", admin_password)

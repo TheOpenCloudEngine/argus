@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: airflow-${WORKSPACE_NAME}-db
+  name: argus-airflow-${WORKSPACE_NAME}-db
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: airflow-db
@@ -36,7 +36,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: postgres-password
           ports:
             - name: postgres
@@ -60,12 +60,12 @@ spec:
       volumes:
         - name: db-data
           persistentVolumeClaim:
-            claimName: airflow-${WORKSPACE_NAME}-db
+            claimName: argus-airflow-${WORKSPACE_NAME}-db
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: airflow-${WORKSPACE_NAME}-db
+  name: argus-airflow-${WORKSPACE_NAME}-db
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: airflow-db

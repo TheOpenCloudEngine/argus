@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: mlflow-${WORKSPACE_NAME}
+  name: argus-mlflow-${WORKSPACE_NAME}
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: mlflow
@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: argus-insight
     argus-insight/workspace: ${WORKSPACE_NAME}
 spec:
-  serviceName: mlflow-${WORKSPACE_NAME}
+  serviceName: argus-mlflow-${WORKSPACE_NAME}
   replicas: 1
   selector:
     matchLabels:
@@ -31,21 +31,21 @@ spec:
             - server
             - --host=0.0.0.0
             - --port=5000
-            - --backend-store-uri=postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD}@mlflow-${WORKSPACE_NAME}-db:5432/mlflow
+            - --backend-store-uri=postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD}@argus-mlflow-${WORKSPACE_NAME}-db:5432/mlflow
             - --default-artifact-root=s3://${MLFLOW_ARTIFACT_BUCKET}/mlflow-artifacts
             - --serve-artifacts
           env:
             - name: MLFLOW_S3_ENDPOINT_URL
-              value: "http://minio-${WORKSPACE_NAME}.${K8S_NAMESPACE}.svc.cluster.local:9000"
+              value: "http://argus-minio-${WORKSPACE_NAME}.${K8S_NAMESPACE}.svc.cluster.local:9000"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: mlflow-${WORKSPACE_NAME}
+                  name: argus-mlflow-${WORKSPACE_NAME}
                   key: minio-access-key
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: mlflow-${WORKSPACE_NAME}
+                  name: argus-mlflow-${WORKSPACE_NAME}
                   key: minio-secret-key
           ports:
             - name: http

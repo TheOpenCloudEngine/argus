@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: airflow-${WORKSPACE_NAME}
+  name: argus-airflow-${WORKSPACE_NAME}
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: airflow
@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: argus-insight
     argus-insight/workspace: ${WORKSPACE_NAME}
 spec:
-  serviceName: airflow-${WORKSPACE_NAME}
+  serviceName: argus-airflow-${WORKSPACE_NAME}
   replicas: 1
   selector:
     matchLabels:
@@ -29,15 +29,15 @@ spec:
           command: ["airflow", "db", "migrate"]
           envFrom:
             - configMapRef:
-                name: airflow-${WORKSPACE_NAME}-env
+                name: argus-airflow-${WORKSPACE_NAME}-env
                 optional: true
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-${WORKSPACE_NAME}-db:5432/airflow"
+              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@argus-airflow-${WORKSPACE_NAME}-db:5432/airflow"
             - name: AIRFLOW__CORE__FERNET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: fernet-key
           volumeMounts:
             - name: config
@@ -59,16 +59,16 @@ spec:
                 --password "$ADMIN_PASSWORD"
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-${WORKSPACE_NAME}-db:5432/airflow"
+              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@argus-airflow-${WORKSPACE_NAME}-db:5432/airflow"
             - name: AIRFLOW__CORE__FERNET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: fernet-key
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: admin-password
           volumeMounts:
             - name: config
@@ -80,16 +80,16 @@ spec:
           command: ["airflow", "webserver"]
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-${WORKSPACE_NAME}-db:5432/airflow"
+              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@argus-airflow-${WORKSPACE_NAME}-db:5432/airflow"
             - name: AIRFLOW__CORE__FERNET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: fernet-key
             - name: AIRFLOW__WEBSERVER__SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: webserver-secret-key
           ports:
             - name: http
@@ -130,11 +130,11 @@ spec:
           command: ["airflow", "scheduler"]
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-${WORKSPACE_NAME}-db:5432/airflow"
+              value: "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@argus-airflow-${WORKSPACE_NAME}-db:5432/airflow"
             - name: AIRFLOW__CORE__FERNET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: fernet-key
           resources:
             requests:
@@ -160,7 +160,7 @@ spec:
             - name: GIT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: airflow-${WORKSPACE_NAME}
+                  name: argus-airflow-${WORKSPACE_NAME}
                   key: gitlab-token
           volumeMounts:
             - name: dags
@@ -170,17 +170,17 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: airflow-${WORKSPACE_NAME}-config
+            name: argus-airflow-${WORKSPACE_NAME}-config
         - name: git-sync-script
           configMap:
-            name: airflow-${WORKSPACE_NAME}-config
+            name: argus-airflow-${WORKSPACE_NAME}-config
             items:
               - key: git-sync.sh
                 path: git-sync.sh
                 mode: 0755
         - name: dags
           persistentVolumeClaim:
-            claimName: airflow-${WORKSPACE_NAME}-dags
+            claimName: argus-airflow-${WORKSPACE_NAME}-dags
         - name: logs
           persistentVolumeClaim:
-            claimName: airflow-${WORKSPACE_NAME}-logs
+            claimName: argus-airflow-${WORKSPACE_NAME}-logs

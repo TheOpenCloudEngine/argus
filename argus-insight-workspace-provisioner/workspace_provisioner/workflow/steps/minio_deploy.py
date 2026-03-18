@@ -85,7 +85,7 @@ class MinioDeployStep(WorkflowStep):
         await kubectl_apply(manifests, kubeconfig=kubeconfig)
 
         # Wait for StatefulSet rollout
-        resource = f"statefulset/minio-{workspace_name}"
+        resource = f"statefulset/argus-minio-{workspace_name}"
         logger.info("Waiting for %s rollout in %s...", resource, namespace)
         ready = await kubectl_rollout_status(
             resource, namespace=namespace, timeout=300, kubeconfig=kubeconfig
@@ -97,9 +97,9 @@ class MinioDeployStep(WorkflowStep):
             )
 
         # Build endpoints
-        internal_endpoint = f"minio-{workspace_name}.{namespace}.svc.cluster.local:9000"
-        external_endpoint = f"minio-{workspace_name}.argus-insight.{domain}"
-        console_endpoint = f"minio-console-{workspace_name}.argus-insight.{domain}"
+        internal_endpoint = f"argus-minio-{workspace_name}.{namespace}.svc.cluster.local:9000"
+        external_endpoint = f"argus-minio-{workspace_name}.argus-insight.{domain}"
+        console_endpoint = f"argus-minio-console-{workspace_name}.argus-insight.{domain}"
 
         # Store in context for subsequent steps
         ctx.set("minio_endpoint", internal_endpoint)

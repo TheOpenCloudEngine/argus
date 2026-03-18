@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: minio-${WORKSPACE_NAME}
+  name: argus-minio-${WORKSPACE_NAME}
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: minio
@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: argus-insight
     argus-insight/workspace: ${WORKSPACE_NAME}
 spec:
-  serviceName: minio-${WORKSPACE_NAME}
+  serviceName: argus-minio-${WORKSPACE_NAME}
   replicas: 1
   selector:
     matchLabels:
@@ -35,12 +35,12 @@ spec:
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: minio-${WORKSPACE_NAME}
+                  name: argus-minio-${WORKSPACE_NAME}
                   key: root-user
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: minio-${WORKSPACE_NAME}
+                  name: argus-minio-${WORKSPACE_NAME}
                   key: root-password
           ports:
             - name: api
@@ -78,4 +78,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: minio-${WORKSPACE_NAME}-data
+            claimName: argus-minio-${WORKSPACE_NAME}-data

@@ -115,7 +115,7 @@ class MlflowDeployStep(WorkflowStep):
         # Wait for DB first, then MLflow
         logger.info("Waiting for MLflow DB rollout...")
         await kubectl_rollout_status(
-            f"deployment/mlflow-{workspace_name}-db",
+            f"deployment/argus-mlflow-{workspace_name}-db",
             namespace=namespace,
             timeout=120,
             kubeconfig=kubeconfig,
@@ -123,18 +123,18 @@ class MlflowDeployStep(WorkflowStep):
 
         logger.info("Waiting for MLflow server rollout...")
         ready = await kubectl_rollout_status(
-            f"statefulset/mlflow-{workspace_name}",
+            f"statefulset/argus-mlflow-{workspace_name}",
             namespace=namespace,
             timeout=300,
             kubeconfig=kubeconfig,
         )
         if not ready:
-            logger.error("MLflow rollout timed out: mlflow-%s in %s", workspace_name, namespace)
+            logger.error("MLflow rollout timed out: argus-mlflow-%s in %s", workspace_name, namespace)
             raise RuntimeError(
-                f"MLflow rollout timed out: mlflow-{workspace_name} in {namespace}"
+                f"MLflow rollout timed out: argus-mlflow-{workspace_name} in {namespace}"
             )
 
-        external_endpoint = f"mlflow-{workspace_name}.argus-insight.{domain}"
+        external_endpoint = f"argus-mlflow-{workspace_name}.argus-insight.{domain}"
 
         ctx.set("mlflow_endpoint", external_endpoint)
         ctx.set("mlflow_artifact_bucket", artifact_bucket)

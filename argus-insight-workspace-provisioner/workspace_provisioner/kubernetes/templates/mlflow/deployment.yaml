@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mlflow-${WORKSPACE_NAME}-db
+  name: argus-mlflow-${WORKSPACE_NAME}-db
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: mlflow-db
@@ -36,7 +36,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: mlflow-${WORKSPACE_NAME}
+                  name: argus-mlflow-${WORKSPACE_NAME}
                   key: postgres-password
           ports:
             - name: postgres
@@ -60,12 +60,12 @@ spec:
       volumes:
         - name: db-data
           persistentVolumeClaim:
-            claimName: mlflow-${WORKSPACE_NAME}-db
+            claimName: argus-mlflow-${WORKSPACE_NAME}-db
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mlflow-${WORKSPACE_NAME}-db
+  name: argus-mlflow-${WORKSPACE_NAME}-db
   namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: mlflow-db
