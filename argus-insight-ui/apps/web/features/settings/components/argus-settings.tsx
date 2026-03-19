@@ -79,36 +79,14 @@ export function ArgusSettings() {
     setTesting(true)
     setTestResult(null)
     try {
-      // Build the v2 endpoint URL
-      let baseUrl = urlTrimmed.replace(/\/+$/, "")
-      const v2Url = `${baseUrl}/v2/`
-
-      const headers: Record<string, string> = {}
-      if (usernameTrimmed && passwordTrimmed) {
-        headers["Authorization"] = `Basic ${btoa(`${usernameTrimmed}:${passwordTrimmed}`)}`
-      }
-
-      const res = await fetch(v2Url, { headers })
-
-      if (res.ok) {
-        setTestResult({ type: "success", text: "Docker Registry connection successful" })
-      } else if (res.status === 401) {
-        setTestResult({ type: "error", text: "Authentication failed. Please check your username and password." })
+      const result = await testDockerRegistry(urlTrimmed, usernameTrimmed, passwordTrimmed)
+      if (result.success) {
+        setTestResult({ type: "success", text: result.message || "Docker Registry connection successful" })
       } else {
-        setTestResult({ type: "error", text: `Connection failed with status ${res.status}` })
+        setTestResult({ type: "error", text: result.message || "Connection failed" })
       }
-    } catch {
-      // If direct fetch fails (e.g. CORS), fall back to server-side test
-      try {
-        const result = await testDockerRegistry(urlTrimmed, usernameTrimmed, passwordTrimmed)
-        if (result.success) {
-          setTestResult({ type: "success", text: result.message || "Docker Registry connection successful" })
-        } else {
-          setTestResult({ type: "error", text: result.message || "Connection failed" })
-        }
-      } catch (err) {
-        setTestResult({ type: "error", text: err instanceof Error ? err.message : "Test failed" })
-      }
+    } catch (err) {
+      setTestResult({ type: "error", text: err instanceof Error ? err.message : "Test failed" })
     } finally {
       setTesting(false)
     }
