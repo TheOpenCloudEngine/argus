@@ -91,6 +91,13 @@ export function DnsZoneProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
+      // Reachable but has an error (e.g. invalid server_id) → show settings
+      if (health.error) {
+        setHealthStatus("unreachable")
+        setHealthError(health.error)
+        return
+      }
+
       if (!health.zone_exists) {
         setHealthStatus("zone_missing")
         return

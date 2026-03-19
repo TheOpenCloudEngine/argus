@@ -170,17 +170,15 @@ async def check_health(session: AsyncSession) -> DnsHealthResponse:
                   "Please configure them in Settings > Domain > PowerDNS.",
         )
 
-    base_url = _build_base_url(cfg)
+    api_base = f"http://{cfg['pdns_ip']}:{cfg['pdns_port']}/api/v1"
+    headers = {"X-API-Key": cfg["pdns_api_key"]}
     zone = _zone_id(cfg["domain_name"])
 
-    # 1) Check connectivity by listing zones.
+    # 1) Check basic connectivity via GET /api/v1/servers.
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{base_url}/zones",
-                headers={"X-API-Key": cfg["pdns_api_key"]},
-            )
-    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            resp = await client.get(f"{api_base}/servers", headers=headers)
+    except (httpx.ConnectError, httpx.TimeoutException):
         return DnsHealthResponse(
             reachable=False,
             zone_exists=False,
@@ -188,21 +186,56 @@ async def check_health(session: AsyncSession) -> DnsHealthResponse:
             error=f"Cannot connect to PowerDNS at {cfg['pdns_ip']}:{cfg['pdns_port']}",
         )
 
+    if resp.status_code == 401:
+        return DnsHealthResponse(
+            reachable=False,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error="PowerDNS API key is invalid (401 Unauthorized).",
+        )
+
     if resp.status_code != 200:
         return DnsHealthResponse(
             reachable=False,
             zone_exists=False,
             zone=cfg["domain_name"],
-            error=f"PowerDNS returned {resp.status_code}",
+            error=f"PowerDNS returned {resp.status_code} on connectivity check.",
         )
 
-    # 2) Check if the zone exists.
+    # 2) Validate server_id by listing zones.
+    base_url = _build_base_url(cfg)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            zone_resp = await client.get(
-                f"{base_url}/zones/{zone}",
-                headers={"X-API-Key": cfg["pdns_api_key"]},
-            )
+            zones_resp = await client.get(f"{base_url}/zones", headers=headers)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error="Failed to list zones from PowerDNS.",
+        )
+
+    if zones_resp.status_code == 404:
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error=f"PowerDNS Server ID \'{cfg['pdns_server_id']}\' not found. "
+                  "Please check the Server ID in Settings > Domain > PowerDNS.",
+        )
+
+    if zones_resp.status_code != 200:
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error=f"PowerDNS returned {zones_resp.status_code} listing zones.",
+        )
+
+    # 3) Check if the zone exists.
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            zone_resp = await client.get(f"{base_url}/zones/{zone}", headers=headers)
     except (httpx.ConnectError, httpx.TimeoutException):
         return DnsHealthResponse(
             reachable=True,
