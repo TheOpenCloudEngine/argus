@@ -13,6 +13,9 @@ data:
 
     [pdns]
     ssl-verify-server-cert = false
+
+    [mariadbd]
+    innodb_snapshot_isolation = OFF
   01-schema.sql: |
     USE pdns;
 

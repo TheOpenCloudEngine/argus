@@ -33,7 +33,8 @@ PowerDNS-service/
 │   ├── pvc.yaml                         # MySQL 데이터 볼륨
 │   ├── powerdns-db.yaml                 # MariaDB Deployment + Service
 │   ├── powerdns-server.yaml             # PowerDNS Server Deployment + Service
-│   └── powerdns-admin.yaml              # PowerDNS Admin Deployment + Service
+│   ├── powerdns-admin.yaml              # PowerDNS Admin Deployment + Service
+│   └── powerdns-admin-ingress.yaml      # PowerDNS Admin Ingress
 └── dist/                                # 빌드 산출물 (gitignored)
     └── powerdns-*.tar.gz                # docker save 이미지
 ```
@@ -150,7 +151,8 @@ PDNS_ADMIN_VERSION=v0.4.2
 | PVC | `argus-powerdns-mysql-data` | MySQL 데이터 (5Gi, ReadWriteOnce) |
 | Deployment + Service | `powerdns-db` | MariaDB (포트 3306) |
 | Deployment + Service | `powerdns-server` | DNS (53 UDP/TCP) + API (8081) |
-| Deployment + Service | `powerdns-admin` | Web UI (포트 80) |
+| Deployment + Service | `powerdns-admin` | Web UI (포트 80, NodePort 8082) |
+| Ingress | `powerdns-admin` | PowerDNS Admin HTTP 라우팅 |
 
 ### 배포 전 필수 설정
 
@@ -207,6 +209,7 @@ PowerDNS MySQL 백엔드에 필요한 테이블:
 | ConfigMap | `powerdns-config` | — |
 | Deployment | `powerdns-db`, `powerdns-server`, `powerdns-admin` | — |
 | Service | `powerdns-db`, `powerdns-server`, `powerdns-admin` | — |
+| Ingress | `powerdns-admin` | — |
 
 ### Kubernetes 라벨
 
@@ -222,7 +225,8 @@ PowerDNS MySQL 백엔드에 필요한 테이블:
 |---|---|---|---|
 | DNS UDP/TCP | `10053` | `53` | DNS 쿼리 |
 | HTTP (API) | `15001` | `8081` | PowerDNS REST API |
-| HTTP (Admin) | `15000` | `80` | PowerDNS Admin Web UI |
+| HTTP (Admin) | `15000` | `80` | PowerDNS Admin Web UI (Docker Compose) |
+| HTTP (Admin) | `8082` (NodePort) | `80` | PowerDNS Admin Web UI (Kubernetes) |
 | MySQL | `3306` | `3306` | MariaDB |
 
 ## 코드 컨벤션
@@ -238,3 +242,6 @@ PowerDNS MySQL 백엔드에 필요한 테이블:
 - PowerDNS API Key는 외부에 노출하지 않도록 주의 (Secret으로 관리)
 - DNS 포트(53)는 Docker에서 `10053`으로 매핑 (호스트의 기본 DNS와 충돌 방지)
 - PowerDNS Admin은 최초 접속 시 관리자 계정을 직접 생성해야 합니다
+- Kubernetes NodePort `8082`를 사용하려면 k3s 서버에 `--service-node-port-range=8000-32767` 설정 또는 `/etc/rancher/k3s/config.yaml`에 `service-node-port-range: "8000-32767"` 설정이 필요합니다
+- **MariaDB 11.7 innodb_snapshot_isolation 이슈**: MariaDB 11.7부터 `innodb_snapshot_isolation`이 기본값 `ON`으로 변경되었습니다. 이 설정이 활성화되면 PowerDNS Admin의 세션 테이블(`sessions`) UPDATE 시 `Record has changed since last read` 에러가 발생하여 모든 Ajax 요청이 실패합니다. `configmap.yaml`의 my.cnf `[mariadbd]` 섹션에 `innodb_snapshot_isolation = OFF`를 설정하고, `powerdns-db.yaml`에서 해당 my.cnf를 `/etc/mysql/conf.d/custom.cnf`로 마운트하여 해결합니다
+- PowerDNS Server의 liveness/readiness probe는 `tcpSocket`을 사용합니다. Kubernetes httpGet probe에서는 `$(ENV_VAR)` 형태의 환경변수 치환이 지원되지 않으므로 API Key 기반 HTTP probe 대신 TCP 포트 체크를 사용합니다

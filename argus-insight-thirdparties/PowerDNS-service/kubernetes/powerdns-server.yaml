@@ -73,21 +73,13 @@ spec:
               cpu: "500m"
               memory: "512Mi"
           livenessProbe:
-            httpGet:
-              path: /api/v1/servers/localhost
+            tcpSocket:
               port: api
-              httpHeaders:
-                - name: X-API-Key
-                  value: "$(PDNS_api_key)"
             initialDelaySeconds: 30
             periodSeconds: 15
           readinessProbe:
-            httpGet:
-              path: /api/v1/servers/localhost
+            tcpSocket:
               port: api
-              httpHeaders:
-                - name: X-API-Key
-                  value: "$(PDNS_api_key)"
             initialDelaySeconds: 10
             periodSeconds: 5
 ---

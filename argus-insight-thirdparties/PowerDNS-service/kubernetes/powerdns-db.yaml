@@ -78,6 +78,9 @@ spec:
             - name: init-schema
               mountPath: /docker-entrypoint-initdb.d/01-schema.sql
               subPath: 01-schema.sql
+            - name: config
+              mountPath: /etc/mysql/conf.d/custom.cnf
+              subPath: my.cnf
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -88,6 +91,12 @@ spec:
             items:
               - key: 01-schema.sql
                 path: 01-schema.sql
+        - name: config
+          configMap:
+            name: powerdns-config
+            items:
+              - key: my.cnf
+                path: my.cnf
 ---
 apiVersion: v1
 kind: Service
