@@ -1,4 +1,4 @@
-const BASE = "/api/v1/infraconfig"
+const BASE = "/api/v1/settings"
 const SECURITY_BASE = "/api/v1/security"
 
 // --------------------------------------------------------------------------- //
@@ -82,11 +82,11 @@ export async function updateDomainConfig(items: Record<string, string>): Promise
 // --------------------------------------------------------------------------- //
 
 export async function fetchPowerDnsConfig(): Promise<Record<string, string>> {
-  return fetchCategory("powerdns")
+  return fetchCategory("domain")
 }
 
 export async function updatePowerDnsConfig(items: Record<string, string>): Promise<void> {
-  return updateCategory("powerdns", items)
+  return updateCategory("domain", items)
 }
 
 // --------------------------------------------------------------------------- //

@@ -6,15 +6,15 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infraconfig.models import ArgusConfigurationInfra
-from app.infraconfig.schemas import InfraCategoryResponse, InfraConfigResponse
+from app.settings.models import ArgusConfiguration
+from app.settings.schemas import InfraCategoryResponse, InfraConfigResponse
 
 logger = logging.getLogger(__name__)
 
 
 async def get_infra_config(session: AsyncSession) -> InfraConfigResponse:
     """Load all infrastructure configuration from the database."""
-    result = await session.execute(select(ArgusConfigurationInfra))
+    result = await session.execute(select(ArgusConfiguration))
     rows = result.scalars().all()
 
     grouped: dict[str, dict[str, str]] = defaultdict(dict)
@@ -38,16 +38,15 @@ async def update_infra_category(
     """Update settings within a single infrastructure category."""
     for key, value in items.items():
         result = await session.execute(
-            select(ArgusConfigurationInfra).where(
-                ArgusConfigurationInfra.config_key == key,
-                ArgusConfigurationInfra.category == category,
+            select(ArgusConfiguration).where(
+                ArgusConfiguration.config_key == key,
             )
         )
         row = result.scalar_one_or_none()
         if row:
             row.config_value = value
         else:
-            session.add(ArgusConfigurationInfra(
+            session.add(ArgusConfiguration(
                 category=category, config_key=key, config_value=value,
             ))
     await session.commit()
@@ -62,11 +61,11 @@ async def seed_infra_config(session: AsyncSession) -> None:
         ("domain", "dns_server_1", "", "Primary DNS server"),
         ("domain", "dns_server_2", "", "Secondary DNS server"),
         ("domain", "dns_server_3", "", "Tertiary DNS server"),
-        # PowerDNS
-        ("powerdns", "pdns_ip", "", "PowerDNS server IP address"),
-        ("powerdns", "pdns_port", "", "PowerDNS server port"),
-        ("powerdns", "pdns_api_key", "", "PowerDNS API key"),
-        ("powerdns", "pdns_server_id", "", "PowerDNS server ID"),
+        ("domain", "pdns_ip", "", "PowerDNS server IP address"),
+        ("domain", "pdns_port", "", "PowerDNS server port"),
+        ("domain", "pdns_api_key", "Argus", "PowerDNS API key"),
+        ("domain", "pdns_server_id", "", "PowerDNS server ID"),
+        ("domain", "pdns_admin_url", "", "PowerDNS Admin web UI URL"),
         # LDAP
         ("ldap", "enable_ldap_auth", "false", "Enable LDAP authentication"),
         ("ldap", "ldap_url", "ldap://<SERVER>:389", "LDAP/AD server URL"),
@@ -90,12 +89,12 @@ async def seed_infra_config(session: AsyncSession) -> None:
     ]
     for category, key, value, description in defaults:
         result = await session.execute(
-            select(ArgusConfigurationInfra).where(
-                ArgusConfigurationInfra.config_key == key
+            select(ArgusConfiguration).where(
+                ArgusConfiguration.config_key == key
             )
         )
         if result.scalar_one_or_none() is None:
-            session.add(ArgusConfigurationInfra(
+            session.add(ArgusConfiguration(
                 category=category,
                 config_key=key,
                 config_value=value,
