@@ -1,18 +1,21 @@
 "use client"
 
 import { DashboardHeader } from "@/components/dashboard-header"
+import { UCConfigGuard } from "@/features/unity-catalog/components/uc-config-guard"
 import { UCSchemaB } from "@/features/unity-catalog/components/uc-schema-browser"
 
 export default function UnityCatalogLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full flex-col">
       <DashboardHeader title="Catalog" />
-      <div className="flex min-h-0 flex-1">
-        <div className="w-64 shrink-0 overflow-y-auto border-r py-4 pl-2">
-          <UCSchemaB />
+      <UCConfigGuard>
+        <div className="flex min-h-0 flex-1">
+          <div className="w-64 shrink-0 overflow-y-auto border-r py-4 pl-2">
+            <UCSchemaB />
+          </div>
+          <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
         </div>
-        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
-      </div>
+      </UCConfigGuard>
     </div>
   )
 }

@@ -5,6 +5,7 @@
  * Falls back to mock data when the API is not available.
  */
 
+import { fetchArgusConfig } from "@/features/settings/api"
 import {
   mockCatalogs,
   mockSchemas,
@@ -38,6 +39,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail)
   }
   return res.json()
+}
+
+// --------------------------------------------------------------------------- //
+// Health check – verify Unity Catalog URL is configured in Settings > Argus
+// --------------------------------------------------------------------------- //
+
+export async function checkUcConfigured(): Promise<{ configured: boolean }> {
+  const config = await fetchArgusConfig()
+  const url = (config.unity_catalog_url ?? "").trim()
+  return { configured: url.length > 0 }
 }
 
 // --------------------------------------------------------------------------- //
