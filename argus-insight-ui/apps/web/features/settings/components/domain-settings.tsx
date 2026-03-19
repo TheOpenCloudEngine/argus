@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ExternalLink, Eye, EyeOff, Loader2, Save } from "lucide-react"
+import { ExternalLink, Eye, EyeOff, Loader2, Play, Save } from "lucide-react"
 
 import {
   AlertDialog,
@@ -226,11 +226,17 @@ function PowerDnsSettingsSection({
   onChange,
   onSave,
   saving,
+  onTest,
+  testing,
+  testResult,
 }: {
-  values: { ip: string; port: string; api_key: string; server_id: string; admin_url: string }
+  values: { ip: string; port: string; api_key: string; admin_url: string }
   onChange: (key: string, value: string) => void
   onSave: () => void
   saving: boolean
+  onTest: () => void
+  testing: boolean
+  testResult: { type: "success" | "error"; text: string } | null
 }) {
   const [showApiKey, setShowApiKey] = useState(false)
 
@@ -259,17 +265,38 @@ function PowerDnsSettingsSection({
               PowerDNS server connection settings
             </CardDescription>
           </div>
-          <Button size="sm" onClick={onSave} disabled={saving || !canSave}>
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-            ) : (
-              <Save className="h-4 w-4 mr-1.5" />
-            )}
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={onSave} disabled={saving || !canSave}>
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="h-4 w-4 mr-1.5" />
+              )}
+              Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={onTest} disabled={testing || !canSave}>
+              {testing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : (
+                <Play className="h-4 w-4 mr-1.5" />
+              )}
+              Test
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
+        {testResult && (
+          <div
+            className={`mb-4 rounded-md px-4 py-2 text-sm ${
+              testResult.type === "success"
+                ? "bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200"
+                : "bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"
+            }`}
+          >
+            {testResult.text}
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="pdns-ip">
@@ -334,15 +361,6 @@ function PowerDnsSettingsSection({
               </button>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="pdns-server-id">Server ID</Label>
-            <Input
-              id="pdns-server-id"
-              value={values.server_id}
-              onChange={(e) => onChange("server_id", e.target.value)}
-              placeholder="e.g. localhost"
-            />
-          </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="pdns-admin-url">PowerDNS Admin URL</Label>
             <div className="flex gap-2">
@@ -384,13 +402,15 @@ export function DomainSettings() {
   const [savingDomain, setSavingDomain] = useState(false)
   const [savingDns, setSavingDns] = useState(false)
   const [savingPdns, setSavingPdns] = useState(false)
+  const [testingPdns, setTestingPdns] = useState(false)
+  const [pdnsTestResult, setPdnsTestResult] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   // Domain state
   const [domainName, setDomainName] = useState("")
   const [dnsServers, setDnsServers] = useState<[string, string, string]>(["", "", ""])
 
   // PowerDNS state
-  const [pdns, setPdns] = useState({ ip: "", port: "", api_key: "", server_id: "", admin_url: "" })
+  const [pdns, setPdns] = useState({ ip: "", port: "", api_key: "", admin_url: "" })
 
   // Status messages
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -415,7 +435,6 @@ export function DomainSettings() {
         ip: powerdns.pdns_ip ?? "",
         port: powerdns.pdns_port ?? "",
         api_key: powerdns.pdns_api_key ?? "",
-        server_id: powerdns.pdns_server_id ?? "",
         admin_url: powerdns.pdns_admin_url ?? "",
       })
     } catch (err) {
@@ -473,7 +492,6 @@ export function DomainSettings() {
         pdns_ip: pdns.ip,
         pdns_port: pdns.port,
         pdns_api_key: pdns.api_key,
-        pdns_server_id: pdns.server_id,
         pdns_admin_url: pdns.admin_url,
       })
       showStatus("success", "PowerDNS settings saved successfully")
@@ -482,6 +500,39 @@ export function DomainSettings() {
       showStatus("error", err instanceof Error ? err.message : "Failed to save")
     } finally {
       setSavingPdns(false)
+    }
+  }
+
+  async function handleTestPdns() {
+    setTestingPdns(true)
+    setPdnsTestResult(null)
+    try {
+      const res = await fetch("/api/v1/dns/health")
+      const data = await res.json()
+
+      if (!res.ok) {
+        setPdnsTestResult({ type: "error", text: data.detail ?? `Server returned ${res.status}` })
+        return
+      }
+
+      if (!data.reachable) {
+        setPdnsTestResult({ type: "error", text: data.error ?? "Cannot connect to PowerDNS" })
+        return
+      }
+
+      if (data.error) {
+        setPdnsTestResult({ type: "error", text: data.error })
+        return
+      }
+
+      const zoneStatus = data.zone_exists
+        ? `Zone '${data.zone}' exists.`
+        : `Connected successfully. Zone '${data.zone}' does not exist yet.`
+      setPdnsTestResult({ type: "success", text: `PowerDNS connection successful. ${zoneStatus}` })
+    } catch (err) {
+      setPdnsTestResult({ type: "error", text: err instanceof Error ? err.message : "Test failed" })
+    } finally {
+      setTestingPdns(false)
     }
   }
 
@@ -550,6 +601,9 @@ export function DomainSettings() {
         onChange={(key, value) => setPdns((prev) => ({ ...prev, [key]: value }))}
         onSave={handleSavePdns}
         saving={savingPdns}
+        onTest={handleTestPdns}
+        testing={testingPdns}
+        testResult={pdnsTestResult}
       />
     </div>
   )

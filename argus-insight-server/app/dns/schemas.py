@@ -1,0 +1,88 @@
+"""DNS zone management Pydantic schemas."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+
+class DnsRecord(BaseModel):
+    """A single DNS record within an RRset."""
+
+    content: str
+    disabled: bool
+
+
+class DnsComment(BaseModel):
+    """A comment on an RRset."""
+
+    content: str
+    account: str
+    modified_at: int
+
+
+class DnsRecordRow(BaseModel):
+    """Flattened row for the UI data table.
+
+    Each record within an RRset becomes its own row.
+    """
+
+    name: str
+    type: str
+    ttl: int
+    content: str
+    disabled: bool
+    comment: str = ""
+
+
+class DnsZoneTableResponse(BaseModel):
+    """Table-ready response with flattened records."""
+
+    zone: str
+    records: list[DnsRecordRow]
+
+
+class DnsRRsetPatch(BaseModel):
+    """A single RRset modification for PATCH requests."""
+
+    name: str
+    type: str
+    ttl: int
+    changetype: str  # "REPLACE" or "DELETE"
+    records: list[DnsRecord] = []
+    comments: list[DnsComment] = []
+
+
+class DnsRecordUpdateRequest(BaseModel):
+    """Request body for updating DNS records via PATCH."""
+
+    rrsets: list[DnsRRsetPatch]
+
+
+class DnsHealthResponse(BaseModel):
+    """Response from the PowerDNS health check."""
+
+    reachable: bool
+    zone_exists: bool
+    zone: str
+    error: str | None = None
+
+
+class DnsZoneCreateResponse(BaseModel):
+    """Response after creating a zone."""
+
+    zone: str
+    created: bool
+
+
+class BindConfigFile(BaseModel):
+    """A single Bind configuration file."""
+
+    filename: str
+    content: str
+
+
+class BindConfigResponse(BaseModel):
+    """Response with Bind configuration files."""
+
+    zone: str
+    files: list[BindConfigFile]

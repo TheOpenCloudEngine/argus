@@ -1,0 +1,452 @@
+"""DNS zone management service.
+
+Reads PowerDNS connection settings from the database and communicates
+with the PowerDNS Authoritative Server REST API.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import httpx
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.dns.schemas import (
+    BindConfigFile,
+    BindConfigResponse,
+    DnsHealthResponse,
+    DnsRecordRow,
+    DnsRRsetPatch,
+    DnsZoneCreateResponse,
+    DnsZoneTableResponse,
+)
+from app.settings.models import ArgusConfiguration
+
+logger = logging.getLogger(__name__)
+
+# Keys we need from the domain category.
+_REQUIRED_KEYS = ("pdns_ip", "pdns_port", "pdns_api_key", "domain_name")
+
+
+async def _get_pdns_settings(session: AsyncSession) -> dict[str, str]:
+    """Read PowerDNS connection settings from the database.
+
+    Returns a dict with keys: pdns_ip, pdns_port, pdns_api_key, domain_name.
+
+    Raises HTTPException(503) if required settings are not configured.
+    """
+    result = await session.execute(
+        select(ArgusConfiguration).where(ArgusConfiguration.category == "domain")
+    )
+    rows = result.scalars().all()
+    cfg = {row.config_key: row.config_value for row in rows}
+
+    logger.info(
+        "Loaded PowerDNS settings: ip=%s, port=%s, domain=%s",
+        cfg.get("pdns_ip"), cfg.get("pdns_port"), cfg.get("domain_name"),
+    )
+
+    missing = [k for k in _REQUIRED_KEYS if not cfg.get(k)]
+    if missing:
+        logger.info("PowerDNS settings missing: %s", ", ".join(missing))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"PowerDNS settings not configured: {', '.join(missing)}. "
+                "Please configure them in Settings > Domain."
+            ),
+        )
+
+    return cfg
+
+
+def _build_base_url(cfg: dict[str, str]) -> str:
+    """Build the PowerDNS API base URL.
+
+    The server_id is always 'localhost' in PowerDNS Authoritative Server.
+    See: https://doc.powerdns.com/authoritative/http-api/server.html
+    """
+    return f"http://{cfg['pdns_ip']}:{cfg['pdns_port']}/api/v1/servers/localhost"
+
+
+def _zone_id(domain_name: str) -> str:
+    """Ensure the zone ID has a trailing dot."""
+    return domain_name if domain_name.endswith(".") else f"{domain_name}."
+
+
+async def get_zone_records(session: AsyncSession) -> DnsZoneTableResponse:
+    """Fetch all records for the configured domain zone from PowerDNS."""
+    cfg = await _get_pdns_settings(session)
+    base_url = _build_base_url(cfg)
+    zone = _zone_id(cfg["domain_name"])
+    url = f"{base_url}/zones/{zone}"
+
+    logger.info("Fetching zone records: GET %s", url)
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(url, headers={"X-API-Key": cfg["pdns_api_key"]})
+    except httpx.ConnectError as exc:
+        logger.info("Connection failed to PowerDNS at %s:%s", cfg["pdns_ip"], cfg["pdns_port"])
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot connect to PowerDNS at {cfg['pdns_ip']}:{cfg['pdns_port']}",
+        ) from exc
+
+    logger.info("GET zone records returned status=%d", resp.status_code)
+
+    if resp.status_code == 404:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Zone '{cfg['domain_name']}' not found on PowerDNS server.",
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=f"PowerDNS returned {resp.status_code}: {resp.text[:200]}",
+        )
+
+    data = resp.json()
+    rrsets = data.get("rrsets", [])
+
+    # Flatten RRsets into individual record rows.
+    rows: list[DnsRecordRow] = []
+    for rrset in rrsets:
+        name = rrset.get("name", "")
+        rtype = rrset.get("type", "")
+        ttl = rrset.get("ttl", 0)
+        comments = rrset.get("comments", [])
+        comment_text = comments[0]["content"] if comments else ""
+
+        for record in rrset.get("records", []):
+            rows.append(
+                DnsRecordRow(
+                    name=name,
+                    type=rtype,
+                    ttl=ttl,
+                    content=record.get("content", ""),
+                    disabled=record.get("disabled", False),
+                    comment=comment_text,
+                )
+            )
+
+    logger.info(
+        "Flattened %d records from %d rrsets for zone %s",
+        len(rows), len(rrsets), cfg["domain_name"],
+    )
+    return DnsZoneTableResponse(zone=cfg["domain_name"], records=rows)
+
+
+async def update_zone_records(
+    session: AsyncSession,
+    rrsets: list[DnsRRsetPatch],
+) -> None:
+    """Update records in the configured domain zone via PATCH."""
+    cfg = await _get_pdns_settings(session)
+    base_url = _build_base_url(cfg)
+    zone = _zone_id(cfg["domain_name"])
+    url = f"{base_url}/zones/{zone}"
+
+    body = {"rrsets": [rrset.model_dump() for rrset in rrsets]}
+    logger.info("Updating zone records: PATCH %s (%d rrsets)", url, len(rrsets))
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.patch(
+                url,
+                json=body,
+                headers={"X-API-Key": cfg["pdns_api_key"]},
+            )
+    except httpx.ConnectError as exc:
+        logger.info("Connection failed to PowerDNS at %s:%s", cfg["pdns_ip"], cfg["pdns_port"])
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot connect to PowerDNS at {cfg['pdns_ip']}:{cfg['pdns_port']}",
+        ) from exc
+
+    logger.info("PATCH zone records returned status=%d", resp.status_code)
+
+    if resp.status_code not in (200, 204):
+        raise HTTPException(
+            status_code=502,
+            detail=f"PowerDNS PATCH returned {resp.status_code}: {resp.text[:200]}",
+        )
+
+
+async def check_health(session: AsyncSession) -> DnsHealthResponse:
+    """Check if PowerDNS is reachable and whether the configured zone exists."""
+    logger.info("Starting PowerDNS health check")
+    try:
+        cfg = await _get_pdns_settings(session)
+    except HTTPException:
+        logger.info("Health check failed: PowerDNS settings not configured")
+        return DnsHealthResponse(
+            reachable=False,
+            zone_exists=False,
+            zone="",
+            error="PowerDNS settings are not configured. "
+                  "Please configure them in Settings > Domain > PowerDNS.",
+        )
+
+    api_base = f"http://{cfg['pdns_ip']}:{cfg['pdns_port']}/api/v1"
+    headers = {"X-API-Key": cfg["pdns_api_key"]}
+    zone = _zone_id(cfg["domain_name"])
+
+    # 1) Check basic connectivity via GET /api/v1/servers.
+    logger.info("Health check step 1: GET %s/servers", api_base)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{api_base}/servers", headers=headers)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        logger.info("Health check step 1 failed: cannot connect to %s:%s",
+                     cfg["pdns_ip"], cfg["pdns_port"])
+        return DnsHealthResponse(
+            reachable=False,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error=f"Cannot connect to PowerDNS at {cfg['pdns_ip']}:{cfg['pdns_port']}",
+        )
+
+    logger.info("Health check step 1 result: status=%d", resp.status_code)
+
+    if resp.status_code == 401:
+        logger.info("Health check failed: API key unauthorized")
+        return DnsHealthResponse(
+            reachable=False,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error="PowerDNS API key is invalid (401 Unauthorized).",
+        )
+
+    if resp.status_code != 200:
+        logger.info("Health check failed: unexpected status %d", resp.status_code)
+        return DnsHealthResponse(
+            reachable=False,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error=f"PowerDNS returned {resp.status_code} on connectivity check.",
+        )
+
+    # 2) List zones to validate configuration.
+    base_url = _build_base_url(cfg)
+    logger.info("Health check step 2: GET %s/zones", base_url)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            zones_resp = await client.get(f"{base_url}/zones", headers=headers)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        logger.info("Health check step 2 failed: connection error")
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error="Failed to list zones from PowerDNS.",
+        )
+
+    logger.info("Health check step 2 result: status=%d", zones_resp.status_code)
+
+    if zones_resp.status_code == 404:
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error="PowerDNS zone listing failed (404). "
+                  "Please check the PowerDNS configuration.",
+        )
+
+    if zones_resp.status_code != 200:
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+            error=f"PowerDNS returned {zones_resp.status_code} listing zones.",
+        )
+
+    # 3) Check if the zone exists.
+    logger.info("Health check step 3: GET %s/zones/%s", base_url, zone)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            zone_resp = await client.get(f"{base_url}/zones/{zone}", headers=headers)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        logger.info("Health check step 3 failed: connection error")
+        return DnsHealthResponse(
+            reachable=True,
+            zone_exists=False,
+            zone=cfg["domain_name"],
+        )
+
+    zone_exists = zone_resp.status_code == 200
+    logger.info(
+        "Health check complete: reachable=True, zone_exists=%s, zone=%s",
+        zone_exists, cfg["domain_name"],
+    )
+    return DnsHealthResponse(
+        reachable=True,
+        zone_exists=zone_exists,
+        zone=cfg["domain_name"],
+    )
+
+
+async def create_zone(session: AsyncSession) -> DnsZoneCreateResponse:
+    """Create the configured domain zone on the PowerDNS server."""
+    cfg = await _get_pdns_settings(session)
+    base_url = _build_base_url(cfg)
+    zone = _zone_id(cfg["domain_name"])
+
+    ns1_name = f"ns1.{zone}"
+    pdns_ip = cfg["pdns_ip"]
+    headers = {"X-API-Key": cfg["pdns_api_key"]}
+
+    body = {
+        "name": zone,
+        "kind": "Native",
+        "nameservers": [ns1_name],
+    }
+
+    logger.info("Creating zone: POST %s/zones (name=%s, kind=Native, ns=%s)",
+                base_url, zone, ns1_name)
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{base_url}/zones",
+                json=body,
+                headers=headers,
+            )
+    except httpx.ConnectError as exc:
+        logger.info("Zone creation failed: cannot connect to %s:%s",
+                     pdns_ip, cfg["pdns_port"])
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot connect to PowerDNS at {pdns_ip}:{cfg['pdns_port']}",
+        ) from exc
+
+    logger.info("POST create zone returned status=%d", resp.status_code)
+
+    if resp.status_code not in (200, 201):
+        logger.info("Zone creation failed: %s", resp.text[:200])
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to create zone: PowerDNS returned {resp.status_code}: "
+                   f"{resp.text[:200]}",
+        )
+
+    # Add A record for ns1 pointing to the PowerDNS server IP.
+    glue_body = {
+        "rrsets": [
+            {
+                "name": ns1_name,
+                "type": "A",
+                "ttl": 3600,
+                "changetype": "REPLACE",
+                "records": [{"content": pdns_ip, "disabled": False}],
+            },
+        ],
+    }
+    logger.info("Adding glue record: PATCH %s/zones/%s (ns1 A -> %s)",
+                base_url, zone, pdns_ip)
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            glue_resp = await client.patch(
+                f"{base_url}/zones/{zone}",
+                json=glue_body,
+                headers=headers,
+            )
+        logger.info("Glue record PATCH returned status=%d", glue_resp.status_code)
+    except httpx.ConnectError:
+        logger.info("Failed to add glue record (connection error), zone was created")
+
+    logger.info("Zone created successfully: %s", cfg["domain_name"])
+    return DnsZoneCreateResponse(zone=cfg["domain_name"], created=True)
+
+
+def _format_bind_record(name: str, ttl: int, rtype: str, content: str) -> str:
+    """Format a single DNS record as a BIND zone file line."""
+    return f"{name:<40s} {ttl:<8d} IN  {rtype:<8s} {content}"
+
+
+async def export_bind_config(session: AsyncSession) -> BindConfigResponse:
+    """Export DNS zone records as BIND configuration files.
+
+    Generates two files:
+    1. named.conf.local - Zone declaration
+    2. db.{zone} - Zone data file with all enabled records
+    """
+    cfg = await _get_pdns_settings(session)
+    domain_name = cfg["domain_name"]
+    zone_data = await get_zone_records(session)
+
+    # --- named.conf.local ---
+    named_conf = (
+        f'zone "{domain_name}" {{\n'
+        f"    type master;\n"
+        f'    file "/etc/bind/zones/db.{domain_name}";\n'
+        f"}};\n"
+    )
+
+    # --- db.{zone} ---
+    # Collect only enabled records
+    enabled = [r for r in zone_data.records if not r.disabled]
+
+    # Find SOA record
+    soa_record = next((r for r in enabled if r.type == "SOA"), None)
+
+    # Determine default TTL from SOA or fallback
+    default_ttl = soa_record.ttl if soa_record else 3600
+
+    lines: list[str] = []
+    lines.append(f"; BIND zone file for {domain_name}")
+    lines.append(f"; Exported from Argus Insight")
+    lines.append(f"")
+    lines.append(f"$TTL {default_ttl}")
+    lines.append(f"")
+
+    # SOA first
+    if soa_record:
+        lines.append(
+            _format_bind_record(soa_record.name, soa_record.ttl, "SOA", soa_record.content)
+        )
+        lines.append("")
+
+    # Group remaining records by type for readability
+    type_order = ["NS", "A", "AAAA", "CNAME", "MX", "TXT", "PTR", "SRV"]
+    other_records = [r for r in enabled if r.type != "SOA"]
+
+    # Sort: known types first in order, then others alphabetically
+    def sort_key(r: DnsRecordRow) -> tuple[int, str, str]:
+        try:
+            idx = type_order.index(r.type)
+        except ValueError:
+            idx = len(type_order)
+        return (idx, r.type, r.name)
+
+    other_records.sort(key=sort_key)
+
+    current_type = ""
+    for record in other_records:
+        if record.type != current_type:
+            if current_type:
+                lines.append("")
+            lines.append(f"; {record.type} Records")
+            current_type = record.type
+        lines.append(
+            _format_bind_record(record.name, record.ttl, record.type, record.content)
+        )
+
+    lines.append("")
+    zone_file_content = "\n".join(lines)
+
+    logger.info(
+        "Exported BIND config for zone %s: %d enabled records",
+        domain_name, len(enabled),
+    )
+
+    return BindConfigResponse(
+        zone=domain_name,
+        files=[
+            BindConfigFile(filename="named.conf.local", content=named_conf),
+            BindConfigFile(filename=f"db.{domain_name}", content=zone_file_content),
+        ],
+    )

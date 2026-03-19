@@ -64,7 +64,6 @@ async def seed_infra_config(session: AsyncSession) -> None:
         ("domain", "pdns_ip", "", "PowerDNS server IP address"),
         ("domain", "pdns_port", "", "PowerDNS server port"),
         ("domain", "pdns_api_key", "Argus", "PowerDNS API key"),
-        ("domain", "pdns_server_id", "", "PowerDNS server ID"),
         ("domain", "pdns_admin_url", "", "PowerDNS Admin web UI URL"),
         # LDAP
         ("ldap", "enable_ldap_auth", "false", "Enable LDAP authentication"),
