@@ -120,6 +120,22 @@ export async function getTable(fullName: string): Promise<UCTable> {
   return apiFetch<UCTable>(`/tables/${fullName}`)
 }
 
+export async function createTable(payload: {
+  catalog_name: string
+  schema_name: string
+  name: string
+  table_type: string
+  data_source_format: string
+  columns: { name: string; type_name: string; position: number; nullable?: boolean; comment?: string }[]
+  comment?: string
+}): Promise<UCTable> {
+  return apiFetch<UCTable>("/tables", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function deleteTable(fullName: string): Promise<void> {
   await apiFetch(`/tables/${fullName}`, { method: "DELETE" })
 }

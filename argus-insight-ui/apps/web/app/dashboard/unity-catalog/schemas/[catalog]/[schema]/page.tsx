@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   Brain,
+  ChevronDown,
   Database,
   FunctionSquare,
   HardDrive,
-  MoreHorizontal,
   Table2,
   Trash2,
 } from "lucide-react"
@@ -25,6 +25,7 @@ import { UCDetailsLayout } from "@/features/unity-catalog/components/uc-details-
 import { UCTimestampMetadata } from "@/features/unity-catalog/components/uc-metadata-list"
 import { UCEntityTable } from "@/features/unity-catalog/components/uc-entity-table"
 import { UCDeleteDialog } from "@/features/unity-catalog/components/uc-delete-dialog"
+import { CreateTableDialog } from "@/features/unity-catalog/components/uc-create-table-dialog"
 import {
   getSchema,
   listTables,
@@ -34,6 +35,7 @@ import {
   updateSchema,
   deleteSchema,
 } from "@/features/unity-catalog/api"
+import { dispatchUcRefresh } from "@/features/unity-catalog/events"
 import type { Schema, UCTable, Volume, UCFunction, Model } from "@/features/unity-catalog/data/schema"
 
 type TabKey = "tables" | "volumes" | "functions" | "models"
@@ -59,6 +61,7 @@ export default function SchemaDetailsPage() {
   const [models, setModels] = useState<Model[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [createTableOpen, setCreateTableOpen] = useState(false)
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
@@ -93,18 +96,29 @@ export default function SchemaDetailsPage() {
             { label: catalogName, href: `${UC_BASE}/catalogs/${catalogName}` },
             { label: schemaName },
           ]} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-destructive" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Schema
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm">
+                  Create <ChevronDown className="ml-1.5 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setCreateTableOpen(true)}>
+                  <Table2 className="mr-2 h-4 w-4" /> Table
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <HardDrive className="mr-2 h-4 w-4" /> Volume
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Brain className="mr-2 h-4 w-4" /> Model
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="mr-1.5 h-4 w-4" /> Delete Schema
+            </Button>
+          </div>
         </div>
 
         <UCDetailsLayout
@@ -218,6 +232,13 @@ export default function SchemaDetailsPage() {
           await deleteSchema(fullName)
           router.push(`${UC_BASE}/catalogs/${catalogName}`)
         }}
+      />
+      <CreateTableDialog
+        open={createTableOpen}
+        onOpenChange={setCreateTableOpen}
+        catalogName={catalogName}
+        schemaName={schemaName}
+        onSuccess={() => { loadData(); dispatchUcRefresh() }}
       />
     </>
   )
