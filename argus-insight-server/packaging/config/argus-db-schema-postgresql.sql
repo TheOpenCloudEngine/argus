@@ -232,10 +232,10 @@ COMMENT ON COLUMN argus_configuration.description IS 'Human-readable description
 
 -- Seed Infrastructure configuration
 INSERT INTO argus_configuration (category, config_key, config_value, description) VALUES
-('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
-('domain', 'dns_server_1',   '', 'Primary DNS server'),
-('domain', 'dns_server_2',   '', 'Secondary DNS server'),
-('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
+('network', 'domain_name',    '', 'Domain name for this infrastructure'),
+('network', 'dns_server_1',   '', 'Primary DNS server'),
+('network', 'dns_server_2',   '', 'Secondary DNS server'),
+('network', 'dns_server_3',   '', 'Tertiary DNS server'),
 ('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
 ('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
 ('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),

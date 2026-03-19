@@ -70,11 +70,11 @@ async function updateCategory(
 // --------------------------------------------------------------------------- //
 
 export async function fetchDomainConfig(): Promise<Record<string, string>> {
-  return fetchCategory("domain")
+  return fetchCategory("network")
 }
 
 export async function updateDomainConfig(items: Record<string, string>): Promise<void> {
-  return updateCategory("domain", items)
+  return updateCategory("network", items)
 }
 
 // --------------------------------------------------------------------------- //

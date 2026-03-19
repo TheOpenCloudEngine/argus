@@ -56,11 +56,11 @@ async def update_infra_category(
 async def seed_infra_config(session: AsyncSession) -> None:
     """Seed default infrastructure configuration if not present."""
     defaults = [
-        # Domain
-        ("domain", "domain_name", "", "Domain name for this infrastructure"),
-        ("domain", "dns_server_1", "", "Primary DNS server"),
-        ("domain", "dns_server_2", "", "Secondary DNS server"),
-        ("domain", "dns_server_3", "", "Tertiary DNS server"),
+        # Network
+        ("network", "domain_name", "", "Domain name for this infrastructure"),
+        ("network", "dns_server_1", "", "Primary DNS server"),
+        ("network", "dns_server_2", "", "Secondary DNS server"),
+        ("network", "dns_server_3", "", "Tertiary DNS server"),
         # PowerDNS
         ("powerdns", "pdns_ip", "", "PowerDNS server IP address"),
         ("powerdns", "pdns_port", "", "PowerDNS server port"),
