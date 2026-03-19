@@ -26,7 +26,7 @@ spec:
             - name: GUNICORN_TIMEOUT
               value: "60"
             - name: PDNS_API_URL
-              value: "http://powerdns-server:8081/"
+              value: "http://powerdns-server:8083/"
             - name: PDNS_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -65,11 +65,12 @@ metadata:
     app.kubernetes.io/name: powerdns-admin
     app.kubernetes.io/part-of: argus-insight
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
     - name: http
-      port: 80
+      port: 8082
       targetPort: http
+      nodePort: 8082
       protocol: TCP
   selector:
     app.kubernetes.io/name: powerdns-admin

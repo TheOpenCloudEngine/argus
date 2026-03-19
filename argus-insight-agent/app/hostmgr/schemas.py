@@ -270,7 +270,10 @@ class InspectResult(BaseModel):
     # 9. Network interfaces (ifconfig)
     network_interfaces: list[InspectNetworkInterface]
 
-    # 10. uname -a
+    # 10. Firewall status
+    firewall_enabled: bool = Field(description="Whether firewall (firewalld/ufw/iptables) is active")
+
+    # 11. uname -a
     uname: str
 
     # 11. /etc/passwd

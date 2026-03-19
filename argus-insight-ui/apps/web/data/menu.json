@@ -79,6 +79,18 @@
       ]
     },
     {
+      "id": "unity-catalog",
+      "label": "Unity Catalog",
+      "items": [
+        {
+          "id": "catalogs",
+          "title": "Catalogs",
+          "url": "/dashboard/unity-catalog",
+          "icon": "Library"
+        }
+      ]
+    },
+    {
       "id": "admin",
       "label": "Administration",
       "items": [
@@ -99,6 +111,12 @@
           "title": "Service Configuration",
           "url": "/dashboard/configuration",
           "icon": "SlidersHorizontal"
+        },
+        {
+          "id": "dns-zone",
+          "title": "Domain Zone",
+          "url": "/dashboard/dns-zone",
+          "icon": "Globe"
         },
         {
           "id": "settings",

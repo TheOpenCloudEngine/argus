@@ -161,7 +161,7 @@ INSERT IGNORE INTO argus_configuration_filebrowser_extension (preview_id, extens
 -- Infrastructure configuration table
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS argus_configuration_infra (
+CREATE TABLE IF NOT EXISTS argus_configuration (
     id              INT             NOT NULL AUTO_INCREMENT PRIMARY KEY,
     category        VARCHAR(50)     NOT NULL                COMMENT 'Category grouping (e.g. domain, powerdns)',
     config_key      VARCHAR(100)    NOT NULL UNIQUE         COMMENT 'Unique setting key',
@@ -172,15 +172,15 @@ CREATE TABLE IF NOT EXISTS argus_configuration_infra (
 ) COMMENT='Infrastructure configuration (key-value, grouped by category)';
 
 -- Seed Infrastructure configuration
-INSERT IGNORE INTO argus_configuration_infra (category, config_key, config_value, description) VALUES
+INSERT IGNORE INTO argus_configuration (category, config_key, config_value, description) VALUES
 ('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
 ('domain', 'dns_server_1',   '', 'Primary DNS server'),
 ('domain', 'dns_server_2',   '', 'Secondary DNS server'),
 ('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
-('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
-('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
-('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
-('powerdns', 'pdns_server_id', '', 'PowerDNS server ID'),
+('domain', 'pdns_ip',        '', 'PowerDNS server IP address'),
+('domain', 'pdns_port',      '', 'PowerDNS server port'),
+('domain', 'pdns_api_key',   'Argus', 'PowerDNS API key'),
+('domain', 'pdns_admin_url', '', 'PowerDNS Admin web UI URL'),
 ('ldap', 'enable_ldap_auth',      'false',              'Enable LDAP authentication'),
 ('ldap', 'ldap_url',              'ldap://<SERVER>:389', 'LDAP/AD server URL'),
 ('ldap', 'enable_ldap_tls',       'false',              'Enable LDAP TLS'),
