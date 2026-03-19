@@ -34,12 +34,13 @@ export default function CatalogDetailsPage() {
 
   const hasDeletableSchemas = schemas.some((s) => s.name !== "default")
 
-  const filteredSchemas = useMemo(
-    () => appliedFilter
-      ? schemas.filter((s) => s.name.toLowerCase().includes(appliedFilter.toLowerCase()))
-      : schemas,
-    [schemas, appliedFilter],
-  )
+  const filteredSchemas = useMemo(() => {
+    if (!appliedFilter) return schemas
+    const q = appliedFilter.toLowerCase()
+    return schemas.filter(
+      (s) => s.name.toLowerCase().includes(q) || (s.owner ?? "").toLowerCase().includes(q),
+    )
+  }, [schemas, appliedFilter])
 
   function applyFilter(value: string) {
     setAppliedFilter(value)
@@ -135,6 +136,12 @@ export default function CatalogDetailsPage() {
               emptyMessage={appliedFilter ? "No schemas matching the filter." : "No schemas in this catalog."}
               nameIcon={<Database className="h-4 w-4 text-muted-foreground" />}
               getHref={(s) => `/dashboard/unity-catalog/schemas/${catalogName}/${s.name}`}
+              extraColumns={[
+                {
+                  header: "Owner",
+                  cell: (s) => <span className="text-muted-foreground">{s.owner ?? "-"}</span>,
+                },
+              ]}
             />
           </div>
         </UCDetailsLayout>
