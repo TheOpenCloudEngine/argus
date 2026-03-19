@@ -80,6 +80,22 @@ class UnityCatalogInitResponse(BaseModel):
     message: str
 
 
+class ObjectStorageTestRequest(BaseModel):
+    """Request to test Object Storage connectivity by listing buckets."""
+
+    endpoint: str = Field(description="S3-compatible endpoint URL")
+    access_key: str = Field(default="", description="Access key")
+    secret_key: str = Field(default="", description="Secret key")
+    region: str = Field(default="us-east-1", description="Region")
+
+
+class ObjectStorageTestResponse(BaseModel):
+    """Response from Object Storage connectivity test."""
+
+    success: bool
+    message: str
+
+
 class CheckPathRequest(BaseModel):
     """Request to check if a file path exists on the server."""
 

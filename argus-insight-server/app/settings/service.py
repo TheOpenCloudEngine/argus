@@ -54,6 +54,45 @@ async def update_infra_category(
     logger.info("UpdateInfraCategory: category=%s keys=%s", category, list(items.keys()))
 
 
+async def test_object_storage(
+    endpoint: str, access_key: str, secret_key: str, region: str,
+) -> dict[str, object]:
+    """Test Object Storage connectivity by listing buckets."""
+    import aioboto3
+
+    endpoint_url = endpoint.rstrip("/")
+
+    try:
+        session = aioboto3.Session()
+        async with session.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region or "us-east-1",
+            verify=False,
+        ) as client:
+            resp = await client.list_buckets()
+            buckets = resp.get("Buckets", [])
+            names = [b["Name"] for b in buckets]
+            return {
+                "success": True,
+                "message": f"Connection successful. Found {len(names)} bucket(s): {', '.join(names)}"
+                if names
+                else "Connection successful. No buckets found.",
+            }
+    except Exception as exc:
+        msg = str(exc)
+        if "ConnectError" in type(exc).__name__ or "ConnectionError" in type(exc).__name__:
+            return {"success": False, "message": f"Cannot connect to {endpoint_url}"}
+        if "InvalidAccessKeyId" in msg or "SignatureDoesNotMatch" in msg:
+            return {
+                "success": False,
+                "message": "Authentication failed. Please check your Access Key and Secret Key.",
+            }
+        return {"success": False, "message": msg}
+
+
 async def test_docker_registry(url: str, username: str, password: str) -> dict[str, object]:
     """Test connectivity to a Docker Registry by calling /v2/ and /v2/_catalog."""
     base_url = url.rstrip("/")

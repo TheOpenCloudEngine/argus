@@ -14,6 +14,8 @@ from app.settings.schemas import (
     DockerRegistryTestRequest,
     DockerRegistryTestResponse,
     InfraConfigResponse,
+    ObjectStorageTestRequest,
+    ObjectStorageTestResponse,
     UnityCatalogInitRequest,
     UnityCatalogInitResponse,
     UnityCatalogTestRequest,
@@ -44,6 +46,15 @@ async def update_category(
         await service.update_infra_category(session, body.category, body.items)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/object-storage/test", response_model=ObjectStorageTestResponse)
+async def test_object_storage(body: ObjectStorageTestRequest) -> ObjectStorageTestResponse:
+    """Test Object Storage connectivity by listing buckets."""
+    result = await service.test_object_storage(
+        body.endpoint, body.access_key, body.secret_key, body.region,
+    )
+    return ObjectStorageTestResponse(**result)
 
 
 @router.post("/docker-registry/test", response_model=DockerRegistryTestResponse)
