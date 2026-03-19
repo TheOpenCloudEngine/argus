@@ -8,7 +8,7 @@
 "use client"
 
 import { type Row } from "@tanstack/react-table"
-import { Ban, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { Ban, CheckCircle, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -30,7 +30,9 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { setOpen, setCurrentRow, refreshRecords } = useDnsZone()
   const record = row.original
 
-  async function handleDisable() {
+  const isDisabled = record.disabled
+
+  async function handleToggleStatus() {
     try {
       await updateZoneRecords([
         {
@@ -38,12 +40,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           type: record.type,
           ttl: record.ttl,
           changetype: "REPLACE",
-          records: [{ content: record.content, disabled: true }],
+          records: [{ content: record.content, disabled: !isDisabled }],
         },
       ])
       await refreshRecords()
     } catch (err) {
-      console.error("Failed to disable record:", err)
+      console.error("Failed to toggle record status:", err)
     }
   }
 
@@ -84,10 +86,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleDisable}>
-          Disable
+        <DropdownMenuItem onClick={handleToggleStatus}>
+          {isDisabled ? "Enable" : "Disable"}
           <span className="ml-auto">
-            <Ban size={16} />
+            {isDisabled ? <CheckCircle size={16} /> : <Ban size={16} />}
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
