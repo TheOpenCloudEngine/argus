@@ -105,7 +105,7 @@ export default function CatalogDetailsPage() {
         open={createSchemaOpen}
         onOpenChange={setCreateSchemaOpen}
         catalogName={catalogName}
-        onSuccess={loadData}
+        onSuccess={() => { loadData(); dispatchUcRefresh() }}
       />
       <UCDeleteSchemaDialog
         open={deleteOpen}
