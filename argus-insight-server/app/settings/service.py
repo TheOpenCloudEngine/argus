@@ -54,6 +54,49 @@ async def update_infra_category(
     logger.info("UpdateInfraCategory: category=%s keys=%s", category, list(items.keys()))
 
 
+async def initialize_object_storage(
+    endpoint: str, access_key: str, secret_key: str, region: str,
+) -> dict[str, object]:
+    """Initialize Object Storage by ensuring the 'global' bucket exists."""
+    import aioboto3
+
+    endpoint_url = endpoint.rstrip("/")
+    bucket_name = "global"
+
+    try:
+        session = aioboto3.Session()
+        async with session.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region or "us-east-1",
+            verify=False,
+        ) as client:
+            resp = await client.list_buckets()
+            buckets = [b["Name"] for b in resp.get("Buckets", [])]
+
+            if bucket_name in buckets:
+                return {
+                    "success": True,
+                    "message": f"Bucket '{bucket_name}' already exists. No action needed.",
+                }
+
+            await client.create_bucket(Bucket=bucket_name)
+            return {
+                "success": True,
+                "message": f"Bucket '{bucket_name}' created successfully.",
+            }
+    except Exception as exc:
+        msg = str(exc)
+        if "InvalidAccessKeyId" in msg or "SignatureDoesNotMatch" in msg:
+            return {
+                "success": False,
+                "message": "Authentication failed. Please check your Access Key and Secret Key.",
+            }
+        return {"success": False, "message": msg}
+
+
 async def test_object_storage(
     endpoint: str, access_key: str, secret_key: str, region: str,
 ) -> dict[str, object]:

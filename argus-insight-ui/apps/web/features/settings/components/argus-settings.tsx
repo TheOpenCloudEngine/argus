@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import {
   fetchArgusConfig,
+  initializeObjectStorage,
   initializeUnityCatalog,
   testDockerRegistry,
   testObjectStorage,
@@ -36,6 +37,7 @@ export function ArgusSettings() {
   const [osPresignedUrlExpiry, setOsPresignedUrlExpiry] = useState("3600")
   const [osSaving, setOsSaving] = useState(false)
   const [osTesting, setOsTesting] = useState(false)
+  const [osInitializing, setOsInitializing] = useState(false)
   const [showOsSecretKey, setShowOsSecretKey] = useState(false)
   const [osStatusMessage, setOsStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [osTestResult, setOsTestResult] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -136,6 +138,23 @@ export function ArgusSettings() {
       setOsTestResult({ type: "error", text: err instanceof Error ? err.message : "Test failed" })
     } finally {
       setOsTesting(false)
+    }
+  }
+
+  async function handleOsInitialize() {
+    setOsInitializing(true)
+    setOsTestResult(null)
+    try {
+      const result = await initializeObjectStorage(osEndpointTrimmed, osAccessKey.trim(), osSecretKey.trim(), osRegion.trim())
+      if (result.success) {
+        setOsTestResult({ type: "success", text: result.message || "Object Storage initialized successfully" })
+      } else {
+        setOsTestResult({ type: "error", text: result.message || "Initialization failed" })
+      }
+    } catch (err) {
+      setOsTestResult({ type: "error", text: err instanceof Error ? err.message : "Initialization failed" })
+    } finally {
+      setOsInitializing(false)
     }
   }
 
@@ -304,6 +323,14 @@ export function ArgusSettings() {
                   <Play className="h-4 w-4 mr-1.5" />
                 )}
                 Test
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleOsInitialize} disabled={osInitializing || !canSaveOs}>
+                {osInitializing ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                ) : (
+                  <Rocket className="h-4 w-4 mr-1.5" />
+                )}
+                Initialize
               </Button>
             </div>
           </div>

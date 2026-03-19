@@ -14,6 +14,8 @@ from app.settings.schemas import (
     DockerRegistryTestRequest,
     DockerRegistryTestResponse,
     InfraConfigResponse,
+    ObjectStorageInitRequest,
+    ObjectStorageInitResponse,
     ObjectStorageTestRequest,
     ObjectStorageTestResponse,
     UnityCatalogInitRequest,
@@ -55,6 +57,15 @@ async def test_object_storage(body: ObjectStorageTestRequest) -> ObjectStorageTe
         body.endpoint, body.access_key, body.secret_key, body.region,
     )
     return ObjectStorageTestResponse(**result)
+
+
+@router.post("/object-storage/initialize", response_model=ObjectStorageInitResponse)
+async def initialize_object_storage(body: ObjectStorageInitRequest) -> ObjectStorageInitResponse:
+    """Initialize Object Storage by ensuring the 'global' bucket exists."""
+    result = await service.initialize_object_storage(
+        body.endpoint, body.access_key, body.secret_key, body.region,
+    )
+    return ObjectStorageInitResponse(**result)
 
 
 @router.post("/docker-registry/test", response_model=DockerRegistryTestResponse)
