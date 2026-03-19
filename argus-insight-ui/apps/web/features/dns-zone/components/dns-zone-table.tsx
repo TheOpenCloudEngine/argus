@@ -1,7 +1,8 @@
 /**
  * DNS Zone Data Table component.
  *
- * Renders the DNS records table with client-side filtering and sorting.
+ * Renders the DNS records table with client-side filtering, sorting,
+ * and row selection for bulk operations.
  * Search filters on name and content columns with 3-second debounce.
  */
 
@@ -11,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   type ColumnFiltersState,
   type FilterFn,
+  type RowSelectionState,
   type SortingState,
   type VisibilityState,
   flexRender,
@@ -31,11 +33,12 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
-import { DataTableToolbar } from "@/components/data-table"
+import { DataTableBulkActions, DataTableToolbar } from "@/components/data-table"
 import { recordStatuses, recordTypes } from "../data/data"
 import { type DnsRecord } from "../data/schema"
 import { dnsZoneColumns as columns } from "./dns-zone-columns"
-import { DnsZoneAddButton } from "./dns-zone-add-button"
+import { DnsZoneAddButton, DnsZoneDeleteButton } from "./dns-zone-add-button"
+import { useDnsZone } from "./dns-zone-provider"
 
 /** Custom global filter: match name or content fields only. */
 const nameContentFilter: FilterFn<DnsRecord> = (row, _columnId, filterValue) => {
@@ -51,10 +54,12 @@ type DnsZoneTableProps = {
 }
 
 export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
+  const { setSelectedRecords } = useDnsZone()
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [globalFilter, setGlobalFilter] = useState("")
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const table = useReactTable({
@@ -65,18 +70,26 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
       columnFilters,
       columnVisibility,
       globalFilter,
+      rowSelection,
     },
+    enableRowSelection: true,
     globalFilterFn: nameContentFilter,
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+
+  // Sync selected rows to provider context
+  useEffect(() => {
+    setSelectedRecords(table.getSelectedRowModel().rows.map((row) => row.original))
+  }, [rowSelection])
 
   // Debounce: apply global filter 3 seconds after last input change
   useEffect(() => {
@@ -112,7 +125,12 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
           },
         ]}
         onClear={handleClear}
-        extraActions={<DnsZoneAddButton />}
+        extraActions={
+          <>
+            <DnsZoneDeleteButton />
+            <DnsZoneAddButton />
+          </>
+        }
       />
 
       <div className="overflow-hidden rounded-md border">
@@ -173,6 +191,8 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
         </Table>
       </div>
 
+      {/* Bulk actions bar: appears when one or more rows are selected */}
+      <DataTableBulkActions table={table} entityName="record" />
     </div>
   )
 }

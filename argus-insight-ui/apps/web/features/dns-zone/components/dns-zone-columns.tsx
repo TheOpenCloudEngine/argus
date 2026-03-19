@@ -1,7 +1,7 @@
 /**
  * TanStack Table column definitions for the DNS Zone table.
  *
- * Columns: Name, Type, Status, TTL, Data, Comment, Action.
+ * Columns: Select, Name, Type, Status, TTL, Data, Comment, Action.
  */
 
 "use client"
@@ -10,6 +10,7 @@ import { type ColumnDef } from "@tanstack/react-table"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Badge } from "@workspace/ui/components/badge"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { DataTableColumnHeader } from "@/components/data-table/column-header"
 import { LongText } from "@/components/long-text"
 import { statusStyles } from "../data/data"
@@ -17,9 +18,35 @@ import { type DnsRecord } from "../data/schema"
 import { DataTableRowActions } from "./data-table-row-actions"
 
 export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
-  /**
-   * Name column — the DNS record name (e.g. "www.example.com.").
-   */
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+        className="translate-y-[2px]"
+      />
+    ),
+    meta: {
+      className: cn("w-12 max-w-12"),
+    },
+    cell: ({ row }) => (
+      <div onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "name",
     header: ({ column }) => (
@@ -31,10 +58,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
     },
     enableHiding: false,
   },
-  /**
-   * Type column — the DNS record type (A, AAAA, CNAME, MX, etc.).
-   * Supports faceted filtering.
-   */
   {
     accessorKey: "type",
     header: ({ column }) => (
@@ -50,10 +73,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
     },
     enableHiding: false,
   },
-  /**
-   * Status column — Enabled or Disabled.
-   * Derived from the `disabled` boolean field.
-   */
   {
     id: "status",
     accessorFn: (row) => (row.disabled ? "disabled" : "enabled"),
@@ -76,9 +95,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
     },
     enableSorting: false,
   },
-  /**
-   * TTL column — Time to Live in seconds.
-   */
   {
     accessorKey: "ttl",
     header: ({ column }) => (
@@ -88,9 +104,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
       <div className="text-center tabular-nums">{row.getValue("ttl")}</div>
     ),
   },
-  /**
-   * Data column — the record content (IP address, hostname, etc.).
-   */
   {
     accessorKey: "content",
     header: ({ column }) => (
@@ -101,9 +114,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
     ),
     enableSorting: false,
   },
-  /**
-   * Comment column — optional comment on the RRset.
-   */
   {
     accessorKey: "comment",
     header: ({ column }) => (
@@ -116,9 +126,6 @@ export const dnsZoneColumns: ColumnDef<DnsRecord>[] = [
     },
     enableSorting: false,
   },
-  /**
-   * Action column — row-level dropdown menu (Edit, Delete).
-   */
   {
     id: "actions",
     cell: DataTableRowActions,

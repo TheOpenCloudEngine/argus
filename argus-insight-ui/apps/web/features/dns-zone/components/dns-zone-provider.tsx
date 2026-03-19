@@ -20,7 +20,7 @@ import useDialogState from "@/hooks/use-dialog-state"
 import { checkDnsHealth, createZone, fetchZoneRecords } from "../api"
 import { type DnsRecord } from "../data/schema"
 
-type DnsZoneDialogType = "add" | "edit" | "delete"
+type DnsZoneDialogType = "add" | "edit" | "delete" | "bulk-delete"
 
 export type HealthStatus =
   | "checking"
@@ -36,6 +36,8 @@ type DnsZoneContextType = {
   setCurrentRow: React.Dispatch<React.SetStateAction<DnsRecord | null>>
   selectedRecordType: string
   setSelectedRecordType: (type: string) => void
+  selectedRecords: DnsRecord[]
+  setSelectedRecords: React.Dispatch<React.SetStateAction<DnsRecord[]>>
   records: DnsRecord[]
   zone: string
   isLoading: boolean
@@ -53,6 +55,7 @@ export function DnsZoneProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useDialogState<DnsZoneDialogType>(null)
   const [currentRow, setCurrentRow] = useState<DnsRecord | null>(null)
   const [selectedRecordType, setSelectedRecordType] = useState("")
+  const [selectedRecords, setSelectedRecords] = useState<DnsRecord[]>([])
   const [records, setRecords] = useState<DnsRecord[]>([])
   const [zone, setZone] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -140,6 +143,7 @@ export function DnsZoneProvider({ children }: { children: React.ReactNode }) {
       open, setOpen,
       currentRow, setCurrentRow,
       selectedRecordType, setSelectedRecordType,
+      selectedRecords, setSelectedRecords,
       records, zone, isLoading, error,
       healthStatus, healthError,
       refreshRecords,

@@ -1,7 +1,5 @@
 /**
  * Static data for DNS Zone feature.
- *
- * Record type options for faceted filtering and status badge styles.
  */
 
 export const recordTypes = [
@@ -21,8 +19,19 @@ export const recordStatuses = [
   { label: "Disabled", value: "disabled" },
 ] as const
 
-/** Badge CSS classes keyed by disabled state. */
 export const statusStyles = new Map<string, string>([
   ["enabled", "bg-primary/10 text-primary border-primary/30"],
   ["disabled", "bg-destructive/10 text-destructive border-destructive/10"],
 ])
+
+/** Descriptions for each record type (used in tooltips). */
+export const recordTypeDescriptions: Record<string, string> = {
+  A: "Maps a domain name to an IPv4 address",
+  AAAA: "Maps a domain name to an IPv6 address",
+  CNAME: "Creates an alias pointing to another domain name",
+  MX: "Specifies the mail server for accepting email",
+  TXT: "Holds arbitrary text data (SPF, DKIM, etc.)",
+  NS: "Delegates a DNS zone to an authoritative name server",
+  PTR: "Maps an IP address back to a domain name (reverse DNS)",
+  SRV: "Specifies the location of a service (host, port, priority)",
+}

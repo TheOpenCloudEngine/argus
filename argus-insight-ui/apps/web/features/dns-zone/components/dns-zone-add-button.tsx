@@ -1,13 +1,10 @@
 /**
- * Add Record dropdown button.
- *
- * Displays a dropdown menu with DNS record types (A, AAAA, CNAME, etc.).
- * Selecting a type opens the add record dialog with the appropriate form.
+ * Add Record dropdown button and Delete Records button.
  */
 
 "use client"
 
-import { Plus } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -16,7 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { recordTypes } from "../data/data"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@workspace/ui/components/tooltip"
+import { recordTypes, recordTypeDescriptions } from "../data/data"
 import { useDnsZone } from "./dns-zone-provider"
 
 export function DnsZoneAddButton() {
@@ -30,19 +33,50 @@ export function DnsZoneAddButton() {
           Add Record
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[140px]">
-        {recordTypes.map((type) => (
-          <DropdownMenuItem
-            key={type.value}
-            onClick={() => {
-              setSelectedRecordType(type.value)
-              setOpen("add")
-            }}
-          >
-            {type.label}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" className="w-[200px]">
+        <TooltipProvider delayDuration={300}>
+          {recordTypes
+            .filter((t) => t.value !== "SOA")
+            .map((type) => (
+              <Tooltip key={type.value}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedRecordType(type.value)
+                      setOpen("add")
+                    }}
+                  >
+                    <span className="font-medium w-14">{type.label}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {recordTypeDescriptions[type.value]?.split(" ").slice(0, 4).join(" ")}...
+                    </span>
+                  </DropdownMenuItem>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-[250px]">
+                  <p className="text-xs">{recordTypeDescriptions[type.value]}</p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+        </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+export function DnsZoneDeleteButton() {
+  const { selectedRecords, setOpen } = useDnsZone()
+  const hasSelection = selectedRecords.length > 0
+
+  return (
+    <Button
+      size="sm"
+      variant="destructive"
+      className="h-8"
+      disabled={!hasSelection}
+      onClick={() => setOpen("bulk-delete")}
+    >
+      <Trash2 className="mr-1.5 h-4 w-4" />
+      Delete Records
+    </Button>
   )
 }
