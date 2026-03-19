@@ -33,7 +33,7 @@ export function DnsZoneAddButton() {
           Add Record
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[200px]">
+      <DropdownMenuContent align="end" className="w-[140px]">
         <TooltipProvider delayDuration={300}>
           {recordTypes
             .filter((t) => t.value !== "SOA")
@@ -46,10 +46,7 @@ export function DnsZoneAddButton() {
                       setOpen("add")
                     }}
                   >
-                    <span className="font-medium w-14">{type.label}</span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {recordTypeDescriptions[type.value]?.split(" ").slice(0, 4).join(" ")}...
-                    </span>
+                    {type.label}
                   </DropdownMenuItem>
                 </TooltipTrigger>
                 <TooltipContent side="left" className="max-w-[250px]">
