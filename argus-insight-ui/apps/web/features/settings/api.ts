@@ -374,6 +374,24 @@ export async function testObjectStorage(
   return res.json()
 }
 
+export async function initializeObjectStorage(
+  endpoint: string,
+  accessKey: string,
+  secretKey: string,
+  region: string,
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${BASE}/object-storage/initialize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint, access_key: accessKey, secret_key: secretKey, region }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: `Initialize failed: ${res.status}` }))
+    throw new Error(data.detail || `Initialize failed: ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function testDockerRegistry(
   url: string,
   username: string,

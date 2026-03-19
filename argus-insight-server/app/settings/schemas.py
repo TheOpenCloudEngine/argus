@@ -96,6 +96,22 @@ class ObjectStorageTestResponse(BaseModel):
     message: str
 
 
+class ObjectStorageInitRequest(BaseModel):
+    """Request to initialize Object Storage (ensure 'global' bucket exists)."""
+
+    endpoint: str = Field(description="S3-compatible endpoint URL")
+    access_key: str = Field(default="", description="Access key")
+    secret_key: str = Field(default="", description="Secret key")
+    region: str = Field(default="us-east-1", description="Region")
+
+
+class ObjectStorageInitResponse(BaseModel):
+    """Response from Object Storage initialization."""
+
+    success: bool
+    message: str
+
+
 class CheckPathRequest(BaseModel):
     """Request to check if a file path exists on the server."""
 
