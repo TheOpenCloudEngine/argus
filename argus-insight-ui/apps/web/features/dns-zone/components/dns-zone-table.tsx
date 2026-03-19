@@ -1,8 +1,7 @@
 /**
  * DNS Zone Data Table component.
  *
- * Renders the DNS records table with client-side pagination, filtering,
- * and sorting. Built on TanStack React Table v8.
+ * Renders the DNS records table with client-side filtering and sorting. Built on TanStack React Table v8.
  */
 
 "use client"
@@ -17,7 +16,6 @@ import {
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
@@ -31,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
-import { DataTablePagination, DataTableToolbar } from "@/components/data-table"
+import { DataTableToolbar } from "@/components/data-table"
 import { recordStatuses, recordTypes } from "../data/data"
 import { type DnsRecord } from "../data/schema"
 import { dnsZoneColumns as columns } from "./dns-zone-columns"
@@ -60,7 +58,6 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
@@ -149,7 +146,6 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
         </Table>
       </div>
 
-      <DataTablePagination table={table} className="mt-auto" />
     </div>
   )
 }
