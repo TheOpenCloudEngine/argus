@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.models import ArgusConfiguration
+from app.settings.models import ArgusConfiguration
 
 logger = logging.getLogger(__name__)
 

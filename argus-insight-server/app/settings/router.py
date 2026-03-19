@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.config import service
-from app.config.schemas import (
+from app.settings import service
+from app.settings.schemas import (
     CheckPathRequest,
     CheckPathResponse,
     InfraConfigResponse,
@@ -17,7 +17,7 @@ from app.config.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/config", tags=["config"])
+router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 @router.get("/configuration", response_model=InfraConfigResponse)

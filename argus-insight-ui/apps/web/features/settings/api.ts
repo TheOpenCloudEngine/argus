@@ -1,4 +1,4 @@
-const BASE = "/api/v1/config"
+const BASE = "/api/v1/settings"
 const SECURITY_BASE = "/api/v1/security"
 
 // --------------------------------------------------------------------------- //
