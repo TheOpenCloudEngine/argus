@@ -5,6 +5,7 @@ import {
   Cpu,
   Download,
   FileText,
+  Flame,
   Globe,
   HardDrive,
   Info,
@@ -168,6 +169,11 @@ export function ServersInspectDialog({
     html += field("Hostname", hn?.hostname)
     html += field("FQDN", hn?.fqdn)
     html += field("Hostname == FQDN", hn?.is_consistent ? "YES" : "NO")
+    html += sectionEnd
+
+    // Firewall
+    html += sectionStart("Firewall")
+    html += field("Firewall Enabled?", data.firewall_enabled ? "ENABLED" : "DISABLED")
     html += sectionEnd
 
     // Network
@@ -338,7 +344,22 @@ export function ServersInspectDialog({
               />
             </Section>
 
-            {/* 2. Network */}
+            {/* 2. Firewall */}
+            <Section icon={Flame} title="Firewall">
+              <Field
+                label="Firewall Enabled?"
+                value={
+                  <Badge
+                    variant={data?.firewall_enabled ? "destructive" : "default"}
+                    className={data?.firewall_enabled ? "" : "bg-blue-500 hover:bg-blue-600 text-white"}
+                  >
+                    {data?.firewall_enabled ? "ENABLED" : "DISABLED"}
+                  </Badge>
+                }
+              />
+            </Section>
+
+            {/* 3. Network */}
             <Section icon={Network} title="Network">
               {ipAddresses.map((ip: any, i: number) => (
                 <Field key={i} label={ip.interface} value={ip.address} mono />
