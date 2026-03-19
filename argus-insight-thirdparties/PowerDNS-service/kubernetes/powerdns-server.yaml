@@ -92,7 +92,7 @@ metadata:
     app.kubernetes.io/name: powerdns-server
     app.kubernetes.io/part-of: argus-insight
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
     - name: dns-udp
       port: 53
