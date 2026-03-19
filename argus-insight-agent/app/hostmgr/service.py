@@ -526,6 +526,7 @@ async def inspect_host() -> InspectResult:
         ps_result,
         ifconfig_result,
         uname_result,
+        firewall_result,
     ) = await asyncio.gather(
         _run("hostname"),
         _run("hostname -f"),
@@ -533,6 +534,11 @@ async def inspect_host() -> InspectResult:
         _run("ps -ef"),
         _run("ifconfig -a 2>/dev/null || ip addr show"),
         _run("uname -a"),
+        _run(
+            "systemctl is-active firewalld 2>/dev/null"
+            " || ufw status 2>/dev/null"
+            " || iptables -L -n 2>/dev/null"
+        ),
     )
 
     # 1. Hostname & IP addresses
@@ -581,6 +587,10 @@ async def inspect_host() -> InspectResult:
     # 12. /etc/hosts
     etc_hosts = _read_file_safe(HOSTS_FILE)
 
+    # 13. Firewall status
+    fw_out = (firewall_result[1] or "").strip()
+    firewall_enabled = fw_out == "active" or "Status: active" in fw_out
+
     logger.info("Host inspection completed")
 
     return InspectResult(
@@ -594,6 +604,7 @@ async def inspect_host() -> InspectResult:
         ulimits=ulimits,
         sysctl_conf=sysctl_conf,
         network_interfaces=network_interfaces,
+        firewall_enabled=firewall_enabled,
         uname=uname,
         etc_passwd=etc_passwd,
         etc_hosts=etc_hosts,
