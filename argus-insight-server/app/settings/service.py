@@ -1,6 +1,5 @@
 """Infrastructure configuration service."""
 
-import base64
 import logging
 from collections import defaultdict
 
@@ -56,33 +55,40 @@ async def update_infra_category(
 
 
 async def test_docker_registry(url: str, username: str, password: str) -> dict[str, object]:
-    """Test connectivity to a Docker Registry by calling its /v2/_catalog endpoint."""
+    """Test connectivity to a Docker Registry by calling /v2/ and /v2/_catalog."""
     base_url = url.rstrip("/")
-    v2_url = f"{base_url}/v2/_catalog"
 
-    headers: dict[str, str] = {}
-    if username and password:
-        credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-        headers["Authorization"] = f"Basic {credentials}"
+    auth = httpx.BasicAuth(username, password) if username and password else None
 
     try:
-        async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
-            resp = await client.get(v2_url, headers=headers)
+        async with httpx.AsyncClient(verify=False, timeout=10.0, auth=auth) as client:
+            # Step 1: Verify connectivity and authentication via /v2/
+            v2_resp = await client.get(f"{base_url}/v2/")
+            if v2_resp.status_code == 401:
+                return {
+                    "success": False,
+                    "message": "Authentication failed. Please check your username and password.",
+                }
+            if v2_resp.status_code != 200:
+                return {
+                    "success": False,
+                    "message": f"Registry returned status {v2_resp.status_code}",
+                }
+
+            # Step 2: Verify catalog access via /v2/_catalog
+            catalog_resp = await client.get(f"{base_url}/v2/_catalog")
+            if catalog_resp.status_code == 200:
+                return {"success": True, "message": "Docker Registry connection successful"}
+            return {
+                "success": False,
+                "message": f"Registry /v2/_catalog returned status {catalog_resp.status_code}",
+            }
     except httpx.ConnectError:
         return {"success": False, "message": f"Cannot connect to {base_url}"}
     except httpx.TimeoutException:
         return {"success": False, "message": f"Connection to {base_url} timed out"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
-
-    if resp.status_code == 200:
-        return {"success": True, "message": "Docker Registry connection successful"}
-    if resp.status_code == 401:
-        return {
-            "success": False,
-            "message": "Authentication failed. Please check your username and password.",
-        }
-    return {"success": False, "message": f"Registry returned status {resp.status_code}"}
 
 
 async def seed_infra_config(session: AsyncSession) -> None:
