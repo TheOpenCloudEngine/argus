@@ -56,9 +56,9 @@ async def update_infra_category(
 
 
 async def test_docker_registry(url: str, username: str, password: str) -> dict[str, object]:
-    """Test connectivity to a Docker Registry by calling its /v2/ endpoint."""
+    """Test connectivity to a Docker Registry by calling its /v2/_catalog endpoint."""
     base_url = url.rstrip("/")
-    v2_url = f"{base_url}/v2/"
+    v2_url = f"{base_url}/v2/_catalog"
 
     headers: dict[str, str] = {}
     if username and password:
