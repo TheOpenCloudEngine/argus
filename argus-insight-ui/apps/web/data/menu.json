@@ -45,12 +45,6 @@
           "title": "My Notes",
           "url": "/dashboard/notes",
           "icon": "BookOpen"
-        },
-        {
-          "id": "catalogs",
-          "title": "Catalog",
-          "url": "/dashboard/unity-catalog",
-          "icon": "Library"
         }
       ]
     },
@@ -75,18 +69,6 @@
           "title": "Event Logs",
           "url": "/dashboard/events",
           "icon": "Zap"
-        }
-      ]
-    },
-    {
-      "id": "unity-catalog",
-      "label": "Unity Catalog",
-      "items": [
-        {
-          "id": "catalogs",
-          "title": "Catalogs",
-          "url": "/dashboard/unity-catalog",
-          "icon": "Library"
         }
       ]
     },
