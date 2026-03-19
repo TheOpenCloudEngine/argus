@@ -227,7 +227,7 @@ function PowerDnsSettingsSection({
   onSave,
   saving,
 }: {
-  values: { ip: string; port: string; api_key: string; server_id: string; admin_url: string }
+  values: { ip: string; port: string; api_key: string; admin_url: string }
   onChange: (key: string, value: string) => void
   onSave: () => void
   saving: boolean
@@ -334,15 +334,6 @@ function PowerDnsSettingsSection({
               </button>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="pdns-server-id">Server ID</Label>
-            <Input
-              id="pdns-server-id"
-              value={values.server_id}
-              onChange={(e) => onChange("server_id", e.target.value)}
-              placeholder="e.g. localhost"
-            />
-          </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="pdns-admin-url">PowerDNS Admin URL</Label>
             <div className="flex gap-2">
@@ -390,7 +381,7 @@ export function DomainSettings() {
   const [dnsServers, setDnsServers] = useState<[string, string, string]>(["", "", ""])
 
   // PowerDNS state
-  const [pdns, setPdns] = useState({ ip: "", port: "", api_key: "", server_id: "", admin_url: "" })
+  const [pdns, setPdns] = useState({ ip: "", port: "", api_key: "", admin_url: "" })
 
   // Status messages
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -415,7 +406,6 @@ export function DomainSettings() {
         ip: powerdns.pdns_ip ?? "",
         port: powerdns.pdns_port ?? "",
         api_key: powerdns.pdns_api_key ?? "",
-        server_id: powerdns.pdns_server_id ?? "",
         admin_url: powerdns.pdns_admin_url ?? "",
       })
     } catch (err) {
@@ -473,7 +463,6 @@ export function DomainSettings() {
         pdns_ip: pdns.ip,
         pdns_port: pdns.port,
         pdns_api_key: pdns.api_key,
-        pdns_server_id: pdns.server_id,
         pdns_admin_url: pdns.admin_url,
       })
       showStatus("success", "PowerDNS settings saved successfully")

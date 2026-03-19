@@ -52,17 +52,16 @@ async def _get_pdns_settings(session: AsyncSession) -> dict[str, str]:
             ),
         )
 
-    # Default server_id to "localhost" if not set.
-    cfg.setdefault("pdns_server_id", "localhost")
-    if not cfg["pdns_server_id"]:
-        cfg["pdns_server_id"] = "localhost"
-
     return cfg
 
 
 def _build_base_url(cfg: dict[str, str]) -> str:
-    """Build the PowerDNS API base URL."""
-    return f"http://{cfg['pdns_ip']}:{cfg['pdns_port']}/api/v1/servers/{cfg['pdns_server_id']}"
+    """Build the PowerDNS API base URL.
+
+    The server_id is always 'localhost' in PowerDNS Authoritative Server.
+    See: https://doc.powerdns.com/authoritative/http-api/server.html
+    """
+    return f"http://{cfg['pdns_ip']}:{cfg['pdns_port']}/api/v1/servers/localhost"
 
 
 def _zone_id(domain_name: str) -> str:
@@ -220,8 +219,8 @@ async def check_health(session: AsyncSession) -> DnsHealthResponse:
             reachable=True,
             zone_exists=False,
             zone=cfg["domain_name"],
-            error=f"PowerDNS Server ID \'{cfg['pdns_server_id']}\' not found. "
-                  "Please check the Server ID in Settings > Domain > PowerDNS.",
+            error="PowerDNS zone listing failed (404). "
+                  "Please check the PowerDNS configuration.",
         )
 
     if zones_resp.status_code != 200:
