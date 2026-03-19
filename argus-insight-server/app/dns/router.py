@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.dns import service
 from app.dns.schemas import (
+    BindConfigResponse,
     DnsHealthResponse,
     DnsRecordUpdateRequest,
     DnsZoneCreateResponse,
@@ -41,6 +42,14 @@ async def get_zone_records(
 ) -> DnsZoneTableResponse:
     """Fetch all DNS records for the configured domain zone."""
     return await service.get_zone_records(session)
+
+
+@router.get("/zone/bind-config", response_model=BindConfigResponse)
+async def export_bind_config(
+    session: AsyncSession = Depends(get_session),
+) -> BindConfigResponse:
+    """Export DNS zone records as BIND configuration files."""
+    return await service.export_bind_config(session)
 
 
 @router.patch("/zone/records", status_code=204)

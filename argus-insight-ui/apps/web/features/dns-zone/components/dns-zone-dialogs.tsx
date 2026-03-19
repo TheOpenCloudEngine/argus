@@ -7,6 +7,7 @@
 "use client"
 
 import { DnsZoneAddDialog } from "./dns-zone-add-dialog"
+import { DnsZoneBindDialog } from "./dns-zone-bind-dialog"
 import { DnsZoneDeleteDialog } from "./dns-zone-delete-dialog"
 import { DnsZoneEditDialog } from "./dns-zone-edit-dialog"
 import { useDnsZone } from "./dns-zone-provider"
@@ -58,6 +59,12 @@ export function DnsZoneDialogs() {
         open={open === "bulk-delete"}
         onOpenChange={() => setOpen("bulk-delete")}
         records={selectedRecords}
+      />
+
+      {/* BIND Configuration Export dialog */}
+      <DnsZoneBindDialog
+        open={open === "bind-conf"}
+        onOpenChange={() => setOpen("bind-conf")}
       />
     </>
   )

@@ -4,7 +4,7 @@
 
 "use client"
 
-import { Plus, Trash2 } from "lucide-react"
+import { FileCode2, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -57,6 +57,21 @@ export function DnsZoneAddButton() {
         </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+export function DnsZoneBindConfButton() {
+  const { setOpen } = useDnsZone()
+
+  return (
+    <Button
+      size="sm"
+      className="h-8 bg-green-600 text-white hover:bg-green-700"
+      onClick={() => setOpen("bind-conf")}
+    >
+      <FileCode2 className="mr-1.5 h-4 w-4" />
+      Bind Conf
+    </Button>
   )
 }
 

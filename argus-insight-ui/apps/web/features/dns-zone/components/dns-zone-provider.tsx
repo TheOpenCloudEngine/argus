@@ -20,7 +20,7 @@ import useDialogState from "@/hooks/use-dialog-state"
 import { checkDnsHealth, createZone, fetchZoneRecords } from "../api"
 import { type DnsRecord } from "../data/schema"
 
-type DnsZoneDialogType = "add" | "edit" | "delete" | "bulk-delete"
+type DnsZoneDialogType = "add" | "edit" | "delete" | "bulk-delete" | "bind-conf"
 
 export type HealthStatus =
   | "checking"

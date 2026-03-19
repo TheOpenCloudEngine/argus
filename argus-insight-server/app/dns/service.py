@@ -14,6 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dns.schemas import (
+    BindConfigFile,
+    BindConfigResponse,
     DnsHealthResponse,
     DnsRecordRow,
     DnsRRsetPatch,
@@ -358,3 +360,93 @@ async def create_zone(session: AsyncSession) -> DnsZoneCreateResponse:
 
     logger.info("Zone created successfully: %s", cfg["domain_name"])
     return DnsZoneCreateResponse(zone=cfg["domain_name"], created=True)
+
+
+def _format_bind_record(name: str, ttl: int, rtype: str, content: str) -> str:
+    """Format a single DNS record as a BIND zone file line."""
+    return f"{name:<40s} {ttl:<8d} IN  {rtype:<8s} {content}"
+
+
+async def export_bind_config(session: AsyncSession) -> BindConfigResponse:
+    """Export DNS zone records as BIND configuration files.
+
+    Generates two files:
+    1. named.conf.local - Zone declaration
+    2. db.{zone} - Zone data file with all enabled records
+    """
+    cfg = await _get_pdns_settings(session)
+    domain_name = cfg["domain_name"]
+    zone_data = await get_zone_records(session)
+
+    # --- named.conf.local ---
+    named_conf = (
+        f'zone "{domain_name}" {{\n'
+        f"    type master;\n"
+        f'    file "/etc/bind/zones/db.{domain_name}";\n'
+        f"}};\n"
+    )
+
+    # --- db.{zone} ---
+    # Collect only enabled records
+    enabled = [r for r in zone_data.records if not r.disabled]
+
+    # Find SOA record
+    soa_record = next((r for r in enabled if r.type == "SOA"), None)
+
+    # Determine default TTL from SOA or fallback
+    default_ttl = soa_record.ttl if soa_record else 3600
+
+    lines: list[str] = []
+    lines.append(f"; BIND zone file for {domain_name}")
+    lines.append(f"; Exported from Argus Insight")
+    lines.append(f"")
+    lines.append(f"$TTL {default_ttl}")
+    lines.append(f"")
+
+    # SOA first
+    if soa_record:
+        lines.append(
+            _format_bind_record(soa_record.name, soa_record.ttl, "SOA", soa_record.content)
+        )
+        lines.append("")
+
+    # Group remaining records by type for readability
+    type_order = ["NS", "A", "AAAA", "CNAME", "MX", "TXT", "PTR", "SRV"]
+    other_records = [r for r in enabled if r.type != "SOA"]
+
+    # Sort: known types first in order, then others alphabetically
+    def sort_key(r: DnsRecordRow) -> tuple[int, str, str]:
+        try:
+            idx = type_order.index(r.type)
+        except ValueError:
+            idx = len(type_order)
+        return (idx, r.type, r.name)
+
+    other_records.sort(key=sort_key)
+
+    current_type = ""
+    for record in other_records:
+        if record.type != current_type:
+            if current_type:
+                lines.append("")
+            lines.append(f"; {record.type} Records")
+            current_type = record.type
+        lines.append(
+            _format_bind_record(record.name, record.ttl, record.type, record.content)
+        )
+
+    lines.append("")
+    zone_file_content = "\n".join(lines)
+
+    logger.info(
+        "Exported BIND config for zone %s: %d enabled records",
+        domain_name, len(enabled),
+    )
+
+    return BindConfigResponse(
+        zone=domain_name,
+        files=[
+            BindConfigFile(filename="named.conf.local", content=named_conf),
+            BindConfigFile(filename=f"db.{domain_name}", content=zone_file_content),
+        ],
+    )

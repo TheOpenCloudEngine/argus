@@ -50,6 +50,16 @@ export type DnsZoneCreateResponse = {
   created: boolean
 }
 
+export type BindConfigFile = {
+  filename: string
+  content: string
+}
+
+export type BindConfigResponse = {
+  zone: string
+  files: BindConfigFile[]
+}
+
 // --------------------------------------------------------------------------- //
 // API functions
 // --------------------------------------------------------------------------- //
@@ -88,6 +98,19 @@ export async function fetchZoneRecords(): Promise<DnsZoneTableResponse> {
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     const detail = body?.detail ?? `Failed to fetch zone records: ${res.status}`
+    throw new Error(detail)
+  }
+  return res.json()
+}
+
+/**
+ * Fetch BIND configuration files for the configured domain zone.
+ */
+export async function fetchBindConfig(): Promise<BindConfigResponse> {
+  const res = await fetch(`${BASE}/zone/bind-config`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const detail = body?.detail ?? `Failed to fetch bind config: ${res.status}`
     throw new Error(detail)
   }
   return res.json()

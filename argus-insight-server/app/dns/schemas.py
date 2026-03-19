@@ -72,3 +72,17 @@ class DnsZoneCreateResponse(BaseModel):
 
     zone: str
     created: bool
+
+
+class BindConfigFile(BaseModel):
+    """A single Bind configuration file."""
+
+    filename: str
+    content: str
+
+
+class BindConfigResponse(BaseModel):
+    """Response with Bind configuration files."""
+
+    zone: str
+    files: list[BindConfigFile]

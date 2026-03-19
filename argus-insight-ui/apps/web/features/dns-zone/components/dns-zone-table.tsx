@@ -39,7 +39,7 @@ import { DataTableBulkActions, DataTableToolbar } from "@/components/data-table"
 import { recordStatuses, recordTypes } from "../data/data"
 import { type DnsRecord } from "../data/schema"
 import { dnsZoneColumns as columns } from "./dns-zone-columns"
-import { DnsZoneAddButton, DnsZoneDeleteButton } from "./dns-zone-add-button"
+import { DnsZoneAddButton, DnsZoneBindConfButton, DnsZoneDeleteButton } from "./dns-zone-add-button"
 import { useDnsZone } from "./dns-zone-provider"
 
 /** Custom global filter: match name or content fields only. */
@@ -130,6 +130,7 @@ export function DnsZoneTable({ data, isLoading }: DnsZoneTableProps) {
         extraActions={
           <>
             <DnsZoneAddButton />
+            <DnsZoneBindConfButton />
             <DnsZoneDeleteButton />
           </>
         }
