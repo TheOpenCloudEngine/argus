@@ -78,7 +78,7 @@ async def test_docker_registry(url: str, username: str, password: str) -> dict[s
             # Step 2: Verify catalog access via /v2/_catalog
             catalog_resp = await client.get(f"{base_url}/v2/_catalog")
             if catalog_resp.status_code == 200:
-                return {"success": True, "message": "Docker Registry connection successful"}
+                return {"success": True, "message": "Zot Docker Registry connection successful"}
             return {
                 "success": False,
                 "message": f"Registry /v2/_catalog returned status {catalog_resp.status_code}",

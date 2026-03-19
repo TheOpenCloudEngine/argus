@@ -66,7 +66,7 @@ export function ArgusSettings() {
         docker_registry_username: username,
         docker_registry_password: password,
       })
-      showStatus("success", "Docker Registry settings saved successfully")
+      showStatus("success", "Zot Docker Registry settings saved successfully")
       await loadConfig()
     } catch (err) {
       showStatus("error", err instanceof Error ? err.message : "Failed to save")
@@ -81,7 +81,7 @@ export function ArgusSettings() {
     try {
       const result = await testDockerRegistry(urlTrimmed, usernameTrimmed, passwordTrimmed)
       if (result.success) {
-        setTestResult({ type: "success", text: result.message || "Docker Registry connection successful" })
+        setTestResult({ type: "success", text: result.message || "Zot Docker Registry connection successful" })
       } else {
         setTestResult({ type: "error", text: result.message || "Connection failed" })
       }
@@ -130,9 +130,9 @@ export function ArgusSettings() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Docker Registry</CardTitle>
+              <CardTitle>Zot Docker Registry</CardTitle>
               <CardDescription>
-                Docker Registry connection settings
+                Zot Docker Registry connection settings
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -170,7 +170,7 @@ export function ArgusSettings() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="docker-registry-url">
-                Docker Registry URL <span className="text-destructive">*</span>
+                Zot Docker Registry URL <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="docker-registry-url"
@@ -179,7 +179,7 @@ export function ArgusSettings() {
                 placeholder="e.g. https://registry.example.com"
               />
               <p className="text-xs text-muted-foreground">
-                Docker Registry server URL
+                Zot Docker Registry server URL
               </p>
             </div>
             <div className="space-y-2">
