@@ -8,7 +8,7 @@ from app.core.database import Base
 class ArgusConfiguration(Base):
     """Infrastructure configuration (key-value pairs).
 
-    Categories group related settings together (e.g. 'network').
+    Categories group related settings together (e.g. 'domain').
     """
 
     __tablename__ = "argus_configuration"

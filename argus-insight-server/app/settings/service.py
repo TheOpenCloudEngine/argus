@@ -56,16 +56,15 @@ async def update_infra_category(
 async def seed_infra_config(session: AsyncSession) -> None:
     """Seed default infrastructure configuration if not present."""
     defaults = [
-        # Network
-        ("network", "domain_name", "", "Domain name for this infrastructure"),
-        ("network", "dns_server_1", "", "Primary DNS server"),
-        ("network", "dns_server_2", "", "Secondary DNS server"),
-        ("network", "dns_server_3", "", "Tertiary DNS server"),
-        # PowerDNS
-        ("powerdns", "pdns_ip", "", "PowerDNS server IP address"),
-        ("powerdns", "pdns_port", "", "PowerDNS server port"),
-        ("powerdns", "pdns_api_key", "", "PowerDNS API key"),
-        ("powerdns", "pdns_server_id", "", "PowerDNS server ID"),
+        # Domain
+        ("domain", "domain_name", "", "Domain name for this infrastructure"),
+        ("domain", "dns_server_1", "", "Primary DNS server"),
+        ("domain", "dns_server_2", "", "Secondary DNS server"),
+        ("domain", "dns_server_3", "", "Tertiary DNS server"),
+        ("domain", "pdns_ip", "", "PowerDNS server IP address"),
+        ("domain", "pdns_port", "", "PowerDNS server port"),
+        ("domain", "pdns_api_key", "", "PowerDNS API key"),
+        ("domain", "pdns_server_id", "", "PowerDNS server ID"),
         # LDAP
         ("ldap", "enable_ldap_auth", "false", "Enable LDAP authentication"),
         ("ldap", "ldap_url", "ldap://<SERVER>:389", "LDAP/AD server URL"),

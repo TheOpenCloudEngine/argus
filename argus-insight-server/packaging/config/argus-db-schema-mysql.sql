@@ -173,14 +173,14 @@ CREATE TABLE IF NOT EXISTS argus_configuration (
 
 -- Seed Infrastructure configuration
 INSERT IGNORE INTO argus_configuration (category, config_key, config_value, description) VALUES
-('network', 'domain_name',    '', 'Domain name for this infrastructure'),
-('network', 'dns_server_1',   '', 'Primary DNS server'),
-('network', 'dns_server_2',   '', 'Secondary DNS server'),
-('network', 'dns_server_3',   '', 'Tertiary DNS server'),
-('powerdns', 'pdns_ip',        '', 'PowerDNS server IP address'),
-('powerdns', 'pdns_port',      '', 'PowerDNS server port'),
-('powerdns', 'pdns_api_key',   '', 'PowerDNS API key'),
-('powerdns', 'pdns_server_id', '', 'PowerDNS server ID'),
+('domain', 'domain_name',    '', 'Domain name for this infrastructure'),
+('domain', 'dns_server_1',   '', 'Primary DNS server'),
+('domain', 'dns_server_2',   '', 'Secondary DNS server'),
+('domain', 'dns_server_3',   '', 'Tertiary DNS server'),
+('domain', 'pdns_ip',        '', 'PowerDNS server IP address'),
+('domain', 'pdns_port',      '', 'PowerDNS server port'),
+('domain', 'pdns_api_key',   '', 'PowerDNS API key'),
+('domain', 'pdns_server_id', '', 'PowerDNS server ID'),
 ('ldap', 'enable_ldap_auth',      'false',              'Enable LDAP authentication'),
 ('ldap', 'ldap_url',              'ldap://<SERVER>:389', 'LDAP/AD server URL'),
 ('ldap', 'enable_ldap_tls',       'false',              'Enable LDAP TLS'),

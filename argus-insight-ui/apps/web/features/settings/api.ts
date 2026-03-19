@@ -70,11 +70,11 @@ async function updateCategory(
 // --------------------------------------------------------------------------- //
 
 export async function fetchDomainConfig(): Promise<Record<string, string>> {
-  return fetchCategory("network")
+  return fetchCategory("domain")
 }
 
 export async function updateDomainConfig(items: Record<string, string>): Promise<void> {
-  return updateCategory("network", items)
+  return updateCategory("domain", items)
 }
 
 // --------------------------------------------------------------------------- //
@@ -82,11 +82,11 @@ export async function updateDomainConfig(items: Record<string, string>): Promise
 // --------------------------------------------------------------------------- //
 
 export async function fetchPowerDnsConfig(): Promise<Record<string, string>> {
-  return fetchCategory("powerdns")
+  return fetchCategory("domain")
 }
 
 export async function updatePowerDnsConfig(items: Record<string, string>): Promise<void> {
-  return updateCategory("powerdns", items)
+  return updateCategory("domain", items)
 }
 
 // --------------------------------------------------------------------------- //
