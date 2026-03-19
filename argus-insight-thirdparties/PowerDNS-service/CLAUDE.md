@@ -60,7 +60,7 @@ make clean                       # dist/ 삭제
 
 # Docker Compose
 cd docker
-docker compose --env-file ../versions.env up --build -d
+docker compose --env-file versions.env up --build -d
 
 # Kubernetes
 kubectl apply -k kubernetes/
