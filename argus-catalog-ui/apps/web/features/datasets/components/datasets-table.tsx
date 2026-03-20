@@ -50,7 +50,7 @@ export function DatasetsTable({ data, isLoading }: DatasetsTableProps) {
     () =>
       platforms.map((p) => ({
         label: p.name,
-        value: p.type,
+        value: p.platform_id,
       })),
     [platforms]
   )

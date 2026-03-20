@@ -18,7 +18,7 @@ class Platform(Base):
     __tablename__ = "catalog_platforms"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    platform_id = Column(String(36), nullable=False, unique=True)
+    platform_id = Column(String(100), nullable=False, unique=True)
     name = Column(String(200), nullable=False)
     type = Column(String(100), nullable=False)
     logo_url = Column(String(500))

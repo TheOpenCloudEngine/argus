@@ -3,7 +3,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.catalog.schemas import (
     PlatformCreate,
     PlatformMetadataResponse,
     PlatformResponse,
+    PlatformUpdate,
     SchemaFieldCreate,
     SchemaFieldResponse,
     TagCreate,
@@ -62,6 +63,17 @@ async def list_platforms(session: AsyncSession = Depends(get_session)):
 async def create_platform(req: PlatformCreate, session: AsyncSession = Depends(get_session)):
     """Register a new data platform."""
     return await service.create_platform(session, req)
+
+
+@router.put("/platforms/{platform_id}", response_model=PlatformResponse)
+async def update_platform(
+    platform_id: int, req: PlatformUpdate, session: AsyncSession = Depends(get_session)
+):
+    """Update platform metadata (e.g. display name)."""
+    platform = await service.update_platform(session, platform_id, req)
+    if not platform:
+        raise HTTPException(status_code=404, detail="Platform not found")
+    return platform
 
 
 @router.get("/platforms/{platform_id}/metadata", response_model=PlatformMetadataResponse)
@@ -123,6 +135,41 @@ async def delete_platform(platform_id: int, session: AsyncSession = Depends(get_
     if not await service.delete_platform(session, platform_id):
         raise HTTPException(status_code=404, detail="Platform not found")
     return {"status": "ok", "message": "Platform deleted"}
+
+
+@router.post("/platforms/{platform_id}/sync")
+async def sync_platform(
+    request: Request,
+    platform_id: int,
+    database: str | None = Query(None, description="Specific database to sync (optional)"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Sync metadata from external platform into the catalog."""
+    platform = await service.get_platform(session, platform_id)
+    if not platform:
+        raise HTTPException(status_code=404, detail="Platform not found")
+
+    # Derive catalog base URL from the incoming request
+    catalog_url = f"{request.url.scheme}://{request.url.netloc}"
+
+    from app.catalog.sync import sync_platform_metadata
+    result = await sync_platform_metadata(
+        session, platform.platform_id, database, catalog_url=catalog_url,
+    )
+
+    if result.errors:
+        raise HTTPException(status_code=400, detail=result.errors[0])
+
+    return {
+        "status": "ok",
+        "platform_id": result.platform_id,
+        "databases_scanned": result.databases_scanned,
+        "tables_created": result.tables_created,
+        "tables_updated": result.tables_updated,
+        "tables_removed": result.tables_removed,
+        "tables_total": result.tables_total,
+        "samples_uploaded": result.samples_uploaded,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +238,7 @@ async def delete_glossary_term(term_id: int, session: AsyncSession = Depends(get
 @router.get("/datasets", response_model=PaginatedDatasets)
 async def list_datasets(
     search: str | None = Query(None, description="Search in name, description, URN"),
-    platform: str | None = Query(None, description="Filter by platform name"),
+    platform: str | None = Query(None, description="Filter by platform_id"),
     origin: str | None = Query(None, description="Filter by origin (PROD/DEV/STAGING)"),
     tag: str | None = Query(None, description="Filter by tag name"),
     status: str | None = Query(None, description="Filter by status"),
@@ -340,6 +387,11 @@ def _sample_dir(qualified_name: str):
     return settings.data_dir / "samples" / safe_name
 
 
+def _sample_dir_by_platform(platform_id: str, name: str):
+    """Resolve sample directory: data_dir/samples/{platform_id}/{name}/."""
+    return settings.data_dir / "samples" / platform_id / name
+
+
 def _sample_path(qualified_name: str):
     """Resolve sample CSV path under data_dir/samples/{qualified_name}/sample.csv."""
     return _sample_dir(qualified_name) / "sample.csv"
@@ -376,17 +428,96 @@ async def get_sample_data(
     dataset_id: int,
     session: AsyncSession = Depends(get_session),
 ):
-    """Download the sample CSV for a dataset."""
+    """Download sample data for a dataset.
+
+    Returns JSON {format, columns, rows} for parquet, or raw CSV for legacy files.
+    """
+    dataset = await service.get_dataset(session, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Try parquet path first
+    parquet_path = _sample_dir_by_platform(
+        dataset.platform.platform_id, dataset.name,
+    ) / "sample.parquet"
+    if parquet_path.is_file():
+        import pyarrow.parquet as pq
+        table = pq.read_table(parquet_path)
+        columns = table.column_names
+        rows = []
+        for i in range(table.num_rows):
+            rows.append([
+                str(v) if v is not None else None
+                for v in (table.column(c)[i].as_py() for c in range(table.num_columns))
+            ])
+        return JSONResponse(content={
+            "format": "parquet",
+            "columns": columns,
+            "rows": rows,
+        })
+
+    # Fallback to legacy CSV path
+    qn = dataset.qualified_name or dataset.name
+    csv_path = _sample_path(qn)
+    if csv_path.is_file():
+        return FileResponse(csv_path, media_type="text/csv", filename="sample.csv")
+
+    raise HTTPException(status_code=404, detail="No sample data available")
+
+
+@router.post("/datasets/{dataset_id}/sample/convert-to-parquet")
+async def convert_sample_to_parquet(
+    dataset_id: int,
+    session: AsyncSession = Depends(get_session),
+):
+    """Convert an existing CSV sample to parquet format."""
     dataset = await service.get_dataset(session, dataset_id)
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     qn = dataset.qualified_name or dataset.name
-    path = _sample_path(qn)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="No sample data available")
+    csv_path = _sample_path(qn)
+    if not csv_path.is_file():
+        raise HTTPException(status_code=404, detail="No CSV sample data to convert")
 
-    return FileResponse(path, media_type="text/csv", filename="sample.csv")
+    import csv as csv_mod
+    import io
+    import pyarrow as pa
+    import pyarrow.parquet as _pq
+
+    text = csv_path.read_text(encoding="utf-8", errors="replace")
+    reader = csv_mod.reader(io.StringIO(text))
+    all_rows = list(reader)
+    if not all_rows:
+        raise HTTPException(status_code=400, detail="CSV file is empty")
+
+    header = all_rows[0]
+    data_rows = all_rows[1:] if len(all_rows) > 1 else []
+
+    columns = {}
+    for ci, col_name in enumerate(header):
+        columns[col_name or f"col_{ci}"] = [
+            row[ci] if ci < len(row) else None for row in data_rows
+        ]
+
+    arrow_table = pa.table(columns)
+    dest_dir = _sample_dir_by_platform(dataset.platform.platform_id, dataset.name)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "sample.parquet"
+    _pq.write_table(arrow_table, dest)
+
+    # Remove old CSV and delimiter config
+    csv_path.unlink()
+    delim_path = csv_path.parent / "delimiter.json"
+    if delim_path.is_file():
+        delim_path.unlink()
+    try:
+        csv_path.parent.rmdir()
+    except OSError:
+        pass
+
+    logger.info("Converted CSV to parquet: %s (%d rows)", dest, len(data_rows))
+    return {"status": "ok", "rows": len(data_rows), "columns": len(header)}
 
 
 @router.delete("/datasets/{dataset_id}/sample")
@@ -394,23 +525,40 @@ async def delete_sample_data(
     dataset_id: int,
     session: AsyncSession = Depends(get_session),
 ):
-    """Delete the sample CSV for a dataset."""
+    """Delete sample data for a dataset (parquet or CSV)."""
     dataset = await service.get_dataset(session, dataset_id)
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    deleted = False
+
+    # Try parquet path
+    parquet_path = _sample_dir_by_platform(
+        dataset.platform.platform_id, dataset.name,
+    ) / "sample.parquet"
+    if parquet_path.is_file():
+        parquet_path.unlink()
+        try:
+            parquet_path.parent.rmdir()
+        except OSError:
+            pass
+        deleted = True
+
+    # Try legacy CSV path
     qn = dataset.qualified_name or dataset.name
-    path = _sample_path(qn)
-    if path.is_file():
-        path.unlink()
-        # Also remove delimiter.json if present
-        delim_path = path.parent / "delimiter.json"
+    csv_path = _sample_path(qn)
+    if csv_path.is_file():
+        csv_path.unlink()
+        delim_path = csv_path.parent / "delimiter.json"
         if delim_path.is_file():
             delim_path.unlink()
         try:
-            path.parent.rmdir()
+            csv_path.parent.rmdir()
         except OSError:
             pass
+        deleted = True
+
+    if deleted:
         return {"status": "ok", "message": "Sample data deleted"}
     raise HTTPException(status_code=404, detail="No sample data available")
 
@@ -466,3 +614,33 @@ async def get_delimiter_config(
 
     data = json.loads(path.read_text(encoding="utf-8"))
     return JSONResponse(content=data)
+
+
+# ---------------------------------------------------------------------------
+# Sample data ingestion (sync upload)
+# ---------------------------------------------------------------------------
+
+@router.post("/samples/upload")
+async def upload_sample_parquet(
+    request: Request,
+    x_platform_id: str = Header(..., alias="X-Platform-Id"),
+    x_dataset_name: str = Header(..., alias="X-Dataset-Name"),
+):
+    """Receive a parquet sample file from a sync process.
+
+    Headers:
+        X-Platform-Id: platform_id (e.g. mysql-19d0bfe954e2cfdaa)
+        X-Dataset-Name: database.table (e.g. sakila.country)
+    Body:
+        Raw parquet bytes.
+    """
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty body")
+
+    dest_dir = _sample_dir_by_platform(x_platform_id, x_dataset_name)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "sample.parquet"
+    dest.write_bytes(body)
+    logger.info("Sample parquet uploaded: %s (%d bytes)", dest, len(body))
+    return {"status": "ok", "path": str(dest), "size": len(body)}

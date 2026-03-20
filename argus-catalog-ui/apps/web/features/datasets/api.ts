@@ -242,6 +242,16 @@ export async function deleteSampleData(
   if (!res.ok) throw new Error(`Failed to delete sample data: ${res.status}`)
 }
 
+export async function convertSampleToParquet(
+  datasetId: number,
+): Promise<{ status: string; rows: number; columns: number }> {
+  const res = await fetch(`${BASE}/datasets/${datasetId}/sample/convert-to-parquet`, {
+    method: "POST",
+  })
+  if (!res.ok) throw new Error(`Failed to convert to parquet: ${res.status}`)
+  return res.json()
+}
+
 // ---------------------------------------------------------------------------
 // Delimiter config
 // ---------------------------------------------------------------------------

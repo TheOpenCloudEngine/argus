@@ -17,12 +17,14 @@ import {
 } from "@workspace/ui/components/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
+  convertSampleToParquet,
   deleteSampleData,
   fetchDelimiterConfig,
   fetchSampleData,
   saveDelimiterConfig,
   uploadSampleData,
 } from "@/features/datasets/api"
+import { SampleGrid } from "./sample-grid"
 
 // ---------------------------------------------------------------------------
 // Constants (matches argus-insight-ui csv-viewer)
@@ -84,6 +86,13 @@ type SampleDataTabProps = {
 }
 
 export function SampleDataTab({ datasetId }: SampleDataTabProps) {
+  // Format: "parquet" when served from synced parquet, "csv" for uploaded CSV
+  const [sampleFormat, setSampleFormat] = useState<"parquet" | "csv" | null>(null)
+
+  // Parquet data (returned as JSON from server)
+  const [parquetColumns, setParquetColumns] = useState<string[]>([])
+  const [parquetRows, setParquetRows] = useState<(string | null)[][]>([])
+
   // CSV parse settings
   const [encoding, setEncoding] = useState("UTF-8")
   const [lineDelimiter, setLineDelimiter] = useState("\n")
@@ -95,7 +104,7 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
   const [customQuoteChar, setCustomQuoteChar] = useState("")
   const [isCustomQuote, setIsCustomQuote] = useState(false)
 
-  // Data state
+  // CSV data state
   const [rows, setRows] = useState<string[][]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -189,6 +198,9 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
     setIsLoading(true)
     setError(null)
     setRows([])
+    setParquetColumns([])
+    setParquetRows([])
+    setSampleFormat(null)
     try {
       const res = await fetchSampleData(datasetId)
       if (res.status === 404) {
@@ -197,6 +209,23 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
         return
       }
       if (!res.ok) throw new Error(`Failed to fetch sample (${res.status})`)
+
+      const contentType = res.headers.get("content-type") || ""
+
+      if (contentType.includes("application/json")) {
+        // Parquet data returned as JSON
+        const data = await res.json()
+        if (data.format === "parquet") {
+          setSampleFormat("parquet")
+          setParquetColumns(data.columns || [])
+          setParquetRows(data.rows || [])
+          setHasSample(true)
+          return
+        }
+      }
+
+      // CSV data
+      setSampleFormat("csv")
       const buf = await res.arrayBuffer()
       rawBufferRef.current = buf
       setHasSample(true)
@@ -216,9 +245,10 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
   }, [loadSample])
 
   // ---------------------------------------------------------------------------
-  // Load delimiter config from server (if exists) and re-parse
+  // Load delimiter config from server (if exists) and re-parse (CSV only)
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (sampleFormat !== "csv") return
     let cancelled = false
     ;(async () => {
       try {
@@ -269,14 +299,15 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
       }
     })()
     return () => { cancelled = true }
-  }, [datasetId, parseCsv])
+  }, [datasetId, sampleFormat, parseCsv])
 
   // ---------------------------------------------------------------------------
-  // Save delimiter config to server
+  // Save: CSV → convert to parquet on server
   // ---------------------------------------------------------------------------
   const handleSave = async () => {
     setSaving(true)
     try {
+      // First save delimiter config
       await saveDelimiterConfig(datasetId, {
         encoding,
         line_delimiter: lineDelimiter,
@@ -288,17 +319,21 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
         custom_quote_char: customQuoteChar,
         is_custom_quote: isCustomQuote,
       })
-      toast.success("CSV parsing options have been saved.")
+      // Convert CSV to parquet
+      await convertSampleToParquet(datasetId)
+      toast.success("Sample data converted to Parquet format.")
+      // Reload to show parquet view
+      await loadSample()
     } catch (err) {
-      console.error("Failed to save delimiter config:", err)
-      toast.error("Failed to save CSV parsing options.")
+      console.error("Failed to save:", err)
+      toast.error("Failed to convert sample data to Parquet.")
     } finally {
       setSaving(false)
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Re-parse with current settings (no server call)
+  // Re-parse with current settings (no server call, CSV only)
   // ---------------------------------------------------------------------------
   const handleRefresh = () => {
     if (rawBufferRef.current) {
@@ -343,7 +378,10 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
       await deleteSampleData(datasetId)
       setHasSample(false)
       setRows([])
+      setParquetColumns([])
+      setParquetRows([])
       rawBufferRef.current = null
+      setSampleFormat(null)
       setError(null)
     } catch {
       // ignore
@@ -353,18 +391,237 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
   // ---------------------------------------------------------------------------
   // Display helpers
   // ---------------------------------------------------------------------------
-  const displayRows = useMemo(() => {
-    if (!rows.length) return { header: undefined, data: [], allRows: rows }
+  const csvDisplay = useMemo(() => {
+    if (!rows.length) return { header: undefined, data: [], columnCount: 0 }
+    const columnCount = Math.max(...rows.map((r) => r.length))
     if (hasHeader) {
-      return { header: rows[0], data: rows.slice(1), allRows: rows }
+      return { header: rows[0], data: rows.slice(1), columnCount }
     }
-    return { header: undefined, data: rows, allRows: rows }
+    return { header: undefined, data: rows, columnCount }
   }, [rows, hasHeader])
 
-  const columnCount = useMemo(() => {
-    if (!rows.length) return 0
-    return Math.max(...rows.map((r) => r.length))
-  }, [rows])
+  // ---------------------------------------------------------------------------
+  // Render: Parquet table (no toolbar)
+  // ---------------------------------------------------------------------------
+  const renderParquetTable = () => (
+    <div className="flex flex-col gap-3 p-4 text-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-[family-name:var(--font-d2coding)]">
+          Parquet · {parquetRows.length} rows · {parquetColumns.length} columns
+        </span>
+      </div>
+      <SampleGrid columns={parquetColumns} rows={parquetRows} />
+    </div>
+  )
+
+  // ---------------------------------------------------------------------------
+  // Render: CSV view (with toolbar)
+  // ---------------------------------------------------------------------------
+  const renderCsvView = () => (
+    <div className="flex flex-col gap-3 p-4 text-sm">
+      {/* CSV Parse Controls */}
+      <div className="flex items-end gap-3 flex-wrap">
+        <div className="space-y-1">
+          <Label className="text-sm">Encoding</Label>
+          <Select value={encoding} onValueChange={setEncoding}>
+            <SelectTrigger className="w-[130px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ENCODINGS.map((enc) => (
+                <SelectItem key={enc.value} value={enc.value} className="text-sm">
+                  {enc.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-sm">Line Delimiter</Label>
+          <Select value={lineDelimiter} onValueChange={setLineDelimiter}>
+            <SelectTrigger className="w-[130px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LINE_DELIMITERS.map((ld) => (
+                <SelectItem key={ld.value} value={ld.value} className="text-sm">
+                  {ld.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-sm">Delimiter</Label>
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={delimiterSelectValue}
+              onValueChange={(v) => {
+                if (v === DELIM_ESCAPE) {
+                  setDelimiterMode("escape")
+                  setDelimiterInput("")
+                } else if (v === DELIM_CUSTOM) {
+                  setDelimiterMode("custom")
+                  setDelimiterInput("")
+                } else {
+                  setDelimiterMode(null)
+                  setDelimiter(v)
+                }
+              }}
+            >
+              <SelectTrigger className="w-[150px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DELIMITER_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value} className="text-sm">
+                    {p.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value={DELIM_ESCAPE} className="text-sm">
+                  Escape
+                </SelectItem>
+                <SelectItem value={DELIM_CUSTOM} className="text-sm">
+                  Custom...
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {delimiterMode === "escape" && (
+              <Input
+                value={delimiterInput}
+                onChange={(e) => setDelimiterInput(e.target.value)}
+                placeholder="e.g. \x1b"
+                className="w-[100px] h-8 text-sm font-mono"
+              />
+            )}
+
+            {delimiterMode === "custom" && (
+              <Input
+                value={delimiterInput}
+                onChange={(e) => setDelimiterInput(e.target.value.slice(0, 1))}
+                placeholder="e.g. :"
+                className="w-[80px] h-8 text-sm font-mono"
+                maxLength={1}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-sm">Header</Label>
+          <Select value={hasHeader ? "yes" : "no"} onValueChange={(v) => setHasHeader(v === "yes")}>
+            <SelectTrigger className="w-[120px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yes" className="text-sm">With Header</SelectItem>
+              <SelectItem value="no" className="text-sm">No Header</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-sm">Quote</Label>
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={isCustomQuote ? "__custom__" : quoteChar}
+              onValueChange={(v) => {
+                if (v === "__custom__") {
+                  setIsCustomQuote(true)
+                } else {
+                  setIsCustomQuote(false)
+                  setQuoteChar(v)
+                }
+              }}
+            >
+              <SelectTrigger className="w-[120px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_QUOTE} className="text-sm">None</SelectItem>
+                <SelectItem value={'"'} className="text-sm">Double (&quot;)</SelectItem>
+                <SelectItem value="'" className="text-sm">Single (&apos;)</SelectItem>
+                <SelectItem value="__custom__" className="text-sm">Custom...</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {isCustomQuote && (
+              <Input
+                value={customQuoteChar}
+                onChange={(e) => setCustomQuoteChar(e.target.value.slice(0, 1))}
+                placeholder="e.g. `"
+                className="w-[80px] h-8 text-sm font-mono"
+                maxLength={1}
+              />
+            )}
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="h-8"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Refresh
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleSave}
+          disabled={saving}
+          className="h-8"
+        >
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Save
+        </Button>
+
+        {!isLoading && rows.length > 0 && (
+          <span className="text-sm text-muted-foreground ml-auto font-[family-name:var(--font-d2coding)]">
+            {csvDisplay.data.length} rows · {csvDisplay.columnCount} columns
+          </span>
+        )}
+      </div>
+
+      {/* Table */}
+      {isLoading && (
+        <div className="flex items-center justify-center h-[200px]">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center justify-center h-[200px]">
+          <p className="text-sm text-muted-foreground">{error}</p>
+        </div>
+      )}
+
+      {!isLoading && !error && rows.length > 0 && (
+        <SampleGrid
+          columns={csvDisplay.header ?? Array.from({ length: csvDisplay.columnCount }, (_, i) => `col_${i + 1}`)}
+          rows={csvDisplay.data}
+        />
+      )}
+
+      {!isLoading && !error && rows.length === 0 && (
+        <div className="flex items-center justify-center h-[200px]">
+          <p className="text-sm text-muted-foreground">No data</p>
+        </div>
+      )}
+    </div>
+  )
 
   // ---------------------------------------------------------------------------
   // Render
@@ -390,247 +647,11 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {/* Show controls + table when sample data exists */}
-        {hasSample && (
-          <div className="flex flex-col gap-3 p-4 text-sm">
-            {/* CSV Parse Controls */}
-            <div className="flex items-end gap-3 flex-wrap">
-              <div className="space-y-1">
-                <Label className="text-sm">Encoding</Label>
-                <Select value={encoding} onValueChange={setEncoding}>
-                  <SelectTrigger className="w-[130px] h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ENCODINGS.map((enc) => (
-                      <SelectItem key={enc.value} value={enc.value} className="text-sm">
-                        {enc.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        {/* Parquet view: no toolbar */}
+        {hasSample && sampleFormat === "parquet" && renderParquetTable()}
 
-              <div className="space-y-1">
-                <Label className="text-sm">Line Delimiter</Label>
-                <Select value={lineDelimiter} onValueChange={setLineDelimiter}>
-                  <SelectTrigger className="w-[130px] h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LINE_DELIMITERS.map((ld) => (
-                      <SelectItem key={ld.value} value={ld.value} className="text-sm">
-                        {ld.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-sm">Delimiter</Label>
-                <div className="flex items-center gap-1.5">
-                  <Select
-                    value={delimiterSelectValue}
-                    onValueChange={(v) => {
-                      if (v === DELIM_ESCAPE) {
-                        setDelimiterMode("escape")
-                        setDelimiterInput("")
-                      } else if (v === DELIM_CUSTOM) {
-                        setDelimiterMode("custom")
-                        setDelimiterInput("")
-                      } else {
-                        setDelimiterMode(null)
-                        setDelimiter(v)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[150px] h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DELIMITER_PRESETS.map((p) => (
-                        <SelectItem key={p.value} value={p.value} className="text-sm">
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={DELIM_ESCAPE} className="text-sm">
-                        Escape
-                      </SelectItem>
-                      <SelectItem value={DELIM_CUSTOM} className="text-sm">
-                        Custom...
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {delimiterMode === "escape" && (
-                    <Input
-                      value={delimiterInput}
-                      onChange={(e) => setDelimiterInput(e.target.value)}
-                      placeholder="e.g. \x1b"
-                      className="w-[100px] h-8 text-sm font-mono"
-                    />
-                  )}
-
-                  {delimiterMode === "custom" && (
-                    <Input
-                      value={delimiterInput}
-                      onChange={(e) => setDelimiterInput(e.target.value.slice(0, 1))}
-                      placeholder="e.g. :"
-                      className="w-[80px] h-8 text-sm font-mono"
-                      maxLength={1}
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-sm">Header</Label>
-                <Select value={hasHeader ? "yes" : "no"} onValueChange={(v) => setHasHeader(v === "yes")}>
-                  <SelectTrigger className="w-[120px] h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yes" className="text-sm">With Header</SelectItem>
-                    <SelectItem value="no" className="text-sm">No Header</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-sm">Quote</Label>
-                <div className="flex items-center gap-1.5">
-                  <Select
-                    value={isCustomQuote ? "__custom__" : quoteChar}
-                    onValueChange={(v) => {
-                      if (v === "__custom__") {
-                        setIsCustomQuote(true)
-                      } else {
-                        setIsCustomQuote(false)
-                        setQuoteChar(v)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[120px] h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_QUOTE} className="text-sm">None</SelectItem>
-                      <SelectItem value={'"'} className="text-sm">Double (&quot;)</SelectItem>
-                      <SelectItem value="'" className="text-sm">Single (&apos;)</SelectItem>
-                      <SelectItem value="__custom__" className="text-sm">Custom...</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {isCustomQuote && (
-                    <Input
-                      value={customQuoteChar}
-                      onChange={(e) => setCustomQuoteChar(e.target.value.slice(0, 1))}
-                      placeholder="e.g. `"
-                      className="w-[80px] h-8 text-sm font-mono"
-                      maxLength={1}
-                    />
-                  )}
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className="h-8"
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                Refresh
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleSave}
-                disabled={saving}
-                className="h-8"
-              >
-                {saving ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Save className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Save
-              </Button>
-
-              {!isLoading && rows.length > 0 && (
-                <span className="text-sm text-muted-foreground ml-auto">
-                  {displayRows.data.length} rows · {columnCount} columns
-                </span>
-              )}
-            </div>
-
-            {/* Table */}
-            {isLoading && (
-              <div className="flex items-center justify-center h-[200px]">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {error && (
-              <div className="flex items-center justify-center h-[200px]">
-                <p className="text-sm text-muted-foreground">{error}</p>
-              </div>
-            )}
-
-            {!isLoading && !error && rows.length > 0 && (
-              <div className="border rounded overflow-auto flex-1 min-h-0 max-h-[500px]">
-                <table className="w-full text-sm font-mono border-collapse">
-                  {displayRows.header && (
-                    <thead className="bg-muted/60 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-2 py-1.5 text-right text-muted-foreground border-r w-10 font-medium">
-                          #
-                        </th>
-                        {displayRows.header.map((cell, i) => (
-                          <th
-                            key={i}
-                            className="px-2 py-1.5 text-left font-semibold border-r last:border-r-0 whitespace-nowrap"
-                          >
-                            {cell}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                  )}
-                  <tbody className="divide-y">
-                    {displayRows.data.map((row, ri) => (
-                      <tr key={ri} className="hover:bg-muted/30">
-                        <td className="px-2 py-1 text-right text-muted-foreground border-r tabular-nums">
-                          {ri + 1}
-                        </td>
-                        {Array.from({ length: columnCount }, (_, ci) => (
-                          <td
-                            key={ci}
-                            className="px-2 py-1 border-r last:border-r-0 whitespace-nowrap max-w-[300px] truncate"
-                            title={row[ci] ?? ""}
-                          >
-                            {row[ci] ?? ""}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {!isLoading && !error && rows.length === 0 && (
-              <div className="flex items-center justify-center h-[200px]">
-                <p className="text-sm text-muted-foreground">No data</p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* CSV view: with toolbar */}
+        {hasSample && sampleFormat === "csv" && renderCsvView()}
 
         {/* Empty state: no sample file */}
         {hasSample === false && (

@@ -54,9 +54,13 @@ class PlatformConfigurationSave(BaseModel):
     config: dict
 
 
+class PlatformUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=200)
+
+
 class PlatformConfigurationResponse(BaseModel):
     id: int
-    platform_id: str
+    platform_id: int
     config: dict
     created_at: datetime
     updated_at: datetime

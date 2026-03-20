@@ -34,6 +34,7 @@ def _print_banner() -> None:
     logger.info("Version           : %s", settings.app_version)
     logger.info("Config YAML       : %s", settings.config_yaml_path)
     logger.info("Config Properties : %s", settings.config_properties_path)
+    logger.info("Data Directory    : %s", settings.data_dir)
 
 
 @asynccontextmanager
@@ -52,13 +53,18 @@ async def lifespan(app: FastAPI):
 
     # Seed default data
     from app.core.database import async_session
-    from app.catalog.service import seed_platforms, seed_platform_metadata
+    from app.catalog.service import (
+        seed_platforms, seed_platform_metadata,
+        migrate_platform_ids, migrate_dataset_urns,
+    )
     from app.usermgr.service import seed_roles
 
     async with async_session() as session:
         await seed_platforms(session)
         await seed_platform_metadata(session)
         await seed_roles(session)
+        await migrate_platform_ids(session)
+        await migrate_dataset_urns(session)
 
     yield
     await close_database()

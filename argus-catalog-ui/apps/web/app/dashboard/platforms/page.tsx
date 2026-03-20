@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Eye, EyeOff, Pencil, Plus, Server, Trash2 } from "lucide-react"
+import { Copy, Eye, EyeOff, Pencil, Plus, Server, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@workspace/ui/components/button"
@@ -49,6 +49,22 @@ async function createPlatform(payload: {
 }): Promise<Platform> {
   const res = await fetch(`${BASE}/platforms`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+async function updatePlatform(
+  id: number,
+  payload: { name?: string },
+): Promise<Platform> {
+  const res = await fetch(`${BASE}/platforms/${id}`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
@@ -289,6 +305,7 @@ export default function PlatformsPage() {
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false)
   const [editPlatform, setEditPlatform] = useState<Platform | null>(null)
+  const [editName, setEditName] = useState("")
   const [editConfig, setEditConfig] = useState<Record<string, unknown>>({})
   const [editSaving, setEditSaving] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
@@ -349,6 +366,7 @@ export default function PlatformsPage() {
 
   const openEditDialog = async (platform: Platform) => {
     setEditPlatform(platform)
+    setEditName(platform.name)
     setEditConfig({})
     setEditOpen(true)
     setEditLoading(true)
@@ -367,12 +385,16 @@ export default function PlatformsPage() {
   }
 
   const handleEditSave = async () => {
-    if (!editPlatform) return
+    if (!editPlatform || !editName.trim()) return
     setEditSaving(true)
     try {
+      if (editName.trim() !== editPlatform.name) {
+        await updatePlatform(editPlatform.id, { name: editName.trim() })
+      }
       await savePlatformConfig(editPlatform.id, editConfig)
-      toast.success(`Configuration for "${editPlatform.name}" has been saved.`)
+      toast.success(`Platform "${editName.trim()}" has been saved.`)
       setEditOpen(false)
+      await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save configuration")
     } finally {
@@ -480,9 +502,26 @@ export default function PlatformsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {p.type}
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      {p.platform_id}
+                    </p>
+                    <button
+                      type="button"
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        try {
+                          await navigator.clipboard.writeText(p.platform_id)
+                          toast.success("ID copied to clipboard.")
+                        } catch {
+                          toast.error("Failed to copy. Clipboard API requires HTTPS.")
+                        }
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
             ))
@@ -569,10 +608,10 @@ export default function PlatformsPage() {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editPlatform?.name} — Connection Settings
+              Edit Platform
             </DialogTitle>
             <DialogDescription>
-              Configure the connection to this {editPlatform?.type} instance.
+              Update display name and connection settings for this {editPlatform?.type} platform.
             </DialogDescription>
           </DialogHeader>
 
@@ -580,12 +619,35 @@ export default function PlatformsPage() {
             <p className="text-sm text-muted-foreground py-8 text-center">Loading...</p>
           ) : (
             <div className="grid gap-4 py-2">
-              {editPlatform && PLATFORM_CONFIGS[editPlatform.type] ? (
-                <ConfigForm
-                  fields={PLATFORM_CONFIGS[editPlatform.type]!}
-                  values={editConfig}
-                  onChange={(k, v) => setEditConfig((prev) => ({ ...prev, [k]: v }))}
+              <div className="grid gap-1.5">
+                <Label className="text-sm">Platform ID</Label>
+                <Input
+                  value={editPlatform?.platform_id ?? ""}
+                  readOnly
+                  className="h-9 text-sm font-mono bg-muted"
                 />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-sm">
+                  Display Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Production MySQL"
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              {editPlatform && PLATFORM_CONFIGS[editPlatform.type] ? (
+                <div className="border-t pt-3">
+                  <p className="text-sm font-medium mb-3">Connection Settings</p>
+                  <ConfigForm
+                    fields={PLATFORM_CONFIGS[editPlatform.type]!}
+                    values={editConfig}
+                    onChange={(k, v) => setEditConfig((prev) => ({ ...prev, [k]: v }))}
+                  />
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No configuration template available for this platform type.
@@ -596,7 +658,7 @@ export default function PlatformsPage() {
                 <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>
                   Cancel
                 </Button>
-                <Button onClick={handleEditSave} disabled={editSaving || !editConfigValid}>
+                <Button onClick={handleEditSave} disabled={editSaving || !editName.trim() || !editConfigValid}>
                   {editSaving ? "Saving..." : "Save"}
                 </Button>
               </div>

@@ -4,6 +4,8 @@ Provides CRUD operations for datasets, platforms, tags, glossary terms, and owne
 """
 
 import logging
+import os
+import time
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +39,7 @@ from app.catalog.schemas import (
     OwnerResponse,
     PaginatedDatasets,
     PlatformCreate,
+    PlatformUpdate,
     PlatformDataTypeResponse,
     PlatformFeatureResponse,
     PlatformMetadataResponse,
@@ -52,9 +55,21 @@ from app.catalog.schemas import (
 logger = logging.getLogger(__name__)
 
 
-def _generate_urn(platform_name: str, dataset_name: str, origin: str) -> str:
-    """Generate a DataHub-style URN for a dataset."""
-    return f"urn:li:dataset:(urn:li:dataPlatform:{platform_name},{dataset_name},{origin})"
+def _generate_platform_id(platform_type: str) -> str:
+    """Generate a platform ID: {type}-{timestamp_hex}{random_hex} (total suffix = 16 chars).
+
+    Format: 10-char ms timestamp hex + 6-char random hex = 16 chars.
+    Same millisecond → different random suffix (2^24 = 16M possibilities).
+    """
+    timestamp_ms = int(time.time() * 1000)
+    ts_hex = format(timestamp_ms, "010x")
+    rand_hex = os.urandom(3).hex()  # 6 hex chars = 24 bits
+    return f"{platform_type}-{ts_hex}{rand_hex}"
+
+
+def _generate_urn(platform_id: str, path: str, env: str, entity_type: str = "dataset") -> str:
+    """Generate a URN: {platform_id}.{path}.{ENV}.{type}"""
+    return f"{platform_id}.{path}.{env}.{entity_type}"
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +82,8 @@ async def list_platforms(session: AsyncSession) -> list[PlatformResponse]:
 
 
 async def create_platform(session: AsyncSession, req: PlatformCreate) -> PlatformResponse:
-    import uuid
     platform = Platform(
-        platform_id=str(uuid.uuid4()),
+        platform_id=_generate_platform_id(req.type),
         name=req.name,
         type=req.type,
         logo_url=req.logo_url,
@@ -86,6 +100,21 @@ async def get_platform(session: AsyncSession, platform_id: int) -> PlatformRespo
     platform = result.scalars().first()
     if not platform:
         return None
+    return PlatformResponse.model_validate(platform)
+
+
+async def update_platform(
+    session: AsyncSession, platform_id: int, req: PlatformUpdate
+) -> PlatformResponse | None:
+    result = await session.execute(select(Platform).where(Platform.id == platform_id))
+    platform = result.scalars().first()
+    if not platform:
+        return None
+    if req.name is not None:
+        platform.name = req.name
+    await session.commit()
+    await session.refresh(platform)
+    logger.info("Platform updated: %s (id=%d)", platform.name, platform.id)
     return PlatformResponse.model_validate(platform)
 
 
@@ -364,7 +393,9 @@ async def create_dataset(session: AsyncSession, req: DatasetCreate) -> DatasetRe
     if not platform:
         raise ValueError(f"Platform with id {req.platform_id} not found")
 
-    urn = _generate_urn(platform.name, req.name, req.origin.value)
+    path = req.qualified_name or req.name
+    urn = _generate_urn(platform.platform_id, path, req.origin.value)
+    qualified_name = f"{platform.platform_id}.{path}"
 
     dataset = Dataset(
         urn=urn,
@@ -372,7 +403,7 @@ async def create_dataset(session: AsyncSession, req: DatasetCreate) -> DatasetRe
         platform_id=req.platform_id,
         description=req.description,
         origin=req.origin.value,
-        qualified_name=req.qualified_name or req.name,
+        qualified_name=qualified_name,
         table_type=req.table_type,
         storage_format=req.storage_format,
         status="active",
@@ -458,6 +489,18 @@ async def update_dataset(
     if req.status is not None:
         dataset.status = req.status.value
 
+    # Regenerate URN when origin or qualified_name changes
+    if req.origin is not None or req.qualified_name is not None:
+        platform_row = await session.execute(
+            select(Platform).where(Platform.id == dataset.platform_id)
+        )
+        platform = platform_row.scalars().first()
+        if platform:
+            qn = dataset.qualified_name or dataset.name
+            prefix = f"{platform.platform_id}."
+            path = qn[len(prefix):] if qn.startswith(prefix) else qn
+            dataset.urn = _generate_urn(platform.platform_id, path, dataset.origin)
+
     await session.commit()
     await session.refresh(dataset)
     logger.info("Dataset updated: %s (id=%d)", dataset.name, dataset.id)
@@ -514,7 +557,7 @@ async def list_datasets(
         )
 
     if platform:
-        base = base.where(Platform.name == platform)
+        base = base.where(Platform.platform_id == platform)
 
     if origin:
         base = base.where(Dataset.origin == origin)
@@ -770,17 +813,62 @@ async def seed_platforms(session: AsyncSession) -> None:
         ("kudu", "Apache Kudu"),
         ("unity_catalog", "Unity Catalog"),
     ]
-    import uuid as _uuid
     for type_name, display_name in defaults:
         existing = await session.execute(select(Platform).where(Platform.type == type_name))
         if not existing.scalars().first():
             session.add(Platform(
-                platform_id=str(_uuid.uuid4()),
+                platform_id=_generate_platform_id(type_name),
                 name=display_name,
                 type=type_name,
             ))
             logger.info("Seeded platform: %s", type_name)
     await session.commit()
+
+
+async def migrate_platform_ids(session: AsyncSession) -> None:
+    """Migrate legacy UUID-style platform_ids to new {type}-{timestamp}{rand} format."""
+    import re
+    uuid_pattern = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+    )
+    result = await session.execute(select(Platform))
+    changed = 0
+    for platform in result.scalars().all():
+        if uuid_pattern.match(platform.platform_id):
+            platform.platform_id = _generate_platform_id(platform.type)
+            changed += 1
+    if changed:
+        await session.commit()
+        logger.info("Migrated %d platform_id(s) from UUID to new format", changed)
+
+
+async def migrate_dataset_urns(session: AsyncSession) -> None:
+    """Migrate dataset URNs and qualified_names to current format.
+
+    URN: {platform_id}.{path}.{ENV}.{type}
+    qualified_name: {platform_id}.{path}
+    """
+    result = await session.execute(
+        select(Dataset, Platform).join(Platform, Dataset.platform_id == Platform.id)
+    )
+    changed = 0
+    for dataset, platform in result.all():
+        qn = dataset.qualified_name or dataset.name
+        prefix = f"{platform.platform_id}."
+
+        # Extract path (without platform_id prefix)
+        path = qn[len(prefix):] if qn.startswith(prefix) else qn
+
+        expected_urn = _generate_urn(platform.platform_id, path, dataset.origin or "PROD")
+        expected_qn = f"{platform.platform_id}.{path}"
+
+        if dataset.urn != expected_urn or dataset.qualified_name != expected_qn:
+            dataset.urn = expected_urn
+            dataset.qualified_name = expected_qn
+            changed += 1
+    if changed:
+        await session.commit()
+        logger.info("Migrated %d dataset URN/qualified_name(s) to new format", changed)
 
 
 async def seed_platform_metadata(session: AsyncSession) -> None:
