@@ -19,6 +19,7 @@ import {
   Plus,
   Rocket,
   Server,
+  Settings2,
   Tags,
   Trash2,
   Users,
@@ -83,6 +84,7 @@ import { fetchUsers } from "@/features/users/api"
 import type { User } from "@/features/users/data/schema"
 import type { DatasetDetail, GlossaryTerm, SchemaField, Tag } from "@/features/datasets/data/schema"
 import { SampleDataTab } from "@/features/datasets/components/sample-data-tab"
+import { PlatformSpecificCard } from "@/features/datasets/components/platform-specific-card"
 
 // ---------------------------------------------------------------------------
 // Schema field type for editing (no id yet)
@@ -612,7 +614,14 @@ export default function DatasetDetailPage() {
           <CardHeader>
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <CardTitle className="text-xl">{dataset.name}</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  {dataset.name}
+                  {dataset.is_synced === "true" && (
+                    <span className="inline-flex items-center rounded-full border border-orange-400 px-2 py-0.5 text-[10px] font-semibold text-orange-500">
+                      SYNCED
+                    </span>
+                  )}
+                </CardTitle>
                 <p className="text-sm text-muted-foreground font-mono">
                   {dataset.urn}
                 </p>
@@ -949,10 +958,13 @@ export default function DatasetDetailPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[50px]">#</TableHead>
-                          <TableHead>Field Path</TableHead>
+                          <TableHead>Field</TableHead>
                           <TableHead>Type</TableHead>
                           <TableHead>Native Type</TableHead>
-                          <TableHead>Nullable</TableHead>
+                          <TableHead className="w-[50px] text-center">PK</TableHead>
+                          <TableHead className="w-[50px] text-center">Unique</TableHead>
+                          <TableHead className="w-[50px] text-center">Index</TableHead>
+                          <TableHead className="w-[50px] text-center">Nullable</TableHead>
                           <TableHead>Description</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -962,7 +974,7 @@ export default function DatasetDetailPage() {
                             <TableCell className="text-muted-foreground">
                               {idx + 1}
                             </TableCell>
-                            <TableCell className="font-mono text-sm">
+                            <TableCell className="text-sm font-[family-name:var(--font-d2coding)]">
                               {field.field_path}
                             </TableCell>
                             <TableCell>
@@ -970,18 +982,28 @@ export default function DatasetDetailPage() {
                                 {field.field_type}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
+                            <TableCell className="text-sm font-[family-name:var(--font-d2coding)] uppercase">
                               {field.native_type || "-"}
                             </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  field.nullable === "true" ? "outline" : "default"
-                                }
-                                className="text-xs"
-                              >
-                                {field.nullable === "true" ? "Yes" : "No"}
-                              </Badge>
+                            <TableCell className="text-center">
+                              {field.is_primary_key === "true" && (
+                                <Check className="h-4 w-4 text-primary mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_unique === "true" && (
+                                <Check className="h-4 w-4 text-primary mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_indexed === "true" && (
+                                <Check className="h-4 w-4 text-muted-foreground mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.nullable === "true" && (
+                                <Check className="h-4 w-4 text-muted-foreground mx-auto" />
+                              )}
                             </TableCell>
                             <TableCell className="text-sm max-w-[300px] truncate">
                               {field.description || "-"}
@@ -1307,6 +1329,14 @@ export default function DatasetDetailPage() {
             <AvroSchemaCard dataset={dataset} />
           </TabsContent>
         </Tabs>
+
+        {/* Platform Specific */}
+        {dataset.platform_properties && (
+          <PlatformSpecificCard
+            platformType={dataset.platform.type}
+            properties={dataset.platform_properties}
+          />
+        )}
       </div>
 
     </>

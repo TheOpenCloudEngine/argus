@@ -52,6 +52,8 @@ class Dataset(Base):
     qualified_name = Column(String(500))
     table_type = Column(String(100))
     storage_format = Column(String(100))
+    platform_properties = Column(Text)  # JSON: platform-specific metadata
+    is_synced = Column(String(5), default="false")
     status = Column(String(20), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -83,6 +85,9 @@ class DatasetSchema(Base):
     native_type = Column(String(100))
     description = Column(Text)
     nullable = Column(String(5), default="true")
+    is_primary_key = Column(String(5), default="false")
+    is_unique = Column(String(5), default="false")
+    is_indexed = Column(String(5), default="false")
     ordinal = Column(Integer, nullable=False, default=0)
 
 

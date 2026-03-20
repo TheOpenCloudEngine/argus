@@ -260,6 +260,7 @@ async def get_tag_usage(session: AsyncSession, tag_id: int) -> TagUsage | None:
             description=row.description,
             origin=row.origin,
             status=row.status,
+            is_synced="false",
             tag_count=0,
             owner_count=0,
             schema_field_count=0,
@@ -365,6 +366,14 @@ async def _build_dataset_response(
     )
     properties = [DatasetPropertyResponse.model_validate(p) for p in result.scalars().all()]
 
+    import json as _json
+    pp = None
+    if dataset.platform_properties:
+        try:
+            pp = _json.loads(dataset.platform_properties)
+        except (ValueError, TypeError):
+            pass
+
     return DatasetResponse(
         id=dataset.id,
         urn=dataset.urn,
@@ -376,6 +385,8 @@ async def _build_dataset_response(
         table_type=dataset.table_type,
         storage_format=dataset.storage_format,
         status=dataset.status,
+        is_synced=dataset.is_synced or "false",
+        platform_properties=pp,
         schema_fields=schema_fields,
         tags=tags,
         owners=owners,
@@ -539,6 +550,7 @@ async def list_datasets(
             Dataset.description,
             Dataset.origin,
             Dataset.status,
+            Dataset.is_synced,
             Dataset.created_at,
             Dataset.updated_at,
         )
@@ -609,6 +621,7 @@ async def list_datasets(
             description=row.description,
             origin=row.origin,
             status=row.status,
+            is_synced=row.is_synced or "false",
             tag_count=tag_count,
             owner_count=owner_count,
             schema_field_count=field_count,
@@ -823,52 +836,6 @@ async def seed_platforms(session: AsyncSession) -> None:
             ))
             logger.info("Seeded platform: %s", type_name)
     await session.commit()
-
-
-async def migrate_platform_ids(session: AsyncSession) -> None:
-    """Migrate legacy UUID-style platform_ids to new {type}-{timestamp}{rand} format."""
-    import re
-    uuid_pattern = re.compile(
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
-    )
-    result = await session.execute(select(Platform))
-    changed = 0
-    for platform in result.scalars().all():
-        if uuid_pattern.match(platform.platform_id):
-            platform.platform_id = _generate_platform_id(platform.type)
-            changed += 1
-    if changed:
-        await session.commit()
-        logger.info("Migrated %d platform_id(s) from UUID to new format", changed)
-
-
-async def migrate_dataset_urns(session: AsyncSession) -> None:
-    """Migrate dataset URNs and qualified_names to current format.
-
-    URN: {platform_id}.{path}.{ENV}.{type}
-    qualified_name: {platform_id}.{path}
-    """
-    result = await session.execute(
-        select(Dataset, Platform).join(Platform, Dataset.platform_id == Platform.id)
-    )
-    changed = 0
-    for dataset, platform in result.all():
-        qn = dataset.qualified_name or dataset.name
-        prefix = f"{platform.platform_id}."
-
-        # Extract path (without platform_id prefix)
-        path = qn[len(prefix):] if qn.startswith(prefix) else qn
-
-        expected_urn = _generate_urn(platform.platform_id, path, dataset.origin or "PROD")
-        expected_qn = f"{platform.platform_id}.{path}"
-
-        if dataset.urn != expected_urn or dataset.qualified_name != expected_qn:
-            dataset.urn = expected_urn
-            dataset.qualified_name = expected_qn
-            changed += 1
-    if changed:
-        await session.commit()
-        logger.info("Migrated %d dataset URN/qualified_name(s) to new format", changed)
 
 
 async def seed_platform_metadata(session: AsyncSession) -> None:

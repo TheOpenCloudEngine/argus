@@ -22,9 +22,12 @@ export async function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate text-lg font-bold">Argus Catalog</span>
+                <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold group-data-[collapsible=icon]:flex">
+                  AC
                 </div>
+                <span className="truncate text-lg font-bold group-data-[collapsible=icon]:hidden">
+                  Argus Catalog
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

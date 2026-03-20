@@ -78,6 +78,17 @@ export const datasetsColumns: ColumnDef<DatasetSummary>[] = [
     meta: { className: "w-[100px]" },
   },
   {
+    id: "is_synced",
+    header: "Sync",
+    cell: ({ row }) =>
+      row.original.is_synced === "true" ? (
+        <span className="inline-flex items-center rounded-full border border-orange-400 px-1.5 py-0.5 text-[9px] font-semibold text-orange-500">
+          SYNCED
+        </span>
+      ) : null,
+    meta: { className: "w-[80px]" },
+  },
+  {
     id: "schema_field_count",
     header: "Fields",
     cell: ({ row }) => (

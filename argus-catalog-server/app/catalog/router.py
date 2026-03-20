@@ -149,6 +149,9 @@ async def sync_platform(
     if not platform:
         raise HTTPException(status_code=404, detail="Platform not found")
 
+    logger.info("Sync requested: platform=%s (id=%d), database=%s",
+                platform.platform_id, platform_id, database or "all")
+
     # Derive catalog base URL from the incoming request
     catalog_url = f"{request.url.scheme}://{request.url.netloc}"
 
@@ -158,7 +161,12 @@ async def sync_platform(
     )
 
     if result.errors:
+        logger.warning("Sync failed: platform=%s, error=%s", platform.platform_id, result.errors[0])
         raise HTTPException(status_code=400, detail=result.errors[0])
+
+    logger.info("Sync completed: platform=%s, created=%d, updated=%d, removed=%d, samples=%d",
+                result.platform_id, result.tables_created, result.tables_updated,
+                result.tables_removed, result.samples_uploaded)
 
     return {
         "status": "ok",

@@ -20,12 +20,12 @@ from app.core.security import SecurityHeadersMiddleware
 logger = logging.getLogger(__name__)
 
 BANNER = r"""
-  ______      __        __                _____
- / ____/___ _/ /_____ _/ /___  ____ _    / ___/___  ______   _____  _____
-/ /   / __ `/ __/ __ `/ / __ \/ __ `/    \__ \/ _ \/ ___/ | / / _ \/ ___/
-/ /___/ /_/ / /_/ /_/ / / /_/ / /_/ /    ___/ /  __/ /   | |/ /  __/ /
-\____/\__,_/\__/\__,_/_/\____/\__, /    /____/\___/_/    |___/\___/_/
-                              /____/
+_______                                  _________      _____       ______                  ________
+___    |_____________ ____  _________    __  ____/_____ __  /______ ___  /____________ _    __  ___/______________   ______________
+__  /| |_  ___/_  __ `/  / / /_  ___/    _  /    _  __ `/  __/  __ `/_  /_  __ \_  __ `/    _____ \_  _ \_  ___/_ | / /  _ \_  ___/
+_  ___ |  /   _  /_/ // /_/ /_(__  )     / /___  / /_/ // /_ / /_/ /_  / / /_/ /  /_/ /     ____/ //  __/  /   __ |/ //  __/  /
+/_/  |_/_/    _\__, / \__,_/ /____/      \____/  \__,_/ \__/ \__,_/ /_/  \____/_\__, /      /____/ \___//_/    _____/ \___//_/
+              /____/                                                           /____/
 """
 
 
@@ -53,18 +53,13 @@ async def lifespan(app: FastAPI):
 
     # Seed default data
     from app.core.database import async_session
-    from app.catalog.service import (
-        seed_platforms, seed_platform_metadata,
-        migrate_platform_ids, migrate_dataset_urns,
-    )
+    from app.catalog.service import seed_platforms, seed_platform_metadata
     from app.usermgr.service import seed_roles
 
     async with async_session() as session:
         await seed_platforms(session)
         await seed_platform_metadata(session)
         await seed_roles(session)
-        await migrate_platform_ids(session)
-        await migrate_dataset_urns(session)
 
     yield
     await close_database()

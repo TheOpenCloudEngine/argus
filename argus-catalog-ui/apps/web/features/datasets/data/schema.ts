@@ -29,6 +29,9 @@ export const schemaFieldSchema = z.object({
   native_type: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   nullable: z.string(),
+  is_primary_key: z.string().optional().default("false"),
+  is_unique: z.string().optional().default("false"),
+  is_indexed: z.string().optional().default("false"),
   ordinal: z.number(),
 })
 export type SchemaField = z.infer<typeof schemaFieldSchema>
@@ -81,6 +84,7 @@ export const datasetSummarySchema = z.object({
   description: z.string().nullable().optional(),
   origin: z.string(),
   status: z.string(),
+  is_synced: z.string().optional().default("false"),
   tag_count: z.number(),
   owner_count: z.number(),
   schema_field_count: z.number(),
@@ -107,6 +111,8 @@ export const datasetDetailSchema = z.object({
   table_type: z.string().nullable().optional(),
   storage_format: z.string().nullable().optional(),
   status: z.string(),
+  is_synced: z.string().optional().default("false"),
+  platform_properties: z.record(z.unknown()).nullable().optional(),
   schema_fields: z.array(schemaFieldSchema),
   tags: z.array(tagSchema),
   owners: z.array(ownerSchema),

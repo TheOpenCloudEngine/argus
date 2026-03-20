@@ -43,8 +43,9 @@ export function SampleGrid({ columns, rows }: SampleGridProps) {
       defs.push({
         id: `col_${ci}`,
         header: colName,
-        size: Math.max(100, Math.min(colName.length * 10 + 40, 300)),
+        size: Math.max(80, Math.min(colName.length * 9 + 30, 200)),
         minSize: 60,
+        maxSize: 400,
         enableResizing: true,
         cell: ({ row }) => row.original[ci] ?? "",
       })
@@ -71,8 +72,8 @@ export function SampleGrid({ columns, rows }: SampleGridProps) {
   return (
     <div className="border rounded overflow-auto max-h-[500px] font-[family-name:var(--font-d2coding)]">
       <table
-        className="text-sm border-collapse"
-        style={{ width: table.getCenterTotalSize() }}
+        className="text-sm border-collapse table-fixed"
+        style={{ width: Math.max(table.getCenterTotalSize(), 100) }}
       >
         <thead className="bg-muted/60 sticky top-0 z-10">
           {table.getHeaderGroups().map((hg) => (

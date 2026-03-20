@@ -76,6 +76,9 @@ class SchemaFieldCreate(BaseModel):
     native_type: str | None = None
     description: str | None = None
     nullable: str = "true"
+    is_primary_key: str = "false"
+    is_unique: str = "false"
+    is_indexed: str = "false"
     ordinal: int = 0
 
 
@@ -86,6 +89,9 @@ class SchemaFieldResponse(BaseModel):
     native_type: str | None = None
     description: str | None = None
     nullable: str
+    is_primary_key: str = "false"
+    is_unique: str = "false"
+    is_indexed: str = "false"
     ordinal: int
 
     model_config = {"from_attributes": True}
@@ -205,6 +211,8 @@ class DatasetResponse(BaseModel):
     table_type: str | None = None
     storage_format: str | None = None
     status: str
+    is_synced: str = "false"
+    platform_properties: dict | None = None
     schema_fields: list[SchemaFieldResponse] = Field(default_factory=list)
     tags: list[TagResponse] = Field(default_factory=list)
     owners: list[OwnerResponse] = Field(default_factory=list)
@@ -224,6 +232,7 @@ class DatasetSummary(BaseModel):
     description: str | None = None
     origin: str
     status: str
+    is_synced: str = "false"
     tag_count: int = 0
     owner_count: int = 0
     schema_field_count: int = 0
