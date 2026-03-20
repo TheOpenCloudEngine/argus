@@ -1,0 +1,205 @@
+-- Argus Catalog Server - MariaDB/MySQL Schema
+-- Database: argus_catalog
+
+-- ---------------------------------------------------------------------------
+-- User Management
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS argus_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(30),
+    password_hash VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    role_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES argus_roles(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Platforms
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_platforms (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    logo_url VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_platform_configurations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id INT NOT NULL UNIQUE,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Platform Metadata
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_platform_data_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id INT NOT NULL,
+    type_name VARCHAR(100) NOT NULL,
+    type_category VARCHAR(50) NOT NULL,
+    description VARCHAR(500),
+    ordinal INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_platform_data_type (platform_id, type_name),
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_platform_table_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id INT NOT NULL,
+    type_name VARCHAR(100) NOT NULL,
+    display_name VARCHAR(200) NOT NULL,
+    description VARCHAR(500),
+    is_default VARCHAR(5) DEFAULT 'false',
+    ordinal INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_platform_table_type (platform_id, type_name),
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_platform_storage_formats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id INT NOT NULL,
+    format_name VARCHAR(100) NOT NULL,
+    display_name VARCHAR(200) NOT NULL,
+    description VARCHAR(500),
+    is_default VARCHAR(5) DEFAULT 'false',
+    ordinal INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_platform_storage_format (platform_id, format_name),
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_platform_features (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    platform_id INT NOT NULL,
+    feature_key VARCHAR(100) NOT NULL,
+    display_name VARCHAR(200) NOT NULL,
+    description VARCHAR(500),
+    value_type VARCHAR(50) NOT NULL,
+    is_required VARCHAR(5) DEFAULT 'false',
+    ordinal INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_platform_feature (platform_id, feature_key),
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Datasets
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_datasets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    urn VARCHAR(500) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    platform_id INT NOT NULL,
+    description TEXT,
+    origin VARCHAR(50) NOT NULL DEFAULT 'PROD',
+    qualified_name VARCHAR(500),
+    table_type VARCHAR(100),
+    storage_format VARCHAR(100),
+    platform_properties TEXT,
+    is_synced VARCHAR(5) DEFAULT 'false',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_dataset_properties (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id INT NOT NULL,
+    property_key VARCHAR(100) NOT NULL,
+    property_value TEXT NOT NULL,
+    UNIQUE KEY uq_dataset_property (dataset_id, property_key),
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_dataset_schemas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id INT NOT NULL,
+    field_path VARCHAR(500) NOT NULL,
+    field_type VARCHAR(100) NOT NULL,
+    native_type VARCHAR(100),
+    description TEXT,
+    nullable VARCHAR(5) DEFAULT 'true',
+    is_primary_key VARCHAR(5) DEFAULT 'false',
+    is_unique VARCHAR(5) DEFAULT 'false',
+    is_indexed VARCHAR(5) DEFAULT 'false',
+    ordinal INT NOT NULL DEFAULT 0,
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Tags
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    color VARCHAR(7) DEFAULT '#3b82f6',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_dataset_tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id INT NOT NULL,
+    tag_id INT NOT NULL,
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES catalog_tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Glossary
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_glossary_terms (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL UNIQUE,
+    description TEXT,
+    source VARCHAR(100),
+    parent_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES catalog_glossary_terms(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS catalog_dataset_glossary_terms (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id INT NOT NULL,
+    term_id INT NOT NULL,
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    FOREIGN KEY (term_id) REFERENCES catalog_glossary_terms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Catalog - Owners
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_owners (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id INT NOT NULL,
+    owner_name VARCHAR(200) NOT NULL,
+    owner_type VARCHAR(50) NOT NULL DEFAULT 'TECHNICAL_OWNER',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
