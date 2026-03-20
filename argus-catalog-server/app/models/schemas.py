@@ -1,0 +1,108 @@
+"""Pydantic schemas for ML Model Registry."""
+
+from datetime import datetime
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+class ModelVersionStatus(str, Enum):
+    PENDING_REGISTRATION = "PENDING_REGISTRATION"
+    READY = "READY"
+    FAILED_REGISTRATION = "FAILED_REGISTRATION"
+
+
+# ---------------------------------------------------------------------------
+# RegisteredModel schemas
+# ---------------------------------------------------------------------------
+
+class RegisteredModelCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    owner: str | None = None
+    storage_location: str | None = None
+    platform_id: int | None = None
+
+
+class RegisteredModelUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    owner: str | None = None
+
+
+class RegisteredModelResponse(BaseModel):
+    id: int
+    name: str
+    urn: str
+    platform_id: int | None = None
+    description: str | None = None
+    owner: str | None = None
+    storage_location: str | None = None
+    max_version_number: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None = None
+    updated_by: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedRegisteredModels(BaseModel):
+    items: list[RegisteredModelResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+# ---------------------------------------------------------------------------
+# ModelVersion schemas
+# ---------------------------------------------------------------------------
+
+class ModelVersionCreate(BaseModel):
+    model_name: str = Field(..., min_length=1, max_length=255)
+    source: str | None = None
+    run_id: str | None = None
+    run_link: str | None = None
+    description: str | None = None
+
+
+class ModelVersionUpdate(BaseModel):
+    description: str | None = None
+    source: str | None = None
+
+
+class ModelVersionFinalize(BaseModel):
+    status: ModelVersionStatus = Field(
+        ..., description="READY or FAILED_REGISTRATION"
+    )
+
+
+class ModelVersionResponse(BaseModel):
+    id: int
+    model_id: int
+    model_name: str
+    version: int
+    source: str | None = None
+    run_id: str | None = None
+    run_link: str | None = None
+    description: str | None = None
+    status: str
+    storage_location: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None = None
+    updated_by: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedModelVersions(BaseModel):
+    items: list[ModelVersionResponse]
+    total: int
+    page: int
+    page_size: int
