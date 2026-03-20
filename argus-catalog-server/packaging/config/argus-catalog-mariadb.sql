@@ -203,3 +203,42 @@ CREATE TABLE IF NOT EXISTS catalog_owners (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- ML Model Registry
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS models_registered_models (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    urn VARCHAR(500) NOT NULL UNIQUE,
+    platform_id INT,
+    description TEXT,
+    owner VARCHAR(200),
+    storage_location VARCHAR(1000),
+    max_version_number INT NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by VARCHAR(200),
+    updated_by VARCHAR(200),
+    FOREIGN KEY (platform_id) REFERENCES catalog_platforms(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS models_model_versions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    model_id INT NOT NULL,
+    version INT NOT NULL,
+    source VARCHAR(1000),
+    run_id VARCHAR(255),
+    run_link VARCHAR(1000),
+    description TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING_REGISTRATION',
+    storage_location VARCHAR(1000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by VARCHAR(200),
+    updated_by VARCHAR(200),
+    UNIQUE KEY uq_model_version (model_id, version),
+    FOREIGN KEY (model_id) REFERENCES models_registered_models(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
