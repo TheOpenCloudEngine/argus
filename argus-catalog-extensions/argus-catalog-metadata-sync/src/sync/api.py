@@ -1,6 +1,7 @@
 """REST API for managing metadata sync remotely."""
 
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -10,6 +11,7 @@ from sync.core.catalog_client import CatalogClient
 from sync.core.config import settings
 from sync.core.database import init_db
 from sync.core.scheduler import SyncScheduler
+from sync import __version__
 from sync.platforms.hive.query_history import HiveQueryEvent, save_query_event
 from sync.platforms.hive.sync import HiveMetastoreSync
 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Global state
 _scheduler = SyncScheduler()
+_start_time: float = 0.0
 
 
 def _init_platforms() -> None:
@@ -35,6 +38,8 @@ def _init_platforms() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _start_time
+    _start_time = time.monotonic()
     init_db(settings)
     _init_platforms()
     _scheduler.start()
@@ -55,7 +60,14 @@ app = FastAPI(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "metadata-sync"}
+    """Health check endpoint."""
+    uptime_seconds = int(time.monotonic() - _start_time)
+    return {
+        "status": "ok",
+        "service": "argus-catalog-metadata-sync",
+        "uptime": uptime_seconds,
+        "version": __version__,
+    }
 
 
 # ---------------------------------------------------------------------------
