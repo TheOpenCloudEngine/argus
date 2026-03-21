@@ -17,9 +17,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * Hive Query를 수집하는 Audit Hook
+ * Hive Query를 Hive Server에서 수신하여, Endpoint로 발송하는 Hook.
  *
- * @author KIM BYOUNG GON (support@data-dynamics.io)
+ * @author KIM BYOUNG GON (fharenheit@gmail.com)
  */
 public class QueryAuditHook implements ExecuteWithHookContext {
 
