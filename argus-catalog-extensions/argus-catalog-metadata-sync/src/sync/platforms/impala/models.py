@@ -6,7 +6,7 @@ from sync.core.database import Base
 
 
 class ImpalaQueryHistory(Base):
-    """Impala query execution history collected from Cloudera Manager API."""
+    """Impala query execution history collected from Cloudera Manager API or Java Agent."""
 
     __tablename__ = "argus_collector_impala_query_history"
 
@@ -15,8 +15,10 @@ class ImpalaQueryHistory(Base):
     query_type = Column(String(32), nullable=True)       # DML, DDL, QUERY, UNKNOWN
     query_state = Column(String(32), nullable=True)       # FINISHED, EXCEPTION, etc.
     statement = Column(Text, nullable=True)
+    plan = Column(Text, nullable=True)                    # Query execution plan
     database = Column(String(256), nullable=True)
     username = Column(String(256), nullable=True)
+    delegate_user = Column(String(256), nullable=True)    # Delegated/proxy user
     coordinator_host = Column(String(512), nullable=True)
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)

@@ -283,3 +283,36 @@ async def collect_hive_query(event: HiveQueryEvent):
     except Exception as e:
         logger.error("Failed to save Hive query event: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Impala Query Collection (from Java Agent)
+# ---------------------------------------------------------------------------
+
+@app.post("/collector/impala/query")
+async def collect_impala_query(event: dict):
+    """Receive an Impala query event from the Java Agent and save it immediately."""
+    from sync.platforms.impala.query_history import ImpalaQueryEvent, save_impala_query_event
+
+    try:
+        parsed_event = ImpalaQueryEvent(**event)
+        record = save_impala_query_event(parsed_event)
+        lineage_count = 0
+
+        # Parse lineage if query text is available
+        if record.statement:
+            try:
+                from sync.platforms.impala.lineage_service import process_impala_query_lineage
+                lineage_count = process_impala_query_lineage(record)
+            except Exception as e:
+                logger.warning("Impala lineage parsing failed for query %s: %s", record.query_id, e)
+
+        return {
+            "status": "ok",
+            "id": record.id,
+            "queryId": record.query_id,
+            "lineageCount": lineage_count,
+        }
+    except Exception as e:
+        logger.error("Failed to save Impala query event: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
