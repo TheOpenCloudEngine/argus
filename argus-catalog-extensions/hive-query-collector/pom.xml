@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.opencloudengine.argus.catalog.collector</groupId>
-    <artifactId>hive-query-collector</artifactId>
+    <artifactId>hive-query-hook</artifactId>
     <version>1.0.1</version>
     <packaging>jar</packaging>
     <name>Hive Query Audit Hook</name>
