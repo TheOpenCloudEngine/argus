@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import {
   ReactFlow,
   Background,
@@ -127,7 +127,7 @@ function transformBadge(type: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Edge Detail Panel
+// Draggable + Resizable Lineage Detail Panel
 // ---------------------------------------------------------------------------
 
 function EdgeDetailPanel({
@@ -137,88 +137,181 @@ function EdgeDetailPanel({
   info: SelectedEdgeInfo
   onClose: () => void
 }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const [size, setSize] = useState({ w: 420, h: 480 })
+  const dragRef = useRef({ active: false, sx: 0, sy: 0, ox: 0, oy: 0 })
+  const resizeRef = useRef({ active: false, sx: 0, sy: 0, ow: 0, oh: 0 })
+
+  // Calculate initial position (top-right of container)
+  useEffect(() => {
+    if (pos) return
+    const container = panelRef.current?.parentElement
+    if (container) {
+      containerRef.current = container as HTMLDivElement
+      const rect = container.getBoundingClientRect()
+      setPos({ left: rect.width - size.w - 16, top: 16 })
+    } else {
+      setPos({ left: 400, top: 16 })
+    }
+  }, [pos, size.w])
+
+  // --- Drag ---
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    if (!pos) return
+    dragRef.current = { active: true, sx: e.clientX, sy: e.clientY, ox: pos.left, oy: pos.top }
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current.active) return
+      setPos({
+        left: dragRef.current.ox + (ev.clientX - dragRef.current.sx),
+        top: dragRef.current.oy + (ev.clientY - dragRef.current.sy),
+      })
+    }
+    const onUp = () => {
+      dragRef.current.active = false
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }, [pos])
+
+  // --- Resize ---
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    resizeRef.current = { active: true, sx: e.clientX, sy: e.clientY, ow: size.w, oh: size.h }
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeRef.current.active) return
+      setSize({
+        w: Math.max(320, resizeRef.current.ow + (ev.clientX - resizeRef.current.sx)),
+        h: Math.max(200, resizeRef.current.oh + (ev.clientY - resizeRef.current.sy)),
+      })
+    }
+    const onUp = () => {
+      resizeRef.current.active = false
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }, [size])
+
+  if (!pos) return null
+
   return (
-    <Card className="absolute top-4 right-4 w-[400px] max-h-[560px] overflow-auto z-10 shadow-lg">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">Edge Detail</CardTitle>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-          <span className="font-medium text-foreground">{info.sourceName}</span>
-          <ArrowRight className="h-3 w-3" />
-          <span className="font-medium text-foreground">{info.targetName}</span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="pt-0 space-y-4">
-        {/* JOIN Keys */}
-        {info.joinKeys.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <Link2 className="h-3.5 w-3.5 text-purple-600" />
-              <span className="text-xs font-medium">JOIN Columns ({info.joinKeys.length})</span>
-            </div>
-            <div className="space-y-1.5">
-              {info.joinKeys.map((jk, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 text-xs bg-purple-50 dark:bg-purple-950 rounded px-2.5 py-1.5"
-                >
-                  <code className="font-mono text-purple-700 dark:text-purple-300">
-                    {jk.sourceColumn}
-                  </code>
-                  <span className="text-muted-foreground">=</span>
-                  <code className="font-mono text-purple-700 dark:text-purple-300">
-                    {jk.targetColumn}
-                  </code>
-                  {transformBadge("JOIN_KEY")}
-                </div>
-              ))}
-            </div>
+    <div
+      ref={panelRef}
+      className="absolute z-10"
+      style={{ left: pos.left, top: pos.top, width: size.w, height: size.h }}
+    >
+      <Card className="h-full flex flex-col shadow-lg border-2">
+        {/* Draggable header */}
+        <CardHeader
+          className="pb-3 cursor-move select-none flex-shrink-0"
+          onMouseDown={onDragStart}
+        >
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium">Lineage Detail</CardTitle>
+            <button
+              onClick={onClose}
+              onMouseDown={e => e.stopPropagation()}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-        )}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+            <span className="font-medium text-foreground">{info.sourceName}</span>
+            <ArrowRight className="h-3 w-3" />
+            <span className="font-medium text-foreground">{info.targetName}</span>
+          </div>
+        </CardHeader>
 
-        {info.joinKeys.length > 0 && info.columns.length > 0 && <Separator />}
-
-        {/* Column Mappings */}
-        {info.columns.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-medium">Column Mappings ({info.columns.length})</span>
-            </div>
-            <div className="space-y-1">
-              {info.columns.map((cl, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <code className="font-mono truncate text-foreground">
-                      {cl.sourceColumn}
+        {/* Scrollable content */}
+        <CardContent className="pt-0 space-y-4 overflow-auto flex-1 min-h-0">
+          {/* JOIN Keys */}
+          {info.joinKeys.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Link2 className="h-3.5 w-3.5 text-purple-600" />
+                <span className="text-xs font-medium">JOIN Columns ({info.joinKeys.length})</span>
+              </div>
+              <div className="space-y-1.5">
+                {info.joinKeys.map((jk, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-xs bg-purple-50 dark:bg-purple-950 rounded px-2.5 py-1.5"
+                  >
+                    <code className="font-mono text-purple-700 dark:text-purple-300">
+                      {jk.sourceColumn}
                     </code>
-                    <ArrowRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                    <code className="font-mono truncate text-foreground">
-                      {cl.targetColumn}
+                    <span className="text-muted-foreground">=</span>
+                    <code className="font-mono text-purple-700 dark:text-purple-300">
+                      {jk.targetColumn}
                     </code>
+                    {transformBadge("JOIN_KEY")}
                   </div>
-                  {transformBadge(cl.transformType)}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {info.joinKeys.length === 0 && info.columns.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No column-level detail available for this edge.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+          {info.joinKeys.length > 0 && info.columns.length > 0 && <Separator />}
+
+          {/* Column Mappings */}
+          {info.columns.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium">Column Mappings ({info.columns.length})</span>
+              </div>
+              <div className="space-y-1">
+                {info.columns.map((cl, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <code className="font-mono truncate text-foreground">
+                        {cl.sourceColumn}
+                      </code>
+                      <ArrowRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                      <code className="font-mono truncate text-foreground">
+                        {cl.targetColumn}
+                      </code>
+                    </div>
+                    {transformBadge(cl.transformType)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {info.joinKeys.length === 0 && info.columns.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No column-level detail available for this edge.
+            </p>
+          )}
+        </CardContent>
+
+        {/* Resize handle */}
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+          onMouseDown={onResizeStart}
+        >
+          <svg
+            width="16" height="16" viewBox="0 0 16 16"
+            className="text-muted-foreground/40 hover:text-muted-foreground"
+          >
+            <path d="M14 14L8 14L14 8Z" fill="currentColor" />
+            <path d="M14 14L11 14L14 11Z" fill="currentColor" opacity="0.5" />
+          </svg>
+        </div>
+      </Card>
+    </div>
   )
 }
 
