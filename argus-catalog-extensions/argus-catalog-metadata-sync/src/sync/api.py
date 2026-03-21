@@ -283,3 +283,88 @@ async def collect_hive_query(event: HiveQueryEvent):
     except Exception as e:
         logger.error("Failed to save Hive query event: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Impala Query Collection (from Java Agent)
+# ---------------------------------------------------------------------------
+
+@app.post("/collector/impala/query")
+async def collect_impala_query(event: dict):
+    """Receive an Impala query event from the Java Agent and save it immediately."""
+    from sync.platforms.impala.query_history import ImpalaQueryEvent, save_impala_query_event
+
+    try:
+        parsed_event = ImpalaQueryEvent(**event)
+        record = save_impala_query_event(parsed_event)
+        lineage_count = 0
+
+        # Parse lineage if query text is available
+        if record.statement:
+            try:
+                from sync.platforms.impala.lineage_service import process_impala_query_lineage
+                lineage_count = process_impala_query_lineage(record)
+            except Exception as e:
+                logger.warning("Impala lineage parsing failed for query %s: %s", record.query_id, e)
+
+        return {
+            "status": "ok",
+            "id": record.id,
+            "queryId": record.query_id,
+            "lineageCount": lineage_count,
+        }
+    except Exception as e:
+        logger.error("Failed to save Impala query event: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Trino Query Collection (from EventListener plugin)
+# ---------------------------------------------------------------------------
+
+@app.post("/collector/trino/query")
+async def collect_trino_query(event: dict):
+    """Receive a Trino query event from the EventListener plugin."""
+    from sync.platforms.trino.query_history import save_trino_query_event, save_trino_lineage
+
+    try:
+        record = save_trino_query_event(event)
+        lineage_count = 0
+
+        # Trino provides native input/output metadata — no SQL parsing needed
+        if record.query_state == "FINISHED":
+            try:
+                lineage_count = save_trino_lineage(record)
+            except Exception as e:
+                logger.warning("Trino lineage failed for query %s: %s", record.query_id, e)
+
+        return {
+            "status": "ok",
+            "id": record.id,
+            "queryId": record.query_id,
+            "lineageCount": lineage_count,
+        }
+    except Exception as e:
+        logger.error("Failed to save Trino query event: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# StarRocks Query Collection (from AuditPlugin)
+# ---------------------------------------------------------------------------
+
+@app.post("/collector/starrocks/query")
+async def collect_starrocks_query(event: dict):
+    """Receive a StarRocks query event from the AuditPlugin."""
+    from sync.platforms.starrocks.query_history import save_starrocks_query_event
+
+    try:
+        record = save_starrocks_query_event(event)
+        return {
+            "status": "ok",
+            "id": record.id,
+            "queryId": record.query_id,
+        }
+    except Exception as e:
+        logger.error("Failed to save StarRocks query event: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")

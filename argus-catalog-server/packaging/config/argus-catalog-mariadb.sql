@@ -291,8 +291,11 @@ CREATE TABLE IF NOT EXISTS argus_collector_impala_query_history (
     query_type VARCHAR(32),
     query_state VARCHAR(32),
     statement TEXT,
+    plan TEXT,
     `database` VARCHAR(256),
     username VARCHAR(256),
+    connected_user VARCHAR(256),
+    delegate_user VARCHAR(256),
     coordinator_host VARCHAR(512),
     start_time TIMESTAMP NULL,
     end_time TIMESTAMP NULL,
@@ -303,6 +306,77 @@ CREATE TABLE IF NOT EXISTS argus_collector_impala_query_history (
     INDEX idx_impala_query_history_query_id (query_id),
     INDEX idx_impala_query_history_platform_id (platform_id),
     INDEX idx_impala_query_history_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Collector - Trino Query History
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_collector_trino_query_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    query_id VARCHAR(256) NOT NULL UNIQUE,
+    query_state VARCHAR(32),
+    query_type VARCHAR(32),
+    statement TEXT,
+    plan TEXT,
+    username VARCHAR(256),
+    principal VARCHAR(256),
+    source VARCHAR(256),
+    catalog VARCHAR(256),
+    `schema` VARCHAR(256),
+    remote_client_address VARCHAR(256),
+    create_time TIMESTAMP NULL,
+    execution_start_time TIMESTAMP NULL,
+    end_time TIMESTAMP NULL,
+    wall_time_ms BIGINT,
+    cpu_time_ms BIGINT,
+    physical_input_bytes BIGINT,
+    physical_input_rows BIGINT,
+    output_bytes BIGINT,
+    output_rows BIGINT,
+    peak_memory_bytes BIGINT,
+    error_code VARCHAR(128),
+    error_message TEXT,
+    inputs_json TEXT,
+    output_json TEXT,
+    platform_id VARCHAR(100),
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trino_query_history_query_id (query_id),
+    INDEX idx_trino_query_history_platform_id (platform_id),
+    INDEX idx_trino_query_history_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Collector - StarRocks Query History
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_collector_starrocks_query_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    query_id VARCHAR(256) NOT NULL UNIQUE,
+    statement TEXT,
+    digest VARCHAR(64),
+    username VARCHAR(256),
+    authorized_user VARCHAR(256),
+    client_ip VARCHAR(64),
+    `database` VARCHAR(256),
+    catalog VARCHAR(256),
+    state VARCHAR(16),
+    error_code VARCHAR(512),
+    query_time_ms BIGINT,
+    scan_rows BIGINT,
+    scan_bytes BIGINT,
+    return_rows BIGINT,
+    cpu_cost_ns BIGINT,
+    mem_cost_bytes BIGINT,
+    pending_time_ms BIGINT,
+    is_query INT,
+    fe_ip VARCHAR(128),
+    event_timestamp BIGINT,
+    platform_id VARCHAR(100),
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_starrocks_query_history_query_id (query_id),
+    INDEX idx_starrocks_query_history_platform_id (platform_id),
+    INDEX idx_starrocks_query_history_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------------
