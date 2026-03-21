@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,7 +15,9 @@ import {
   Columns3,
   Database,
   FlaskConical,
+  Flame,
   Globe,
+  History,
   Pencil,
   Plus,
   Rocket,
@@ -23,12 +26,13 @@ import {
   Tags,
   Trash2,
   Users,
+  Workflow,
   X,
 } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +49,7 @@ import {
 } from "@workspace/ui/components/command"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Textarea } from "@workspace/ui/components/textarea"
+// Textarea removed — replaced by Tiptap MarkdownEditor
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
 import {
   Select,
@@ -84,41 +88,49 @@ import { fetchUsers } from "@/features/users/api"
 import type { User } from "@/features/users/data/schema"
 import type { DatasetDetail, GlossaryTerm, SchemaField, Tag } from "@/features/datasets/data/schema"
 import { SampleDataTab } from "@/features/datasets/components/sample-data-tab"
+import { SchemaHistoryTab } from "@/features/datasets/components/schema-history-tab"
 import { PlatformSpecificCard } from "@/features/datasets/components/platform-specific-card"
+import { MarkdownEditor, MarkdownViewer } from "@/features/datasets/components/markdown-editor"
+import { SchemaEditGrid, type EditableField } from "@/features/datasets/components/schema-edit-grid"
+import { NiFiFlowTab } from "@/features/datasets/components/nifi-flow-tab"
+import { KestraFlowTab } from "@/features/datasets/components/kestra-flow-tab"
+import { AirflowDagTab } from "@/features/datasets/components/airflow-dag-tab"
 
 // ---------------------------------------------------------------------------
-// Schema field type for editing (no id yet)
+// Schema field helpers for editing
 // ---------------------------------------------------------------------------
-type EditableField = {
-  key: string
-  field_path: string
-  field_type: string
-  native_type: string
-  description: string
-  nullable: string
-  ordinal: number
+
+let _idCounter = 0
+function genId(): string {
+  return `f-${Date.now()}-${++_idCounter}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function newField(ordinal: number): EditableField {
   return {
-    key: crypto.randomUUID(),
+    key: genId(),
     field_path: "",
     field_type: "STRING",
     native_type: "",
     description: "",
     nullable: "true",
+    is_primary_key: "false",
+    is_unique: "false",
+    is_indexed: "false",
     ordinal,
   }
 }
 
 function toEditable(f: SchemaField): EditableField {
   return {
-    key: crypto.randomUUID(),
+    key: genId(),
     field_path: f.field_path,
     field_type: f.field_type,
     native_type: f.native_type ?? "",
     description: f.description ?? "",
     nullable: f.nullable,
+    is_primary_key: f.is_primary_key ?? "false",
+    is_unique: f.is_unique ?? "false",
+    is_indexed: f.is_indexed ?? "false",
     ordinal: f.ordinal,
   }
 }
@@ -228,6 +240,172 @@ function generateAvroSchema(datasetName: string, namespace: string, fields: Sche
 }
 
 // ---------------------------------------------------------------------------
+// PySpark code generator
+// ---------------------------------------------------------------------------
+
+function fieldTypeToSparkType(fieldType: string): string {
+  switch (fieldType.toUpperCase()) {
+    case "NUMBER": return "StringType()"  // Read as string for safety; cast in downstream
+    case "STRING": return "StringType()"
+    case "BOOLEAN": return "StringType()"
+    case "DATE": return "StringType()"
+    case "BYTES": return "BinaryType()"
+    case "MAP": return "StringType()"
+    case "ARRAY": return "StringType()"
+    case "ENUM": return "StringType()"
+    default: return "StringType()"
+  }
+}
+
+function getJdbcUrl(platformType: string): { url: string; driver: string; format: string } {
+  switch (platformType) {
+    case "mysql":
+      return { url: "jdbc:mysql://<HOST>:<PORT>/<DATABASE>", driver: "com.mysql.cj.jdbc.Driver", format: "jdbc" }
+    case "postgresql":
+      return { url: "jdbc:postgresql://<HOST>:<PORT>/<DATABASE>", driver: "org.postgresql.Driver", format: "jdbc" }
+    case "greenplum":
+      return { url: "jdbc:postgresql://<HOST>:<PORT>/<DATABASE>", driver: "org.postgresql.Driver", format: "jdbc" }
+    case "starrocks":
+      return { url: "jdbc:mysql://<HOST>:<PORT>/<DATABASE>", driver: "com.mysql.cj.jdbc.Driver", format: "jdbc" }
+    case "trino":
+      return { url: "jdbc:trino://<HOST>:<PORT>/<CATALOG>/<SCHEMA>", driver: "io.trino.jdbc.TrinoDriver", format: "jdbc" }
+    case "oracle":
+      return { url: "jdbc:oracle:thin:@<HOST>:<PORT>:<SID>", driver: "oracle.jdbc.OracleDriver", format: "jdbc" }
+    default:
+      return { url: `jdbc:${platformType}://<HOST>:<PORT>/<DATABASE>`, driver: "<DRIVER_CLASS>", format: "jdbc" }
+  }
+}
+
+function generatePySparkCode(dataset: DatasetDetail): string {
+  const tableName = dataset.name  // e.g. "sakila.actor"
+  const parts = tableName.split(".")
+  const dbName = parts.length > 1 ? parts[0] : "<DATABASE>"
+  const tblName = parts.length > 1 ? parts[1] : parts[0]
+  const platformType = dataset.platform.type
+  const platformId = dataset.platform.platform_id
+  const jdbc = getJdbcUrl(platformType)
+  const fields = dataset.schema_fields
+
+  const structFields = fields.map((f) => {
+    const sparkType = fieldTypeToSparkType(f.field_type)
+    const nullable = f.nullable === "true" ? "True" : "False"
+    return `    StructField("${f.field_path}", ${sparkType}, ${nullable}),`
+  }).join("\n")
+
+  return `"""
+PySpark code to read '${tableName}' from ${dataset.platform.name} (${platformId})
+and write to HDFS as Parquet with optional date-based partitioning.
+
+Generated by Argus Catalog
+Platform: ${platformType} (${platformId})
+Table: ${dbName}.${tblName}
+Fields: ${fields.length}
+"""
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    StructType, StructField, StringType, BinaryType,
+)
+
+# ---------------------------------------------------------------------------
+# 1. Spark Session
+# ---------------------------------------------------------------------------
+
+spark = SparkSession.builder \\
+    .appName("argus-catalog-${platformId}-${tblName}") \\
+    .getOrCreate()
+
+# ---------------------------------------------------------------------------
+# 2. Schema Definition (from Argus Catalog metadata)
+# ---------------------------------------------------------------------------
+
+schema = StructType([
+${structFields}
+])
+
+# ---------------------------------------------------------------------------
+# 3. Read from Source (JDBC)
+# ---------------------------------------------------------------------------
+
+jdbc_url = "${jdbc.url}"
+
+df = spark.read \\
+    .format("${jdbc.format}") \\
+    .option("url", jdbc_url) \\
+    .option("dbtable", "${dbName}.${tblName}") \\
+    .option("driver", "${jdbc.driver}") \\
+    .option("user", "<USERNAME>") \\
+    .option("password", "<PASSWORD>") \\
+    .schema(schema) \\
+    .load()
+
+print(f"Read {df.count()} rows from ${tableName}")
+df.printSchema()
+
+# ---------------------------------------------------------------------------
+# 4. Write to HDFS as Parquet
+# ---------------------------------------------------------------------------
+
+hdfs_path = "hdfs://nameservice/data/catalog/${platformId}/${dbName}/${tblName}"
+
+df.write \\
+    .mode("overwrite") \\
+    .parquet(hdfs_path)
+
+print(f"Written to {hdfs_path}")
+
+# ---------------------------------------------------------------------------
+# 5. Date-based Partitioning (Optional)
+#
+# Uncomment and customize the code below to read/write by date partition.
+# This is useful for incremental ingestion of large tables.
+#
+# Requirements:
+#   - The source table must have a date/timestamp column (e.g. "last_update")
+#   - Adjust the column name, date format, and paths as needed
+# ---------------------------------------------------------------------------
+
+# from pyspark.sql.functions import col, to_date, lit
+# from datetime import date, timedelta
+#
+# # Configuration
+# DATE_COLUMN = "last_update"          # Column to partition by
+# TARGET_DATE = date(2026, 3, 20)      # Specific date to process
+# # TARGET_DATE = date.today() - timedelta(days=1)  # Yesterday
+#
+# # Read only rows matching the target date
+# df_daily = spark.read \\
+#     .format("${jdbc.format}") \\
+#     .option("url", jdbc_url) \\
+#     .option("dbtable", f"(SELECT * FROM ${dbName}.${tblName} WHERE DATE({DATE_COLUMN}) = '{TARGET_DATE}') AS t") \\
+#     .option("driver", "${jdbc.driver}") \\
+#     .option("user", "<USERNAME>") \\
+#     .option("password", "<PASSWORD>") \\
+#     .schema(schema) \\
+#     .load()
+#
+# # Add partition column
+# df_daily = df_daily.withColumn("dt", lit(str(TARGET_DATE)))
+#
+# # Write with date partitioning (append mode for incremental)
+# hdfs_partitioned_path = "hdfs://nameservice/data/catalog/${platformId}/${dbName}/${tblName}"
+#
+# df_daily.write \\
+#     .mode("append") \\
+#     .partitionBy("dt") \\
+#     .parquet(hdfs_partitioned_path)
+#
+# print(f"Written {df_daily.count()} rows for {TARGET_DATE} to {hdfs_partitioned_path}/dt={TARGET_DATE}")
+
+# ---------------------------------------------------------------------------
+# 6. Cleanup
+# ---------------------------------------------------------------------------
+
+spark.stop()
+`
+}
+
+// ---------------------------------------------------------------------------
 // Main page component
 // ---------------------------------------------------------------------------
 export default function DatasetDetailPage() {
@@ -268,7 +446,6 @@ export default function DatasetDetailPage() {
   const [descEditing, setDescEditing] = useState(false)
   const [descDraft, setDescDraft] = useState("")
   const [descSaving, setDescSaving] = useState(false)
-  const descRef = useRef<HTMLTextAreaElement>(null)
 
   const load = useCallback(async (showLoading = true) => {
     try {
@@ -387,7 +564,6 @@ export default function DatasetDetailPage() {
   const startDescEdit = () => {
     setDescDraft(dataset?.description ?? "")
     setDescEditing(true)
-    setTimeout(() => descRef.current?.focus(), 0)
   }
 
   const cancelDescEdit = () => {
@@ -414,12 +590,11 @@ export default function DatasetDetailPage() {
     }
   }
 
-  const handleDescKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      cancelDescEdit()
-    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      saveDesc()
-    }
+  // Keyboard shortcuts removed — Tiptap editor handles its own input.
+  // Save/Cancel are done via buttons.
+  const _unused_handleDescKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") cancelDescEdit()
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveDesc()
   }
 
   // -------------------------------------------------------------------------
@@ -440,20 +615,6 @@ export default function DatasetDetailPage() {
     setEditFields([])
   }
 
-  const updateField = (key: string, prop: keyof EditableField, value: string | number) => {
-    setEditFields((prev) =>
-      prev.map((f) => (f.key === key ? { ...f, [prop]: value } : f))
-    )
-  }
-
-  const removeField = (key: string) => {
-    setEditFields((prev) => prev.filter((f) => f.key !== key))
-  }
-
-  const addField = () => {
-    setEditFields((prev) => [...prev, newField(prev.length)])
-  }
-
   const saveSchema = async () => {
     const valid = editFields.filter((f) => f.field_path.trim() && f.field_type.trim())
     const payload = valid.map((f, idx) => ({
@@ -462,6 +623,9 @@ export default function DatasetDetailPage() {
       native_type: f.native_type.trim() || undefined,
       description: f.description.trim() || undefined,
       nullable: f.nullable,
+      is_primary_key: f.is_primary_key,
+      is_unique: f.is_unique,
+      is_indexed: f.is_indexed,
       ordinal: idx,
     }))
     try {
@@ -721,14 +885,11 @@ export default function DatasetDetailPage() {
               <span className="text-sm text-muted-foreground">Description</span>
               {descEditing ? (
                 <div className="mt-1 space-y-2">
-                  <Textarea
-                    ref={descRef}
+                  <MarkdownEditor
                     value={descDraft}
-                    onChange={(e) => setDescDraft(e.target.value)}
-                    onKeyDown={handleDescKeyDown}
-                    placeholder="Enter description..."
-                    className="text-sm min-h-[60px]"
-                    disabled={descSaving}
+                    onChange={setDescDraft}
+                    editable={!descSaving}
+                    placeholder="Write description in Markdown..."
                   />
                   <div className="flex items-center gap-2">
                     <Button size="sm" onClick={saveDesc} disabled={descSaving}>
@@ -737,18 +898,19 @@ export default function DatasetDetailPage() {
                     <Button size="sm" variant="outline" onClick={cancelDescEdit} disabled={descSaving}>
                       Cancel
                     </Button>
-                    <span className="text-xs text-muted-foreground">
-                      Ctrl+Enter to save · Esc to cancel
-                    </span>
                   </div>
+                </div>
+              ) : dataset.description ? (
+                <div className="mt-1">
+                  <MarkdownViewer value={dataset.description} onClick={startDescEdit} />
                 </div>
               ) : (
                 <p
-                  className="mt-1 text-sm cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-muted transition-colors"
+                  className="mt-1 text-sm cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-muted transition-colors text-muted-foreground italic"
                   onClick={startDescEdit}
                   title="Click to edit"
                 >
-                  {dataset.description || <span className="text-muted-foreground italic">No description. Click to add.</span>}
+                  No description. Click to add.
                 </p>
               )}
             </div>
@@ -782,126 +944,66 @@ export default function DatasetDetailPage() {
               <Code2 className="h-4 w-4" />
               Avro
             </TabsTrigger>
+            <TabsTrigger value="spark" className="gap-1.5">
+              <Flame className="h-4 w-4" />
+              PySpark
+            </TabsTrigger>
+            <TabsTrigger value="nifi" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              NiFi 2
+            </TabsTrigger>
+            <TabsTrigger value="kestra" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              Kestra
+            </TabsTrigger>
+            <TabsTrigger value="airflow" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              Airflow
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
           </TabsList>
 
           {/* =============== Schema tab =============== */}
           <TabsContent value="schema" className="mt-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base">Schema Fields</CardTitle>
-                <div className="flex items-center gap-2">
-                  {schemaEditing ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={cancelSchemaEdit}
-                        disabled={schemaSaving}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={saveSchema}
-                        disabled={schemaSaving}
-                      >
-                        {schemaSaving ? "Saving..." : "Save"}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={startSchemaEdit}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" />
-                      Edit Schema
+              <div className="flex justify-end px-4 pt-3">
+                {schemaEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelSchemaEdit}
+                      disabled={schemaSaving}
+                    >
+                      Cancel
                     </Button>
-                  )}
-                </div>
-              </CardHeader>
+                    <Button
+                      size="sm"
+                      onClick={saveSchema}
+                      disabled={schemaSaving}
+                    >
+                      {schemaSaving ? "Updating..." : "Update"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={startSchemaEdit}>
+                    <Pencil className="mr-1 h-3.5 w-3.5" />
+                    Edit Schema
+                  </Button>
+                )}
+              </div>
               <CardContent className="p-0">
                 {schemaEditing ? (
-                  /* ---------- Inline edit mode ---------- */
-                  <div className="p-4 space-y-3">
-                    {/* Column headers */}
-                    <div className="grid grid-cols-[1fr_140px_140px_80px_1fr_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                      <span>Field Path *</span>
-                      <span>Type *</span>
-                      <span>Native Type</span>
-                      <span>Nullable</span>
-                      <span>Description</span>
-                      <span />
-                    </div>
-
-                    {editFields.map((field) => (
-                      <div key={field.key} className="space-y-2">
-                        <div className="grid grid-cols-[1fr_140px_140px_80px_1fr_40px] gap-2 items-center">
-                          <Input
-                            placeholder="e.g. user_id"
-                            value={field.field_path}
-                            onChange={(e) => updateField(field.key, "field_path", e.target.value)}
-                            className="h-8 text-sm font-mono"
-                          />
-                          {dataTypeOptions.length > 0 ? (
-                            <Select
-                              value={field.field_type}
-                              onValueChange={(v) => updateField(field.key, "field_type", v)}
-                            >
-                              <SelectTrigger size="sm" className="h-8 text-sm w-full">
-                                <SelectValue placeholder="Type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {dataTypeOptions.map((dt) => (
-                                  <SelectItem key={dt.type_name} value={dt.type_name}>
-                                    {dt.type_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              placeholder="STRING"
-                              value={field.field_type}
-                              onChange={(e) => updateField(field.key, "field_type", e.target.value)}
-                              className="h-8 text-sm"
-                            />
-                          )}
-                          <Input
-                            placeholder="VARCHAR"
-                            value={field.native_type}
-                            onChange={(e) => updateField(field.key, "native_type", e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          <Select
-                            value={field.nullable}
-                            onValueChange={(v) => updateField(field.key, "nullable", v)}
-                          >
-                            <SelectTrigger size="sm" className="h-8 text-sm w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="true">Yes</SelectItem>
-                              <SelectItem value="false">No</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            placeholder="Description"
-                            value={field.description}
-                            onChange={(e) => updateField(field.key, "description", e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => removeField(field.key)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    <Button variant="outline" size="sm" onClick={addField}>
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Add Field
-                    </Button>
+                  /* ---------- AG Grid edit mode ---------- */
+                  <div>
+                    <SchemaEditGrid
+                      fields={editFields}
+                      onChange={setEditFields}
+                      dataTypeOptions={dataTypeOptions.map(dt => dt.type_name)}
+                    />
 
                     {/* Platform features section */}
                     {featuresMeta.length > 0 && (
@@ -1005,8 +1107,10 @@ export default function DatasetDetailPage() {
                                 <Check className="h-4 w-4 text-muted-foreground mx-auto" />
                               )}
                             </TableCell>
-                            <TableCell className="text-sm max-w-[300px] truncate">
-                              {field.description || "-"}
+                            <TableCell className="text-sm min-w-[200px] max-w-[500px]">
+                              <span className="whitespace-pre-wrap break-words">
+                                {field.description || "-"}
+                              </span>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1321,12 +1425,37 @@ export default function DatasetDetailPage() {
 
           {/* =============== Sample tab =============== */}
           <TabsContent value="sample" className="mt-4">
-            <SampleDataTab datasetId={datasetId} />
+            <SampleDataTab datasetId={datasetId} isSynced={dataset.is_synced === "true"} />
           </TabsContent>
 
           {/* =============== Avro tab =============== */}
           <TabsContent value="avro" className="mt-4">
             <AvroSchemaCard dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== Spark tab =============== */}
+          <TabsContent value="spark" className="mt-4">
+            <SparkCodeCard dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== NiFi tab =============== */}
+          <TabsContent value="nifi" className="mt-4">
+            <NiFiFlowTab dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== Kestra tab =============== */}
+          <TabsContent value="kestra" className="mt-4">
+            <KestraFlowTab dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== Airflow tab =============== */}
+          <TabsContent value="airflow" className="mt-4">
+            <AirflowDagTab dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== History tab =============== */}
+          <TabsContent value="history" className="mt-4">
+            <SchemaHistoryTab datasetId={datasetId} />
           </TabsContent>
         </Tabs>
 
@@ -1349,15 +1478,15 @@ export default function DatasetDetailPage() {
 function AvroSchemaCard({ dataset }: { dataset: DatasetDetail }) {
   const schema = useMemo(() => {
     if (dataset.schema_fields.length === 0) return ""
+    const schemaName = dataset.name.split(".").pop() || dataset.name
     return generateAvroSchema(
-      dataset.name,
-      `com.argus.catalog.${dataset.platform.name}`,
+      schemaName,
+      `argus.catalog.${dataset.platform.platform_id}.${dataset.name.split(".").slice(0, -1).join(".")}`,
       dataset.schema_fields
     )
-  }, [dataset.name, dataset.platform.name, dataset.schema_fields])
+  }, [dataset.name, dataset.platform.platform_id, dataset.schema_fields])
 
-  const lines = useMemo(() => schema.split("\n"), [schema])
-  const lineNumWidth = String(lines.length).length
+  const lineCount = useMemo(() => schema.split("\n").length, [schema])
 
   return (
     <Card>
@@ -1367,7 +1496,14 @@ function AvroSchemaCard({ dataset }: { dataset: DatasetDetail }) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => navigator.clipboard.writeText(schema)}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(schema)
+                toast.success("Copied to clipboard.")
+              } catch {
+                toast.error("Failed to copy. Clipboard API requires HTTPS.")
+              }
+            }}
           >
             Copy
           </Button>
@@ -1375,32 +1511,111 @@ function AvroSchemaCard({ dataset }: { dataset: DatasetDetail }) {
       </CardHeader>
       <CardContent className="p-0">
         {schema ? (
-          <div
-            className="overflow-auto max-h-[600px] border-t bg-muted/30"
-            style={{ fontFamily: "var(--font-d2coding), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
-          >
-            <table className="w-full border-collapse text-sm leading-6">
-              <tbody>
-                {lines.map((line, i) => (
-                  <tr key={i} className="hover:bg-muted/50">
-                    <td
-                      className="select-none text-right text-muted-foreground/60 px-3 py-0 align-top border-r border-border/50"
-                      style={{ minWidth: `${lineNumWidth + 2}ch` }}
-                    >
-                      {i + 1}
-                    </td>
-                    <td className="px-4 py-0 whitespace-pre">
-                      {line || "\u00A0"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="border-t">
+            <MonacoEditor
+              height={Math.min(lineCount * 20 + 20, 600)}
+              language="json"
+              value={schema}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                fontFamily: "var(--font-d2coding), 'D2Coding', Consolas, 'Courier New', monospace",
+                lineNumbers: "on",
+                renderLineHighlight: "none",
+                overviewRulerLanes: 0,
+                hideCursorInOverviewRuler: true,
+                scrollbar: { vertical: "auto", horizontal: "auto" },
+                wordWrap: "off",
+                domReadOnly: true,
+                padding: { top: 8, bottom: 8 },
+              }}
+            />
           </div>
         ) : (
           <div className="flex items-center justify-center p-8">
             <p className="text-muted-foreground">
               Define schema fields first to generate Avro schema.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PySpark Code Card with Monaco Editor
+// ---------------------------------------------------------------------------
+import dynamic from "next/dynamic"
+const MonacoEditor = dynamic(() => import("@monaco-editor/react").then(m => m.default), { ssr: false })
+
+function SparkCodeCard({ dataset }: { dataset: DatasetDetail }) {
+  const code = useMemo(() => {
+    if (dataset.schema_fields.length === 0) return ""
+    return generatePySparkCode(dataset)
+  }, [dataset])
+
+  const lineCount = useMemo(() => code.split("\n").length, [code])
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between py-3">
+        <div>
+          <CardTitle className="text-base">PySpark Code</CardTitle>
+          <CardDescription className="text-xs mt-1">
+            JDBC read from {dataset.platform.type} and write to HDFS as Parquet.
+            Date partitioning code is included as comments.
+          </CardDescription>
+        </div>
+        {code && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(code)
+                toast.success("Copied to clipboard.")
+              } catch {
+                toast.error("Failed to copy. Clipboard API requires HTTPS.")
+              }
+            }}
+          >
+            Copy
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        {code ? (
+          <div className="border-t">
+            <MonacoEditor
+              height={Math.min(lineCount * 20 + 20, 600)}
+              language="python"
+              value={code}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                fontFamily: "var(--font-d2coding), 'D2Coding', Consolas, 'Courier New', monospace",
+                lineNumbers: "on",
+                renderLineHighlight: "none",
+                overviewRulerLanes: 0,
+                hideCursorInOverviewRuler: true,
+                scrollbar: { vertical: "auto", horizontal: "auto" },
+                wordWrap: "off",
+                domReadOnly: true,
+                padding: { top: 8, bottom: 8 },
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-muted-foreground">
+              Define schema fields first to generate PySpark code.
             </p>
           </div>
         )}
