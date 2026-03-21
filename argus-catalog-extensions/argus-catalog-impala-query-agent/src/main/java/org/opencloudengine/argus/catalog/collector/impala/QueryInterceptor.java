@@ -70,7 +70,13 @@ public class QueryInterceptor {
             String query = extractQuery(queryCtx);
             String user = extractUser(queryCtx);
             String delegateUser = extractDelegateUser(queryCtx);
+            String effectiveUser = extractEffectiveUser(queryCtx);
             String plan = extractPlan(execRequestObj);
+
+            // Use effectiveUser as 'user' if direct user extraction failed
+            if (user == null && effectiveUser != null) {
+                user = effectiveUser;
+            }
 
             QuerySender.send(timestamp, query, plan, user, delegateUser);
 
@@ -177,6 +183,43 @@ public class QueryInterceptor {
                 delegatedUser = tryFieldGet(session, "delegated_user");
             }
             return delegatedUser != null ? delegatedUser.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Extract effective user via TSessionStateUtil.getEffectiveUser(session).
+     *
+     * <p>This is the canonical Impala utility that returns delegated_user
+     * if set, otherwise connected_user. We call it via reflection to avoid
+     * compile-time dependency.</p>
+     */
+    private static String extractEffectiveUser(Object queryCtx) {
+        try {
+            Object session = invoke(queryCtx, "getSession");
+            if (session == null) {
+                session = tryFieldGet(queryCtx, "session");
+            }
+            if (session == null) return null;
+
+            // Try TSessionStateUtil.getEffectiveUser(session)
+            try {
+                Class<?> utilClass = Class.forName("org.apache.impala.util.TSessionStateUtil");
+                java.lang.reflect.Method m = utilClass.getMethod("getEffectiveUser", session.getClass());
+                Object result = m.invoke(null, session);
+                if (result != null) return result.toString();
+            } catch (ClassNotFoundException | NoSuchMethodException e) {
+                // TSessionStateUtil not available — fall through to manual logic
+            }
+
+            // Manual fallback: delegated_user if non-empty, else connected_user
+            Object delegated = invoke(session, "getDelegated_user");
+            if (delegated != null && !delegated.toString().isEmpty()) {
+                return delegated.toString();
+            }
+            Object connected = invoke(session, "getConnected_user");
+            return connected != null ? connected.toString() : null;
         } catch (Exception e) {
             return null;
         }
