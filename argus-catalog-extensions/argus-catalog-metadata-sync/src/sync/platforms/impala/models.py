@@ -17,7 +17,8 @@ class ImpalaQueryHistory(Base):
     statement = Column(Text, nullable=True)
     plan = Column(Text, nullable=True)                    # Query execution plan
     database = Column(String(256), nullable=True)
-    username = Column(String(256), nullable=True)
+    username = Column(String(256), nullable=True)          # Effective user (delegate if set, else connected)
+    connected_user = Column(String(256), nullable=True)   # Authenticated connected user
     delegate_user = Column(String(256), nullable=True)    # Delegated/proxy user
     coordinator_host = Column(String(512), nullable=True)
     start_time = Column(DateTime, nullable=True)

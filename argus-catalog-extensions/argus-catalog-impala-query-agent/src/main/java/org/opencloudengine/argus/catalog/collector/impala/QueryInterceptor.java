@@ -68,17 +68,12 @@ public class QueryInterceptor {
             }
 
             String query = extractQuery(queryCtx);
-            String user = extractUser(queryCtx);
-            String delegateUser = extractDelegateUser(queryCtx);
-            String effectiveUser = extractEffectiveUser(queryCtx);
+            String connectedUser = extractUser(queryCtx);          // session.connected_user
+            String delegateUser = extractDelegateUser(queryCtx);   // session.delegated_user
+            String effectiveUser = extractEffectiveUser(queryCtx); // TSessionStateUtil.getEffectiveUser()
             String plan = extractPlan(execRequestObj);
 
-            // Use effectiveUser as 'user' if direct user extraction failed
-            if (user == null && effectiveUser != null) {
-                user = effectiveUser;
-            }
-
-            QuerySender.send(timestamp, query, plan, user, delegateUser);
+            QuerySender.send(timestamp, query, plan, connectedUser, delegateUser, effectiveUser);
 
         } catch (Exception e) {
             // Agent must never crash the host process

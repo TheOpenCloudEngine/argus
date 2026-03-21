@@ -294,6 +294,7 @@ CREATE TABLE IF NOT EXISTS argus_collector_impala_query_history (
     plan TEXT,
     `database` VARCHAR(256),
     username VARCHAR(256),
+    connected_user VARCHAR(256),
     delegate_user VARCHAR(256),
     coordinator_host VARCHAR(512),
     start_time TIMESTAMP NULL,

@@ -24,8 +24,9 @@ mvn clean install
 | `timestamp` | 쿼리 시작 시각 (epoch millis) |
 | `query` | SQL 쿼리 텍스트 (`TQueryCtx.client_request.stmt`) |
 | `plan` | 쿼리 실행 계획 (`TExecRequest.query_exec_request.query_plan`) |
-| `user` | 연결된 사용자 (`TQueryCtx.session.connected_user`) |
-| `delegateUser` | 위임된 사용자 (`TQueryCtx.session.delegated_user`) |
+| `connectedUser` | 인증된 연결 사용자 (`session.connected_user`) |
+| `delegateUser` | 위임된 사용자 (`session.delegated_user`, proxy 사용 시) |
+| `effectiveUser` | 실제 실행 사용자 (`TSessionStateUtil.getEffectiveUser()` — delegate가 있으면 delegate, 없으면 connected) |
 | `platformId` | Argus Catalog 플랫폼 ID (agent 파라미터로 설정) |
 
 ## 동작 원리
@@ -89,8 +90,9 @@ TQueryCtx 내부 구조(`client_request.stmt`, `session.connected_user`, `sessio
   "timestamp": 1742536200000,
   "query": "SELECT a.id, b.name FROM db.table_a a JOIN db.table_b b ON a.id = b.id",
   "plan": "01:EXCHANGE [UNPARTITIONED]\n|  ...\n00:SCAN HDFS [db.table_a a]\n   ...",
-  "user": "alice",
+  "connectedUser": "alice",
   "delegateUser": "bob",
+  "effectiveUser": "bob",
   "platformId": "impala-19d0bfe954e3fd2cd"
 }
 ```

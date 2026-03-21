@@ -62,14 +62,15 @@ public class QuerySender {
     /**
      * Send a query event asynchronously.
      *
-     * @param timestamp     query start time (epoch millis)
-     * @param query         SQL query text
-     * @param plan          query execution plan (may be null)
-     * @param user          connected user
-     * @param delegateUser  delegated user (may be null)
+     * @param timestamp      query start time (epoch millis)
+     * @param query          SQL query text
+     * @param plan           query execution plan (may be null)
+     * @param connectedUser  authenticated connected user (session.connected_user)
+     * @param delegateUser   delegated/proxy user (session.delegated_user, may be null)
+     * @param effectiveUser  effective user (TSessionStateUtil.getEffectiveUser — delegateUser if set, else connectedUser)
      */
     public static void send(long timestamp, String query, String plan,
-                            String user, String delegateUser) {
+                            String connectedUser, String delegateUser, String effectiveUser) {
         if (targetUrl == null || executor == null) return;
 
         // Build payload on the calling thread (cheap)
@@ -77,8 +78,9 @@ public class QuerySender {
         payload.put("timestamp", timestamp);
         payload.put("query", query);
         payload.put("plan", plan);
-        payload.put("user", user);
+        payload.put("connectedUser", connectedUser);
         payload.put("delegateUser", delegateUser);
+        payload.put("effectiveUser", effectiveUser);
         payload.put("platformId", platformId);
 
         // Send on background thread (never block Impala)

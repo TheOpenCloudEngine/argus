@@ -19,23 +19,25 @@ class ImpalaQueryEvent(BaseModel):
     - timestamp: query start time (epoch millis)
     - query: SQL query text
     - plan: query execution plan (may be null)
-    - user: connected user (effective user)
-    - delegateUser: delegated/proxy user (may be null)
+    - connectedUser: authenticated user (session.connected_user)
+    - delegateUser: delegated/proxy user (session.delegated_user, may be null)
+    - effectiveUser: resolved effective user (TSessionStateUtil.getEffectiveUser)
     - platformId: Argus Catalog platform ID
     """
 
     timestamp: int | None = None
     query: str | None = None
     plan: str | None = None
-    user: str | None = None
-    delegateUser: str | None = None
+    connectedUser: str | None = None   # session.connected_user
+    delegateUser: str | None = None    # session.delegated_user
+    effectiveUser: str | None = None   # TSessionStateUtil.getEffectiveUser()
     platformId: str | None = None
 
 
 def save_impala_query_event(event: ImpalaQueryEvent) -> ImpalaQueryHistory:
     """Save a single Impala query event from the Java Agent to the database."""
-    logger.debug("Received Impala query event: user=%s, platform=%s",
-                 event.user, event.platformId)
+    logger.debug("Received Impala query event: connected=%s, delegate=%s, effective=%s, platform=%s",
+                 event.connectedUser, event.delegateUser, event.effectiveUser, event.platformId)
 
     # Generate a unique query_id (Agent doesn't have Impala's internal query ID)
     query_id = f"agent-{uuid.uuid4().hex[:16]}"
@@ -50,7 +52,8 @@ def save_impala_query_event(event: ImpalaQueryEvent) -> ImpalaQueryHistory:
         query_state="FINISHED",
         statement=event.query,
         plan=event.plan,
-        username=event.user,
+        username=event.effectiveUser or event.connectedUser,
+        connected_user=event.connectedUser,
         delegate_user=event.delegateUser,
         start_time=start_time,
         platform_id=event.platformId,
