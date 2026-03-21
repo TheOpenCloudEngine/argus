@@ -4,7 +4,8 @@ Java ASM 기반 bytecode instrumentation agent로, Impala Frontend의 `createExe
 
 ## Requirement
 
-* Impala 3.x / CDP 7.x (Java Frontend)
+* Impala 4.0+ (Apache Impala, Java Frontend)
+* Impala 3.x (CDP 7.x) 도 호환
 * JDK 11+
 
 ## Build
@@ -60,10 +61,26 @@ mvn clean install
 ### ASM Instrumentation 대상
 
 * **클래스**: `org.apache.impala.service.Frontend`
-* **메서드**: `createExecRequest(TQueryCtx, StringBuilder)`
+* **메서드**: `createExecRequest` (public overload만 계측)
+  * Impala 3.x: `createExecRequest(TQueryCtx, StringBuilder)`
+  * Impala 4.0+: `createExecRequest(PlanCtx)` — `PlanCtx.getQueryContext()`로 TQueryCtx 추출
 * **진입점**: `onMethodEnter` — TQueryCtx에서 query, user, delegateUser 추출
 * **종료점**: `onMethodExit` — TExecRequest에서 query plan 추출
 * **데이터 접근**: Reflection 사용 (Thrift 객체 컴파일 의존성 없음)
+* **버전 자동 감지**: `PlanCtx` 클래스 여부로 3.x/4.x 자동 판별
+
+### 버전 호환성
+
+| Impala 버전 | createExecRequest 시그니처 | 첫 번째 인자 | TQueryCtx 접근 방법 |
+|-------------|--------------------------|-------------|-------------------|
+| 3.x (CDP 7.x) | `(TQueryCtx, StringBuilder)` | TQueryCtx 직접 | 직접 사용 |
+| 4.0 | `(PlanCtx)` | PlanCtx | `getQueryContext()` |
+| 4.1 | `(PlanCtx)` | PlanCtx | `getQueryContext()` |
+| 4.2 | `(PlanCtx)` | PlanCtx | `getQueryContext()` |
+| 4.3 | `(PlanCtx)` | PlanCtx | `getQueryContext()` |
+| 4.4+ | `(PlanCtx)` | PlanCtx | `getQueryContext()` |
+
+TQueryCtx 내부 구조(`client_request.stmt`, `session.connected_user`, `session.delegated_user`)와 TExecRequest 구조(`query_exec_request.query_plan`)는 3.x ~ 4.x 전체에서 동일합니다.
 
 ## 전송 JSON 포맷
 

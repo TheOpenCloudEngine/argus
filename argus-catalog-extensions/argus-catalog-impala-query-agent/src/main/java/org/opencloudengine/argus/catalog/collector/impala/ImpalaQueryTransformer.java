@@ -13,33 +13,33 @@ import java.security.ProtectionDomain;
  * to capture query execution events including query text, plan, user, and
  * delegate user information.</p>
  *
- * <p>Target method signature (Impala 3.x / CDP 7.x):</p>
- * <pre>
- * public TExecRequest createExecRequest(TQueryCtx queryCtx, StringBuilder timeline)
- * </pre>
+ * <h3>Impala version compatibility</h3>
+ * <table>
+ *   <tr><th>Version</th><th>Signature</th></tr>
+ *   <tr><td>3.x (CDP 7.x)</td><td>{@code createExecRequest(TQueryCtx, StringBuilder)}</td></tr>
+ *   <tr><td>4.0+ (ASF)</td><td>{@code createExecRequest(PlanCtx)}</td></tr>
+ * </table>
  *
- * <p>The transformer injects calls to {@link QueryInterceptor} at method entry
- * and exit to capture query details before and after execution.</p>
+ * <p>In 4.x, {@code TQueryCtx} is wrapped inside {@code PlanCtx} and accessed
+ * via {@code planCtx.getQueryContext()}. The transformer handles both signatures
+ * by passing the first argument to {@link QueryInterceptor} which unwraps it
+ * at runtime via reflection.</p>
+ *
+ * <p>Only the <b>public</b> overload is instrumented. The private overload
+ * {@code createExecRequest(Planner, PlanCtx)} is skipped to avoid double-counting.</p>
  */
 public class ImpalaQueryTransformer implements ClassFileTransformer {
 
     private static final String LOG_PREFIX = "[ImpalaQueryAgent] ";
 
-    /**
-     * Target class to instrument (internal name format).
-     */
     private static final String TARGET_CLASS = "org/apache/impala/service/Frontend";
-
-    /**
-     * Target method to intercept.
-     */
     private static final String TARGET_METHOD = "createExecRequest";
 
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (!TARGET_CLASS.equals(className)) {
-            return null; // Return null = no transformation
+            return null;
         }
 
         System.out.println(LOG_PREFIX + "Transforming class: " + className);
@@ -53,12 +53,12 @@ public class ImpalaQueryTransformer implements ClassFileTransformer {
         } catch (Exception e) {
             System.err.println(LOG_PREFIX + "ERROR transforming " + className + ": " + e.getMessage());
             e.printStackTrace();
-            return null; // Fall back to original bytecode
+            return null;
         }
     }
 
     /**
-     * ClassVisitor that finds the target method and applies the advice adapter.
+     * ClassVisitor that instruments only the public createExecRequest overload.
      */
     private static class FrontendClassVisitor extends ClassVisitor {
         FrontendClassVisitor(ClassVisitor cv) {
@@ -69,27 +69,35 @@ public class ImpalaQueryTransformer implements ClassFileTransformer {
         public MethodVisitor visitMethod(int access, String name, String descriptor,
                                          String signature, String[] exceptions) {
             MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-            if (TARGET_METHOD.equals(name)) {
-                System.out.println(LOG_PREFIX + "Instrumenting method: " + name + descriptor);
-                return new CreateExecRequestAdvice(mv, access, name, descriptor);
+
+            if (!TARGET_METHOD.equals(name)) {
+                return mv;
             }
-            return mv;
+
+            // Only instrument the public overload (skip private createExecRequest(Planner, PlanCtx))
+            if ((access & Opcodes.ACC_PUBLIC) == 0) {
+                System.out.println(LOG_PREFIX + "Skipping non-public overload: " + name + descriptor);
+                return mv;
+            }
+
+            System.out.println(LOG_PREFIX + "Instrumenting method: " + name + descriptor);
+            return new CreateExecRequestAdvice(mv, access, name, descriptor);
         }
     }
 
     /**
      * AdviceAdapter that injects interceptor calls around {@code createExecRequest}.
      *
-     * <p>At method entry: captures TQueryCtx (first argument) to extract query text,
-     * user, delegate user, and timestamp.</p>
-     *
-     * <p>At method exit: captures TExecRequest (return value) to extract query plan.</p>
+     * <p>The first argument is passed to {@link QueryInterceptor} as-is. The
+     * interceptor uses reflection to detect whether it is a {@code TQueryCtx}
+     * (3.x) or {@code PlanCtx} (4.x) and extracts data accordingly.</p>
      */
     private static class CreateExecRequestAdvice extends AdviceAdapter {
 
-        private static final String INTERCEPTOR = "org/opencloudengine/argus/catalog/collector/impala/QueryInterceptor";
+        private static final String INTERCEPTOR =
+                "org/opencloudengine/argus/catalog/collector/impala/QueryInterceptor";
 
-        private int queryCtxLocal = -1;
+        private int firstArgLocal = -1;
 
         CreateExecRequestAdvice(MethodVisitor mv, int access, String name, String desc) {
             super(Opcodes.ASM9, mv, access, name, desc);
@@ -97,15 +105,13 @@ public class ImpalaQueryTransformer implements ClassFileTransformer {
 
         @Override
         protected void onMethodEnter() {
-            // Store the first argument (TQueryCtx) for later use
-            // Method: createExecRequest(TQueryCtx queryCtx, StringBuilder timeline)
-            // 'this' is arg0, queryCtx is arg1
-            queryCtxLocal = newLocal(Type.getType(Object.class));
-            loadArg(0); // queryCtx (first method argument)
-            storeLocal(queryCtxLocal);
+            // Store the first argument (TQueryCtx in 3.x, PlanCtx in 4.x)
+            firstArgLocal = newLocal(Type.getType(Object.class));
+            loadArg(0);
+            storeLocal(firstArgLocal);
 
-            // Call QueryInterceptor.onQueryStart(queryCtx)
-            loadLocal(queryCtxLocal);
+            // Call QueryInterceptor.onQueryStart(arg0)
+            loadLocal(firstArgLocal);
             invokeStatic(
                     Type.getType("L" + INTERCEPTOR + ";"),
                     new Method("onQueryStart", "(Ljava/lang/Object;)V")
@@ -114,17 +120,14 @@ public class ImpalaQueryTransformer implements ClassFileTransformer {
 
         @Override
         protected void onMethodExit(int opcode) {
-            if (opcode == RETURN || opcode == ARETURN) {
-                // At normal return, the return value (TExecRequest) is on top of stack
-                // We need to peek at it without consuming it
-                if (opcode == ARETURN) {
-                    dup(); // Duplicate return value
-                    loadLocal(queryCtxLocal); // Push queryCtx
-                    invokeStatic(
-                            Type.getType("L" + INTERCEPTOR + ";"),
-                            new Method("onQueryComplete", "(Ljava/lang/Object;Ljava/lang/Object;)V")
-                    );
-                }
+            if (opcode == ARETURN) {
+                // Return value (TExecRequest) is on top of stack
+                dup();
+                loadLocal(firstArgLocal);
+                invokeStatic(
+                        Type.getType("L" + INTERCEPTOR + ";"),
+                        new Method("onQueryComplete", "(Ljava/lang/Object;Ljava/lang/Object;)V")
+                );
             }
         }
     }
