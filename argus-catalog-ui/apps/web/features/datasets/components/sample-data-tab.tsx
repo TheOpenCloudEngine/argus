@@ -83,9 +83,12 @@ function parseEscapeSequences(input: string): string {
 
 type SampleDataTabProps = {
   datasetId: number
+  /** When true (synced dataset), the Delete button is hidden to prevent
+   *  accidental removal of sync-managed sample data. */
+  isSynced?: boolean
 }
 
-export function SampleDataTab({ datasetId }: SampleDataTabProps) {
+export function SampleDataTab({ datasetId, isSynced = false }: SampleDataTabProps) {
   // Format: "parquet" when served from synced parquet, "csv" for uploaded CSV
   const [sampleFormat, setSampleFormat] = useState<"parquet" | "csv" | null>(null)
 
@@ -628,24 +631,22 @@ export function SampleDataTab({ datasetId }: SampleDataTabProps) {
   // ---------------------------------------------------------------------------
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between py-3">
-        <CardTitle className="text-base">Sample Data</CardTitle>
-        <div className="flex items-center gap-2">
-          {hasSample && (
-            <Button size="sm" variant="outline" onClick={handleDelete} className="text-destructive">
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Delete
-            </Button>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.tsv"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
+      {/* Hide Delete button for synced datasets — sample data is managed by sync */}
+      {hasSample && !isSynced && (
+        <div className="flex justify-end px-4 pt-3">
+          <Button size="sm" variant="outline" onClick={handleDelete} className="text-destructive">
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Delete
+          </Button>
         </div>
-      </CardHeader>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.tsv"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
       <CardContent className="p-0">
         {/* Parquet view: no toolbar */}
         {hasSample && sampleFormat === "parquet" && renderParquetTable()}

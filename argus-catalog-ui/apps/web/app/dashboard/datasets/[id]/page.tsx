@@ -26,6 +26,7 @@ import {
   Tags,
   Trash2,
   Users,
+  Workflow,
   X,
 } from "lucide-react"
 
@@ -89,6 +90,8 @@ import type { DatasetDetail, GlossaryTerm, SchemaField, Tag } from "@/features/d
 import { SampleDataTab } from "@/features/datasets/components/sample-data-tab"
 import { SchemaHistoryTab } from "@/features/datasets/components/schema-history-tab"
 import { PlatformSpecificCard } from "@/features/datasets/components/platform-specific-card"
+import { NiFiFlowTab } from "@/features/datasets/components/nifi-flow-tab"
+import { KestraFlowTab } from "@/features/datasets/components/kestra-flow-tab"
 
 // ---------------------------------------------------------------------------
 // Schema field type for editing (no id yet)
@@ -956,6 +959,14 @@ export default function DatasetDetailPage() {
               <Flame className="h-4 w-4" />
               PySpark
             </TabsTrigger>
+            <TabsTrigger value="nifi" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              NiFi
+            </TabsTrigger>
+            <TabsTrigger value="kestra" className="gap-1.5">
+              <Workflow className="h-4 w-4" />
+              Kestra
+            </TabsTrigger>
             <TabsTrigger value="history" className="gap-1.5">
               <History className="h-4 w-4" />
               History
@@ -965,35 +976,32 @@ export default function DatasetDetailPage() {
           {/* =============== Schema tab =============== */}
           <TabsContent value="schema" className="mt-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base">Schema Fields</CardTitle>
-                <div className="flex items-center gap-2">
-                  {schemaEditing ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={cancelSchemaEdit}
-                        disabled={schemaSaving}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={saveSchema}
-                        disabled={schemaSaving}
-                      >
-                        {schemaSaving ? "Saving..." : "Save"}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={startSchemaEdit}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" />
-                      Edit Schema
+              <div className="flex justify-end px-4 pt-3">
+                {schemaEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelSchemaEdit}
+                      disabled={schemaSaving}
+                    >
+                      Cancel
                     </Button>
-                  )}
-                </div>
-              </CardHeader>
+                    <Button
+                      size="sm"
+                      onClick={saveSchema}
+                      disabled={schemaSaving}
+                    >
+                      {schemaSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={startSchemaEdit}>
+                    <Pencil className="mr-1 h-3.5 w-3.5" />
+                    Edit Schema
+                  </Button>
+                )}
+              </div>
               <CardContent className="p-0">
                 {schemaEditing ? (
                   /* ---------- Inline edit mode ---------- */
@@ -1183,8 +1191,10 @@ export default function DatasetDetailPage() {
                                 <Check className="h-4 w-4 text-muted-foreground mx-auto" />
                               )}
                             </TableCell>
-                            <TableCell className="text-sm max-w-[300px] truncate">
-                              {field.description || "-"}
+                            <TableCell className="text-sm min-w-[200px] max-w-[500px]">
+                              <span className="whitespace-pre-wrap break-words">
+                                {field.description || "-"}
+                              </span>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1499,7 +1509,7 @@ export default function DatasetDetailPage() {
 
           {/* =============== Sample tab =============== */}
           <TabsContent value="sample" className="mt-4">
-            <SampleDataTab datasetId={datasetId} />
+            <SampleDataTab datasetId={datasetId} isSynced={dataset.is_synced === "true"} />
           </TabsContent>
 
           {/* =============== Avro tab =============== */}
@@ -1510,6 +1520,16 @@ export default function DatasetDetailPage() {
           {/* =============== Spark tab =============== */}
           <TabsContent value="spark" className="mt-4">
             <SparkCodeCard dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== NiFi tab =============== */}
+          <TabsContent value="nifi" className="mt-4">
+            <NiFiFlowTab dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== Kestra tab =============== */}
+          <TabsContent value="kestra" className="mt-4">
+            <KestraFlowTab dataset={dataset} />
           </TabsContent>
 
           {/* =============== History tab =============== */}
