@@ -309,6 +309,44 @@ CREATE TABLE IF NOT EXISTS argus_collector_impala_query_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------------
+-- Collector - Trino Query History
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_collector_trino_query_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    query_id VARCHAR(256) NOT NULL UNIQUE,
+    query_state VARCHAR(32),
+    query_type VARCHAR(32),
+    statement TEXT,
+    plan TEXT,
+    username VARCHAR(256),
+    principal VARCHAR(256),
+    source VARCHAR(256),
+    catalog VARCHAR(256),
+    `schema` VARCHAR(256),
+    remote_client_address VARCHAR(256),
+    create_time TIMESTAMP NULL,
+    execution_start_time TIMESTAMP NULL,
+    end_time TIMESTAMP NULL,
+    wall_time_ms BIGINT,
+    cpu_time_ms BIGINT,
+    physical_input_bytes BIGINT,
+    physical_input_rows BIGINT,
+    output_bytes BIGINT,
+    output_rows BIGINT,
+    peak_memory_bytes BIGINT,
+    error_code VARCHAR(128),
+    error_message TEXT,
+    inputs_json TEXT,
+    output_json TEXT,
+    platform_id VARCHAR(100),
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trino_query_history_query_id (query_id),
+    INDEX idx_trino_query_history_platform_id (platform_id),
+    INDEX idx_trino_query_history_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
 -- Lineage - Query Lineage (per-query source→target table mapping)
 -- ---------------------------------------------------------------------------
 
