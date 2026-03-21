@@ -48,6 +48,10 @@ public class QueryAuditHook implements ExecuteWithHookContext {
         }
 
         String targetUrl = conf.getTrimmed(PROP_TARGET_URL, null); // 기본값 null, getTrimmed()는 앞뒤 공백 제거
+        if (targetUrl == null || targetUrl.isEmpty()) {
+            LOG.warn("Target URL is not configured. Set '{}' in hive-site.xml.", PROP_TARGET_URL);
+            return;
+        }
 
         QueryPlan queryPlan = context.getQueryPlan();
         if (queryPlan == null) {
@@ -68,7 +72,26 @@ public class QueryAuditHook implements ExecuteWithHookContext {
             case PRE_EXEC_HOOK: // 쿼리 시작 시점 기록 (QueryPlan에 기록된 시작 시각 사용)
                 long queryStartTime = queryPlan.getQueryStartTime();
                 String startTimeStr = formatTimestamp(queryStartTime);
-                LOG.info("[PRE] QueryId: {}, Short Username: {}, Username: {}, Operation: {}, StartTime: {}, Query: {}", queryId, shortUsername, username, operationName, startTimeStr, queryString);
+
+                Map pre = Map.of(
+                        "queryId", queryId,
+                        "shortUsername", shortUsername,
+                        "username", username,
+                        "operationName", operationName,
+                        "startTime", String.valueOf(queryStartTime),
+                        "query", queryString,
+                        "status", "RUNNING"
+                );
+
+                LOG.debug("Hive Query Audit을 송신할 메시지: {}", pre);
+
+                try {
+                    helper.post(targetUrl, pre, Map.class);
+                    LOG.info("[PRE] QueryId: {}, Short Username: {}, Username: {}, Operation: {}, StartTime: {}, Query: {}", queryId, shortUsername, username, operationName, startTimeStr, queryString);
+                } catch (Exception e) {
+                    LOG.warn("Hive Query Audit을 송신할 수 없습니다. 원인: {}", e.getMessage(), e);
+                }
+
                 break;
 
             case POST_EXEC_HOOK: // 쿼리 성공 종료 시점 및 소요 시간 기록
@@ -81,17 +104,20 @@ public class QueryAuditHook implements ExecuteWithHookContext {
                         "queryId", queryId,
                         "shortUsername", shortUsername,
                         "username", username,
+                        "operationName", operationName,
                         "startTime", String.valueOf(postStartTime),
                         "endTime", String.valueOf(postEndTime),
-                        "durationMs", postDuration,
-                        "query", queryString,
-                        "status", "SUCCESS"
+                        "durationMs", String.valueOf(postDuration),
+                        "query", queryString
                 );
+                // Map.of()는 최대 10개 key-value 쌍까지 지원하므로 HashMap으로 status 추가
+                Map successWithStatus = new java.util.HashMap<>(success);
+                successWithStatus.put("status", "SUCCESS");
 
-                LOG.debug("Hive Query Audit을 송신할 메시지: {}", success);
+                LOG.debug("Hive Query Audit을 송신할 메시지: {}", successWithStatus);
 
                 try {
-                    helper.post(targetUrl, success, Map.class);
+                    helper.post(targetUrl, successWithStatus, Map.class);
                     LOG.info("[SUCCESS] QueryId: {}, Short Username: {}, Username: {}, EndTime: {}, DurationMs: {}, Query: {}", queryId, shortUsername, username, postEndTimeStr, postDuration, queryString);
                 } catch (Exception e) {
                     LOG.warn("Hive Query Audit을 송신할 수 없습니다. 원인: {}", e.getMessage(), e);
@@ -113,18 +139,21 @@ public class QueryAuditHook implements ExecuteWithHookContext {
                         "queryId", queryId,
                         "shortUsername", shortUsername,
                         "username", username,
+                        "operationName", operationName,
                         "startTime", String.valueOf(failStartTime),
                         "endTime", String.valueOf(failEndTime),
-                        "durationMs", failDuration,
+                        "durationMs", String.valueOf(failDuration),
                         "errorMsg", errorMsg,
-                        "query", queryString,
-                        "status", "FAILED"
+                        "query", queryString
                 );
+                // Map.of()는 최대 10개 key-value 쌍까지 지원하므로 HashMap으로 status 추가
+                Map failedWithStatus = new java.util.HashMap<>(failed);
+                failedWithStatus.put("status", "FAILED");
 
-                LOG.debug("Hive Query Audit을 송신할 메시지: {}", failed);
+                LOG.debug("Hive Query Audit을 송신할 메시지: {}", failedWithStatus);
 
                 try {
-                    helper.post(targetUrl, failed, Map.class);
+                    helper.post(targetUrl, failedWithStatus, Map.class);
                     LOG.warn("[FAILURE] QueryId: {}, Short Username: {}, Username: {}, EndTime: {}, DurationMs: {}, Error: {}, Query: {}", queryId, shortUsername, username, failEndTimeStr, failDuration, errorMsg, queryString);
                 } catch(Exception e) {
                     LOG.warn("Hive Query Audit을 송신할 수 없습니다. 원인: {}", e.getMessage(), e);
