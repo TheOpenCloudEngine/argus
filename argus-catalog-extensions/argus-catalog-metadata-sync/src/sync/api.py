@@ -347,3 +347,24 @@ async def collect_trino_query(event: dict):
     except Exception as e:
         logger.error("Failed to save Trino query event: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# StarRocks Query Collection (from AuditPlugin)
+# ---------------------------------------------------------------------------
+
+@app.post("/collector/starrocks/query")
+async def collect_starrocks_query(event: dict):
+    """Receive a StarRocks query event from the AuditPlugin."""
+    from sync.platforms.starrocks.query_history import save_starrocks_query_event
+
+    try:
+        record = save_starrocks_query_event(event)
+        return {
+            "status": "ok",
+            "id": record.id,
+            "queryId": record.query_id,
+        }
+    except Exception as e:
+        logger.error("Failed to save StarRocks query event: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save query event: {e}")

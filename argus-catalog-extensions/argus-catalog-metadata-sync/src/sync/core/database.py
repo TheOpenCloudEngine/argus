@@ -28,6 +28,7 @@ def init_db(settings) -> None:
     import sync.platforms.hive.models  # noqa: F401
     import sync.platforms.impala.models  # noqa: F401
     import sync.platforms.trino.models  # noqa: F401
+    import sync.platforms.starrocks.models  # noqa: F401
 
     engine_kwargs = {"echo": settings.db_echo}
     if settings.db_type in ("postgresql", "mariadb", "mysql"):
