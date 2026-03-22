@@ -2,10 +2,14 @@
 
 import { Trash2 } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
+import { useAuth } from "@/features/auth"
 import { useModels } from "./models-provider"
 
 export function ModelsPrimaryButtons() {
+  const { user } = useAuth()
   const { setOpen, selectedNames, setDeleteTargetNames } = useModels()
+
+  if (!user?.is_admin) return null
 
   return (
     <Button
