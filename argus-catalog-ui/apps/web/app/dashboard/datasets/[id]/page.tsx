@@ -1014,14 +1014,12 @@ export default function DatasetDetailPage() {
                       {schemaSaving ? "Updating..." : "Update"}
                     </Button>
                   </div>
-                ) : (
-                  {user?.is_admin && (
-                    <Button size="sm" variant="outline" onClick={startSchemaEdit}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" />
-                      Edit Schema
-                    </Button>
-                  )}
-                )}
+                ) : user?.is_admin ? (
+                  <Button size="sm" variant="outline" onClick={startSchemaEdit}>
+                    <Pencil className="mr-1 h-3.5 w-3.5" />
+                    Edit Schema
+                  </Button>
+                ) : null}
               </div>
               <CardContent className="p-0">
                 {schemaEditing ? (
