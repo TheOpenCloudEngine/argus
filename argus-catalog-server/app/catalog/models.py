@@ -178,6 +178,101 @@ class Owner(Base):
 # Platform metadata models
 # ---------------------------------------------------------------------------
 
+class DataPipeline(Base):
+    """데이터 파이프라인 레지스트리.
+
+    이기종 시스템 간 데이터 흐름(ETL, CDC, 파일 내보내기 등)을 등록하고 관리한다.
+    DatasetLineage에서 pipeline_id로 참조하여 어떤 파이프라인이
+    cross-platform 리니지를 만드는지 추적한다.
+
+    예시: PostgreSQL → Parquet 변환 → Impala 적재 파이프라인
+    """
+
+    __tablename__ = "argus_data_pipeline"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pipeline_name = Column(String(255), nullable=False, unique=True)   # 파이프라인 고유 이름
+    description = Column(Text)                                         # 파이프라인 설명
+    pipeline_type = Column(String(64), nullable=False, default="ETL")  # 유형: ETL, FILE_EXPORT, CDC, REPLICATION, API, MANUAL
+    schedule = Column(String(100))                                     # 실행 주기 (cron 표현식, 예: "0 2 * * *")
+    owner = Column(String(200))                                        # 파이프라인 담당자
+    status = Column(String(20), nullable=False, default="ACTIVE")      # 상태: ACTIVE, INACTIVE, DEPRECATED
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DatasetLineage(Base):
+    """데이터셋 간 리니지 관계 (Cross-Platform 지원).
+
+    이기종 시스템 간의 데이터 흐름 관계를 저장한다.
+    동일 플랫폼 내 쿼리 기반 자동 수집과 수동/파이프라인 등록을 모두 지원.
+
+    리니지 출처(lineage_source)에 따른 구분:
+    - QUERY_AGGREGATED: 쿼리 로그 분석으로 자동 수집 (같은 플랫폼 내)
+    - PIPELINE: 파이프라인 등록을 통해 명시적 연결 (이기종 간)
+    - MANUAL: 사용자가 UI에서 직접 등록 (이기종 간)
+
+    예시:
+      PostgreSQL.hr_db.employees → Impala.analytics.emp_fact
+      (lineage_source=PIPELINE, relation_type=ETL)
+    """
+
+    __tablename__ = "argus_dataset_lineage"
+    __table_args__ = (
+        UniqueConstraint("source_dataset_id", "target_dataset_id", "relation_type"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_dataset_id = Column(                                           # 원본 데이터셋 (데이터를 제공하는 쪽)
+        Integer, ForeignKey("catalog_datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    target_dataset_id = Column(                                           # 대상 데이터셋 (데이터를 받는 쪽)
+        Integer, ForeignKey("catalog_datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    relation_type = Column(String(32), nullable=False, default="READ_WRITE")  # 관계 유형: ETL, FILE_EXPORT, CDC, REPLICATION, DERIVED, READ_WRITE
+    lineage_source = Column(String(32), nullable=False, default="QUERY_AGGREGATED")  # 리니지 출처: QUERY_AGGREGATED, PIPELINE, MANUAL
+    pipeline_id = Column(                                                 # 파이프라인 참조 (PIPELINE 출처일 때)
+        Integer, ForeignKey("argus_data_pipeline.id", ondelete="SET NULL")
+    )
+    description = Column(Text)                                            # 리니지 관계 설명
+    created_by = Column(String(200))                                      # 등록한 사용자
+    query_count = Column(Integer, nullable=False, default=0)              # 이 관계를 확인한 쿼리 수 (자동 수집 시)
+    last_query_id = Column(String(256))                                   # 마지막으로 확인된 쿼리 ID
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now())  # 마지막 확인 시각
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DatasetColumnMapping(Base):
+    """Cross-Platform 컬럼 수준 리니지 매핑.
+
+    이기종 시스템 간 데이터셋 리니지에서 개별 컬럼 간의 매핑 관계를 저장한다.
+    스키마 변경 시 영향 분석(Impact Analysis)의 핵심 데이터.
+
+    변환 유형(transform_type):
+    - DIRECT: 동일한 값을 그대로 전달
+    - CAST: 타입 변환 (예: INT → BIGINT)
+    - EXPRESSION: 수식/변환 적용 (transform_expr에 수식 기록)
+    - DERIVED: 여러 컬럼에서 파생된 값 (집계, 계산 등)
+
+    예시:
+      source=emp_id → target=employee_key (transform_type=CAST, expr="CAST(emp_id AS BIGINT)")
+    """
+
+    __tablename__ = "argus_dataset_column_mapping"
+    __table_args__ = (
+        UniqueConstraint("dataset_lineage_id", "source_column", "target_column"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_lineage_id = Column(                                         # 소속 리니지 관계
+        Integer, ForeignKey("argus_dataset_lineage.id", ondelete="CASCADE"), nullable=False
+    )
+    source_column = Column(String(256), nullable=False)                  # 원본 컬럼명
+    target_column = Column(String(256), nullable=False)                  # 대상 컬럼명
+    transform_type = Column(String(64), nullable=False, default="DIRECT")  # 변환 유형: DIRECT, CAST, EXPRESSION, DERIVED
+    transform_expr = Column(String(500))                                 # 변환 수식 (CAST/EXPRESSION일 때, 예: "CAST(emp_id AS BIGINT)")
+
+
 class PlatformDataType(Base):
     """Supported data types per platform."""
 
