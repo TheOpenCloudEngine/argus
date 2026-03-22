@@ -133,6 +133,60 @@ class ModelStats(BaseModel):
     daily_publish_30d: list[AccessDataPoint]
 
 
+class CatalogModelDetail(BaseModel):
+    """Parsed metadata from catalog_models table."""
+
+    predict_fn: str | None = None
+    python_version: str | None = None
+    serialization_format: str | None = None
+    sklearn_version: str | None = None
+    mlflow_version: str | None = None
+    mlflow_model_id: str | None = None
+    model_size_bytes: int | None = None
+    utc_time_created: str | None = None
+    requirements: str | None = None
+    conda: str | None = None
+    python_env: str | None = None
+    source_type: str | None = None
+
+
+class ModelDetailResponse(BaseModel):
+    """Full model detail with latest version metadata."""
+
+    id: int
+    name: str
+    urn: str
+    description: str | None = None
+    owner: str | None = None
+    storage_type: str = "local"
+    storage_location: str | None = None
+    max_version_number: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    latest_version_status: str | None = None
+    catalog: CatalogModelDetail | None = None
+    access_count: int = 0
+
+
+class AccessLogEntry(BaseModel):
+    """Single access log entry."""
+
+    accessed_at: datetime
+    version: int
+    access_type: str
+    client_ip: str | None = None
+    user_agent: str | None = None
+
+
+class ModelAccessStats(BaseModel):
+    """Access statistics for a single model."""
+
+    total_access: int
+    daily_access: list[AccessDataPoint]
+    recent_logs: list[AccessLogEntry]
+
+
 # ---------------------------------------------------------------------------
 # ModelVersion schemas
 # ---------------------------------------------------------------------------

@@ -32,6 +32,10 @@ from app.core.config import settings
 from app.models.models import CatalogModel, ModelVersion, RegisteredModel
 from app.models.schemas import (
     AccessDataPoint,
+    AccessLogEntry,
+    CatalogModelDetail,
+    ModelAccessStats,
+    ModelDetailResponse,
     ModelSizeInfo,
     ModelStats,
     ModelSummary,
@@ -384,6 +388,113 @@ async def get_model_stats(session: AsyncSession) -> ModelStats:
         daily_publish_7d=pub_7d,
         daily_publish_30d=pub_30d,
     )
+
+
+async def get_model_detail(
+    session: AsyncSession, name: str,
+) -> ModelDetailResponse | None:
+    """Get full model detail with latest version metadata and access count."""
+    model = await _resolve_model(session, name)
+    if not model:
+        return None
+
+    # Latest version status
+    latest_ver = (await session.execute(
+        select(ModelVersion.status).where(
+            ModelVersion.model_id == model.id,
+        ).order_by(ModelVersion.version.desc()).limit(1)
+    )).scalar()
+
+    # catalog_models for latest version
+    cm = (await session.execute(
+        select(CatalogModel).where(
+            CatalogModel.model_name == name,
+        ).order_by(CatalogModel.version.desc()).limit(1)
+    )).scalars().first()
+
+    catalog = None
+    if cm:
+        catalog = CatalogModelDetail(
+            predict_fn=cm.predict_fn,
+            python_version=cm.python_version,
+            serialization_format=cm.serialization_format,
+            sklearn_version=cm.sklearn_version,
+            mlflow_version=cm.mlflow_version,
+            mlflow_model_id=cm.mlflow_model_id,
+            model_size_bytes=cm.model_size_bytes,
+            utc_time_created=cm.utc_time_created,
+            requirements=cm.requirements,
+            conda=cm.conda,
+            python_env=cm.python_env,
+            source_type=cm.source_type,
+        )
+
+    # Access count
+    from app.models.access_log import get_access_count_by_model
+    access_counts = await get_access_count_by_model(session)
+
+    return ModelDetailResponse(
+        id=model.id,
+        name=model.name,
+        urn=model.urn,
+        description=model.description,
+        owner=model.owner,
+        storage_type=model.storage_type,
+        storage_location=model.storage_location,
+        max_version_number=model.max_version_number,
+        status=model.status,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        latest_version_status=latest_ver,
+        catalog=catalog,
+        access_count=access_counts.get(name, 0),
+    )
+
+
+async def get_model_access_stats(
+    session: AsyncSession, name: str,
+) -> ModelAccessStats:
+    """Get access statistics for a specific model."""
+    from app.models.models import ModelAccessLog
+
+    # Total access for this model
+    total = (await session.execute(
+        select(func.count()).where(ModelAccessLog.model_name == name)
+    )).scalar() or 0
+
+    # Daily access (30 days)
+    from datetime import timezone, timedelta
+    since = _dt.datetime.now(timezone.utc) - timedelta(days=30)
+    daily_result = await session.execute(
+        select(
+            func.date(ModelAccessLog.accessed_at).label("day"),
+            func.count().label("count"),
+        )
+        .where(ModelAccessLog.model_name == name, ModelAccessLog.accessed_at >= since)
+        .group_by(func.date(ModelAccessLog.accessed_at))
+        .order_by(func.date(ModelAccessLog.accessed_at))
+    )
+    daily = [AccessDataPoint(date=str(r.day), count=r.count) for r in daily_result.all()]
+
+    # Recent logs (last 50)
+    recent_result = await session.execute(
+        select(ModelAccessLog)
+        .where(ModelAccessLog.model_name == name)
+        .order_by(ModelAccessLog.accessed_at.desc())
+        .limit(50)
+    )
+    recent = [
+        AccessLogEntry(
+            accessed_at=r.accessed_at,
+            version=r.version,
+            access_type=r.access_type,
+            client_ip=r.client_ip,
+            user_agent=r.user_agent,
+        )
+        for r in recent_result.scalars().all()
+    ]
+
+    return ModelAccessStats(total_access=total, daily_access=daily, recent_logs=recent)
 
 
 async def update_registered_model(

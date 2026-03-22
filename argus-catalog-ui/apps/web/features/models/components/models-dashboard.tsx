@@ -69,14 +69,14 @@ export function ModelsDashboard() {
     )
   }
 
-  const sizeData = stats.model_sizes.map((m) => ({
+  const sizeData = stats.model_sizes.slice(0, 10).map((m) => ({
     name: shortName(m.model_name),
     fullName: m.model_name,
     size: m.model_size_bytes,
     sizeLabel: formatSize(m.model_size_bytes),
   }))
 
-  const versionData = stats.versions_per_model.map((m) => ({
+  const versionData = stats.versions_per_model.slice(0, 10).map((m) => ({
     name: shortName(m.model_name),
     fullName: m.model_name,
     versions: m.version_count,

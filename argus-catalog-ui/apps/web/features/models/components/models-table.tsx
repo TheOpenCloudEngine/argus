@@ -31,7 +31,7 @@ import {
 } from "@workspace/ui/components/table"
 import { DataTablePagination } from "@/components/data-table"
 import { type ModelSummary } from "../data/schema"
-import { modelsColumns as columns } from "./models-columns"
+import { createModelsColumns } from "./models-columns"
 import { ModelsPrimaryButtons } from "./models-primary-buttons"
 import { useModels } from "./models-provider"
 
@@ -43,8 +43,13 @@ type ModelsTableProps = {
 export function ModelsTable({ data, isLoading }: ModelsTableProps) {
   const {
     total, page, pageSize, setPage, setPageSize, searchModels,
-    rowSelection, setRowSelection,
+    rowSelection, setRowSelection, setSelectedModelName,
   } = useModels()
+
+  const columns = useMemo(
+    () => createModelsColumns((name) => setSelectedModelName(name)),
+    [setSelectedModelName],
+  )
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})

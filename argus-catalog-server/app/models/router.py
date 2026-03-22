@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.models import service
 from app.models.schemas import (
+    ModelAccessStats,
+    ModelDetailResponse,
     ModelStats,
     ModelVersionCreate,
     ModelVersionFinalize,
@@ -73,6 +75,25 @@ async def list_registered_models(
         python_version=python_version, sklearn_version=sklearn_version,
         page=page, page_size=page_size,
     )
+
+
+@router.get("/{model_name}/detail", response_model=ModelDetailResponse)
+async def get_model_detail(
+    model_name: str, session: AsyncSession = Depends(get_session),
+):
+    """Get full model detail with latest version metadata."""
+    detail = await service.get_model_detail(session, model_name)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
+    return detail
+
+
+@router.get("/{model_name}/access", response_model=ModelAccessStats)
+async def get_model_access_stats(
+    model_name: str, session: AsyncSession = Depends(get_session),
+):
+    """Get access statistics for a specific model."""
+    return await service.get_model_access_stats(session, model_name)
 
 
 @router.get("/{model_name}", response_model=RegisteredModelResponse)

@@ -82,6 +82,96 @@ export async function createModel(payload: {
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+// Model Detail
+// ---------------------------------------------------------------------------
+
+export type CatalogModelDetail = {
+  predict_fn: string | null
+  python_version: string | null
+  serialization_format: string | null
+  sklearn_version: string | null
+  mlflow_version: string | null
+  mlflow_model_id: string | null
+  model_size_bytes: number | null
+  utc_time_created: string | null
+  requirements: string | null
+  conda: string | null
+  python_env: string | null
+  source_type: string | null
+}
+
+export type ModelDetail = {
+  id: number
+  name: string
+  urn: string
+  description: string | null
+  owner: string | null
+  storage_type: string
+  storage_location: string | null
+  max_version_number: number
+  status: string
+  created_at: string
+  updated_at: string
+  latest_version_status: string | null
+  catalog: CatalogModelDetail | null
+  access_count: number
+}
+
+export type ModelVersionItem = {
+  id: number
+  model_id: number
+  model_name: string
+  version: number
+  source: string | null
+  run_id: string | null
+  run_link: string | null
+  description: string | null
+  status: string
+  status_message: string | null
+  storage_location: string | null
+  artifact_count: number
+  artifact_size: number
+  finished_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type AccessLogEntry = {
+  accessed_at: string
+  version: number
+  access_type: string
+  client_ip: string | null
+  user_agent: string | null
+}
+
+export type ModelAccessStats = {
+  total_access: number
+  daily_access: { date: string; count: number }[]
+  recent_logs: AccessLogEntry[]
+}
+
+export async function fetchModelDetail(name: string): Promise<ModelDetail> {
+  const res = await fetch(`${BASE}/${encodeURIComponent(name)}/detail`)
+  if (!res.ok) throw new Error(`Failed to fetch model detail: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchModelVersions(
+  name: string, page: number = 1, pageSize: number = 20,
+): Promise<{ items: ModelVersionItem[]; total: number; page: number; page_size: number }> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  const res = await fetch(`${BASE}/${encodeURIComponent(name)}/versions?${params}`)
+  if (!res.ok) throw new Error(`Failed to fetch versions: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchModelAccessStats(name: string): Promise<ModelAccessStats> {
+  const res = await fetch(`${BASE}/${encodeURIComponent(name)}/access`)
+  if (!res.ok) throw new Error(`Failed to fetch access stats: ${res.status}`)
+  return res.json()
+}
+
 export async function deleteModel(name: string): Promise<void> {
   const res = await fetch(`${BASE}/${encodeURIComponent(name)}`, {
     method: "DELETE",
