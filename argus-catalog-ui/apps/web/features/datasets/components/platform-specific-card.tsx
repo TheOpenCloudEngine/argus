@@ -331,7 +331,7 @@ function TblPropertiesGrid({ tblProperties }: { tblProperties: Record<string, st
   )
 
   return (
-    <CollapsibleSection title={`TABLE PROPERTIES (${entries.length})`}>
+    <CollapsibleSection title={`TABLE PROPERTIES (${entries.length})`} defaultOpen>
       <div
         className="border rounded ag-theme-alpine"
         style={{
@@ -347,7 +347,7 @@ function TblPropertiesGrid({ tblProperties }: { tblProperties: Record<string, st
           headerHeight={30}
           rowHeight={26}
           suppressCellFocus
-          rowSelection={{ mode: "singleRow", enableClickSelection: false }}
+          suppressRowClickSelection
           animateRows={false}
         />
       </div>
