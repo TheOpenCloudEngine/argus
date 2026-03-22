@@ -159,6 +159,34 @@ export async function updateAuthConfig(config: AuthConfig): Promise<void> {
   if (!res.ok) throw new Error(`Failed to update auth config: ${res.status}`)
 }
 
+export type KeycloakInitRequest = {
+  server_url: string
+  admin_username: string
+  admin_password: string
+  realm: string
+  client_id: string
+  client_secret: string
+  roles: string[]
+}
+
+export type InitStep = {
+  step: string
+  status: "ok" | "skip" | "created" | "error"
+  message: string
+}
+
+export async function initializeKeycloak(
+  req: KeycloakInitRequest,
+): Promise<{ steps: InitStep[] }> {
+  const res = await authFetch(`${BASE}/auth/initialize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) throw new Error(`Initialize failed: ${res.status}`)
+  return res.json()
+}
+
 export async function testAuthConnection(
   config: AuthConfig,
 ): Promise<{ success: boolean; message: string }> {

@@ -296,6 +296,160 @@ async def test_auth_connection(body: AuthConfig):
 
 
 # ---------------------------------------------------------------------------
+# Keycloak Initialize (auto-setup realm, client, roles)
+# ---------------------------------------------------------------------------
+
+class KeycloakInitRequest(BaseModel):
+    server_url: str
+    admin_username: str = "admin"
+    admin_password: str = "admin"
+    realm: str = "argus"
+    client_id: str = "argus-client"
+    client_secret: str = "argus-client-secret"
+    roles: list[str] = ["argus-admin", "argus-superuser", "argus-user"]
+
+
+class InitStep(BaseModel):
+    step: str
+    status: str  # "skip", "created", "error"
+    message: str
+
+
+@router.post("/auth/initialize")
+async def initialize_keycloak(body: KeycloakInitRequest):
+    """Auto-setup Keycloak: realm, client, client secret, and realm roles."""
+    import httpx
+    steps: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # Step 1: Get admin token from master realm
+        try:
+            token_resp = await client.post(
+                f"{body.server_url}/realms/master/protocol/openid-connect/token",
+                data={
+                    "grant_type": "password",
+                    "client_id": "admin-cli",
+                    "username": body.admin_username,
+                    "password": body.admin_password,
+                },
+            )
+            token_resp.raise_for_status()
+            admin_token = token_resp.json()["access_token"]
+            steps.append({"step": "Admin Login", "status": "ok", "message": "Authenticated as admin"})
+        except Exception as e:
+            steps.append({"step": "Admin Login", "status": "error", "message": f"Failed: {e}"})
+            return {"steps": steps}
+
+        headers = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+
+        # Step 2: Check/Create Realm
+        try:
+            realm_resp = await client.get(f"{body.server_url}/admin/realms/{body.realm}", headers=headers)
+            if realm_resp.status_code == 200:
+                steps.append({"step": f"Realm '{body.realm}'", "status": "skip", "message": "Already exists"})
+            else:
+                create_resp = await client.post(
+                    f"{body.server_url}/admin/realms",
+                    headers=headers,
+                    json={"realm": body.realm, "enabled": True},
+                )
+                create_resp.raise_for_status()
+                steps.append({"step": f"Realm '{body.realm}'", "status": "created", "message": "Created successfully"})
+        except Exception as e:
+            steps.append({"step": f"Realm '{body.realm}'", "status": "error", "message": str(e)})
+            return {"steps": steps}
+
+        # Step 3: Check/Create Client
+        client_uuid = None
+        try:
+            clients_resp = await client.get(
+                f"{body.server_url}/admin/realms/{body.realm}/clients",
+                headers=headers,
+                params={"clientId": body.client_id},
+            )
+            clients_resp.raise_for_status()
+            existing_clients = clients_resp.json()
+
+            if existing_clients:
+                client_uuid = existing_clients[0]["id"]
+                steps.append({"step": f"Client '{body.client_id}'", "status": "skip", "message": "Already exists"})
+            else:
+                create_client_resp = await client.post(
+                    f"{body.server_url}/admin/realms/{body.realm}/clients",
+                    headers=headers,
+                    json={
+                        "clientId": body.client_id,
+                        "enabled": True,
+                        "protocol": "openid-connect",
+                        "publicClient": False,
+                        "secret": body.client_secret,
+                        "directAccessGrantsEnabled": True,
+                        "serviceAccountsEnabled": True,
+                        "authorizationServicesEnabled": False,
+                        "standardFlowEnabled": True,
+                        "redirectUris": ["*"],
+                        "webOrigins": ["*"],
+                    },
+                )
+                create_client_resp.raise_for_status()
+                # Get the UUID of the created client
+                loc = create_client_resp.headers.get("Location", "")
+                client_uuid = loc.rsplit("/", 1)[-1] if loc else None
+                steps.append({"step": f"Client '{body.client_id}'", "status": "created", "message": "Created successfully"})
+        except Exception as e:
+            steps.append({"step": f"Client '{body.client_id}'", "status": "error", "message": str(e)})
+            return {"steps": steps}
+
+        # Step 4: Set/Verify Client Secret
+        if client_uuid:
+            try:
+                secret_resp = await client.get(
+                    f"{body.server_url}/admin/realms/{body.realm}/clients/{client_uuid}/client-secret",
+                    headers=headers,
+                )
+                if secret_resp.status_code == 200:
+                    current_secret = secret_resp.json().get("value", "")
+                    if current_secret == body.client_secret:
+                        steps.append({"step": "Client Secret", "status": "skip", "message": "Already matches"})
+                    else:
+                        # Update the client with the desired secret
+                        update_resp = await client.put(
+                            f"{body.server_url}/admin/realms/{body.realm}/clients/{client_uuid}",
+                            headers=headers,
+                            json={"secret": body.client_secret},
+                        )
+                        update_resp.raise_for_status()
+                        steps.append({"step": "Client Secret", "status": "created", "message": "Updated to match"})
+                else:
+                    steps.append({"step": "Client Secret", "status": "skip", "message": "Could not verify"})
+            except Exception as e:
+                steps.append({"step": "Client Secret", "status": "error", "message": str(e)})
+
+        # Step 5: Check/Create Realm Roles
+        for role_name in body.roles:
+            try:
+                role_resp = await client.get(
+                    f"{body.server_url}/admin/realms/{body.realm}/roles/{role_name}",
+                    headers=headers,
+                )
+                if role_resp.status_code == 200:
+                    steps.append({"step": f"Role '{role_name}'", "status": "skip", "message": "Already exists"})
+                else:
+                    create_role_resp = await client.post(
+                        f"{body.server_url}/admin/realms/{body.realm}/roles",
+                        headers=headers,
+                        json={"name": role_name},
+                    )
+                    create_role_resp.raise_for_status()
+                    steps.append({"step": f"Role '{role_name}'", "status": "created", "message": "Created successfully"})
+            except Exception as e:
+                steps.append({"step": f"Role '{role_name}'", "status": "error", "message": str(e)})
+
+    logger.info("Keycloak initialize: %d steps completed", len(steps))
+    return {"steps": steps}
+
+
+# ---------------------------------------------------------------------------
 # CORS configuration
 # ---------------------------------------------------------------------------
 

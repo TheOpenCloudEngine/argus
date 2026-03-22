@@ -1,14 +1,42 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, Eye, EyeOff, Loader2, Play, Save, X } from "lucide-react"
+import { Check, CheckCircle2, Eye, EyeOff, Loader2, Play, Rocket, Save, SkipForward, X, XCircle } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 
-import { fetchAuthConfig, fetchAuthSecret, testAuthConnection, updateAuthConfig, type AuthConfig } from "./api"
+import {
+  fetchAuthConfig, fetchAuthSecret, initializeKeycloak,
+  testAuthConnection, updateAuthConfig,
+  type AuthConfig, type InitStep,
+} from "./api"
+
+function StepIcon({ status }: { status: string }) {
+  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-blue-500" />
+  if (status === "created") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+  if (status === "skip") return <SkipForward className="h-4 w-4 text-muted-foreground" />
+  return <XCircle className="h-4 w-4 text-red-500" />
+}
+
+function StepBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    ok: "bg-blue-50 text-blue-700 border-blue-200",
+    created: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    skip: "bg-muted text-muted-foreground border-muted",
+    error: "bg-red-50 text-red-700 border-red-200",
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colors[status] || colors.error}`}>
+      {status.toUpperCase()}
+    </span>
+  )
+}
 
 export function AuthSettings() {
   const [loading, setLoading] = useState(true)
@@ -26,9 +54,15 @@ export function AuthSettings() {
   const [showSecret, setShowSecret] = useState(false)
   const [realSecret, setRealSecret] = useState<string | null>(null)
 
+  // Initialize dialog
+  const [initOpen, setInitOpen] = useState(false)
+  const [initRunning, setInitRunning] = useState(false)
+  const [initSteps, setInitSteps] = useState<InitStep[]>([])
+  const [initAdminUser, setInitAdminUser] = useState("admin")
+  const [initAdminPass, setInitAdminPass] = useState("admin")
+
   const handleToggleSecret = async () => {
     if (!showSecret && realSecret === null) {
-      // First reveal — fetch the actual secret from server
       try {
         const secret = await fetchAuthSecret()
         setRealSecret(secret)
@@ -66,13 +100,8 @@ export function AuthSettings() {
     try {
       await updateAuthConfig({
         type: "keycloak",
-        server_url: serverUrl,
-        realm,
-        client_id: clientId,
-        client_secret: clientSecret,
-        admin_role: adminRole,
-        superuser_role: superuserRole,
-        user_role: userRole,
+        server_url: serverUrl, realm, client_id: clientId, client_secret: clientSecret,
+        admin_role: adminRole, superuser_role: superuserRole, user_role: userRole,
       })
       setMessage({ type: "success", text: "Authentication configuration saved" })
     } catch (e) {
@@ -88,13 +117,8 @@ export function AuthSettings() {
     try {
       const result = await testAuthConnection({
         type: "keycloak",
-        server_url: serverUrl,
-        realm,
-        client_id: clientId,
-        client_secret: clientSecret,
-        admin_role: adminRole,
-        superuser_role: superuserRole,
-        user_role: userRole,
+        server_url: serverUrl, realm, client_id: clientId, client_secret: clientSecret,
+        admin_role: adminRole, superuser_role: superuserRole, user_role: userRole,
       })
       setMessage({ type: result.success ? "success" : "error", text: result.message })
     } catch (e) {
@@ -104,9 +128,45 @@ export function AuthSettings() {
     }
   }
 
+  const handleInitialize = async () => {
+    setInitRunning(true)
+    setInitSteps([])
+    try {
+      // Get real secret if masked
+      let secret = clientSecret
+      if (secret === "••••••••" && realSecret) {
+        secret = realSecret
+      } else if (secret === "••••••••") {
+        try {
+          secret = await fetchAuthSecret()
+        } catch {
+          secret = "argus-client-secret"
+        }
+      }
+
+      const result = await initializeKeycloak({
+        server_url: serverUrl,
+        admin_username: initAdminUser,
+        admin_password: initAdminPass,
+        realm,
+        client_id: clientId,
+        client_secret: secret,
+        roles: [adminRole, superuserRole, userRole].filter(Boolean),
+      })
+      setInitSteps(result.steps)
+    } catch (e) {
+      setInitSteps([{ step: "Initialize", status: "error", message: e instanceof Error ? e.message : "Failed" }])
+    } finally {
+      setInitRunning(false)
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
+
+  const hasErrors = initSteps.some((s) => s.status === "error")
+  const createdCount = initSteps.filter((s) => s.status === "created").length
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -187,9 +247,102 @@ export function AuthSettings() {
               {testing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
               Test Connection
             </Button>
+            <Button variant="outline" onClick={() => setInitOpen(true)}>
+              <Rocket className="h-4 w-4 mr-1" />
+              Initialize
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Initialize Dialog */}
+      <Dialog open={initOpen} onOpenChange={(open) => { if (!initRunning) setInitOpen(open) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Rocket className="h-5 w-5" />
+              Initialize Keycloak
+            </DialogTitle>
+            <DialogDescription>
+              Automatically create the realm, client, and roles in Keycloak.
+              Existing resources will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+
+          {initSteps.length === 0 && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <Label>Keycloak Admin Username</Label>
+                <Input value={initAdminUser} onChange={(e) => setInitAdminUser(e.target.value)} placeholder="admin" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Keycloak Admin Password</Label>
+                <Input type="password" value={initAdminPass} onChange={(e) => setInitAdminPass(e.target.value)} placeholder="admin" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These credentials are used once to access the Keycloak Admin API and are not stored.
+              </p>
+            </div>
+          )}
+
+          {/* Progress steps */}
+          {initSteps.length > 0 && (
+            <div className="space-y-2 py-2">
+              {initSteps.map((s, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <StepIcon status={s.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{s.step}</span>
+                      <StepBadge status={s.status} />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{s.message}</p>
+                  </div>
+                </div>
+              ))}
+
+              {!initRunning && (
+                <div className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                  hasErrors
+                    ? "bg-red-50 text-red-700 border border-red-200"
+                    : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>
+                  {hasErrors
+                    ? "Initialization completed with errors."
+                    : createdCount > 0
+                      ? `Initialization complete. ${createdCount} resource(s) created.`
+                      : "All resources already exist. Nothing to do."
+                  }
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Loading indicator */}
+          {initRunning && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Initializing...
+            </div>
+          )}
+
+          <DialogFooter>
+            {initSteps.length === 0 ? (
+              <>
+                <Button variant="outline" onClick={() => setInitOpen(false)}>Cancel</Button>
+                <Button onClick={handleInitialize} disabled={initRunning || !initAdminUser || !initAdminPass}>
+                  {initRunning ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Rocket className="h-4 w-4 mr-1" />}
+                  Start
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => { setInitOpen(false); setInitSteps([]) }}>
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
