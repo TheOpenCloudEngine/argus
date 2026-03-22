@@ -26,6 +26,7 @@ import { useCallback } from "react"
 import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { toast } from "sonner"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -276,7 +277,7 @@ export function UsersActionDialog({
       onOpenChange(false)
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save user"
-      alert(msg)
+      toast.error(msg)
     }
   }
 

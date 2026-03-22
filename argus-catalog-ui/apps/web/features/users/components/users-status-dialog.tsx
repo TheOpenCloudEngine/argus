@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
 import { Button } from "@workspace/ui/components/button"
+import { toast } from "sonner"
 import { activateUser, deactivateUser } from "../api"
 import { type User } from "../data/schema"
 import { useUsers } from "./users-provider"
@@ -66,7 +67,7 @@ export function UsersStatusDialog({
       onOpenChange(false)
     } catch (err) {
       const msg = err instanceof Error ? err.message : `Failed to ${type} users`
-      alert(msg)
+      toast.error(msg)
     }
   }
 
