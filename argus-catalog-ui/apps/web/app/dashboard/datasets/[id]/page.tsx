@@ -1159,6 +1159,15 @@ export default function DatasetDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Platform Specific — inside Schema tab */}
+            {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
+              <PlatformSpecificCard
+                platformType={dataset.platform.type}
+                properties={dataset.platform_properties || {}}
+                datasetProperties={dataset.properties}
+              />
+            )}
           </TabsContent>
 
           {/* =============== Tags tab =============== */}
@@ -1500,14 +1509,6 @@ export default function DatasetDetailPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Platform Specific */}
-        {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
-          <PlatformSpecificCard
-            platformType={dataset.platform.type}
-            properties={dataset.platform_properties || {}}
-            datasetProperties={dataset.properties}
-          />
-        )}
       </div>
 
     </>
