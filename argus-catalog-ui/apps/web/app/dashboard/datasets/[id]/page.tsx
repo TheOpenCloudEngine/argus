@@ -1162,11 +1162,11 @@ export default function DatasetDetailPage() {
 
             {/* Platform Specific — inside Schema tab */}
             {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
-              <PlatformSpecificCard
+              <div className="mt-4"><PlatformSpecificCard
                 platformType={dataset.platform.type}
                 properties={dataset.platform_properties || {}}
                 datasetProperties={dataset.properties}
-              />
+              /></div>
             )}
           </TabsContent>
 
