@@ -120,6 +120,7 @@ function newField(ordinal: number): EditableField {
     is_primary_key: "false",
     is_unique: "false",
     is_indexed: "false",
+    is_partition_key: "false",
     ordinal,
   }
 }
@@ -135,6 +136,7 @@ function toEditable(f: SchemaField): EditableField {
     is_primary_key: f.is_primary_key ?? "false",
     is_unique: f.is_unique ?? "false",
     is_indexed: f.is_indexed ?? "false",
+    is_partition_key: f.is_partition_key ?? "false",
     ordinal: f.ordinal,
   }
 }
@@ -631,6 +633,7 @@ export default function DatasetDetailPage() {
       is_primary_key: f.is_primary_key,
       is_unique: f.is_unique,
       is_indexed: f.is_indexed,
+      is_partition_key: f.is_partition_key,
       ordinal: idx,
     }))
     try {
@@ -1092,6 +1095,7 @@ export default function DatasetDetailPage() {
                           <TableHead className="w-[50px] text-center">PK</TableHead>
                           <TableHead className="w-[50px] text-center">Unique</TableHead>
                           <TableHead className="w-[50px] text-center">Index</TableHead>
+                          <TableHead className="w-[50px] text-center">Partition</TableHead>
                           <TableHead className="w-[50px] text-center">Nullable</TableHead>
                           <TableHead>Description</TableHead>
                         </TableRow>
@@ -1129,6 +1133,11 @@ export default function DatasetDetailPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-center">
+                              {field.is_partition_key === "true" && (
+                                <Check className="h-4 w-4 text-orange-500 mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
                               {field.nullable === "true" && (
                                 <Check className="h-4 w-4 text-muted-foreground mx-auto" />
                               )}
@@ -1142,21 +1151,6 @@ export default function DatasetDetailPage() {
                         ))}
                       </TableBody>
                     </Table>
-                    {/* Platform features read-only */}
-                    {dataset.properties && dataset.properties.length > 0 && (
-                      <div className="p-4 border-t">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">
-                          Platform Features
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {dataset.properties.map((p) => (
-                            <Badge key={p.id} variant="outline" className="text-xs font-mono">
-                              {p.property_key}: {p.property_value}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </>
                 ) : (
                   <div className="flex items-center justify-center p-8">
@@ -1165,6 +1159,15 @@ export default function DatasetDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Platform Specific — inside Schema tab */}
+            {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
+              <div className="mt-4"><PlatformSpecificCard
+                platformType={dataset.platform.type}
+                properties={dataset.platform_properties || {}}
+                datasetProperties={dataset.properties}
+              /></div>
+            )}
           </TabsContent>
 
           {/* =============== Tags tab =============== */}
@@ -1311,7 +1314,7 @@ export default function DatasetDetailPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {dataset.owners.length > 0 ? (
-                  <Table>
+                  <Table className="w-[80%] mx-auto">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Owner</TableHead>
@@ -1403,7 +1406,7 @@ export default function DatasetDetailPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {dataset.glossary_terms.length > 0 ? (
-                  <Table>
+                  <Table className="w-[80%] mx-auto">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Term</TableHead>
@@ -1506,13 +1509,6 @@ export default function DatasetDetailPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Platform Specific */}
-        {dataset.platform_properties && (
-          <PlatformSpecificCard
-            platformType={dataset.platform.type}
-            properties={dataset.platform_properties}
-          />
-        )}
       </div>
 
     </>

@@ -97,6 +97,16 @@ class Settings:
         self.hive_schedule_interval_minutes: int = int(sched.get("interval_minutes", 60))
         self.hive_schedule_enabled: bool = _to_bool(sched.get("enabled", True))
         self.hive_origin: str = hive_raw.get("origin", "PROD")
+        self.hive_sync_mode: str = hive_raw.get("sync_mode", "thrift")  # "thrift" or "sql"
+
+        # SQL mode: Hive Metastore backend RDBMS connection
+        hive_db = hive_raw.get("metastore_db", {})
+        self.hive_metastore_db_type: str = hive_db.get("type", "mysql")
+        self.hive_metastore_db_host: str = hive_db.get("host", "localhost")
+        self.hive_metastore_db_port: int = int(hive_db.get("port", 3306))
+        self.hive_metastore_db_name: str = hive_db.get("name", "hive")
+        self.hive_metastore_db_username: str = hive_db.get("username", "hive")
+        self.hive_metastore_db_password: str = hive_db.get("password", "hive")
 
         # Impala Platform (query collection via Cloudera Manager API)
         impala_raw = _raw.get("platforms", {}).get("impala", {})
