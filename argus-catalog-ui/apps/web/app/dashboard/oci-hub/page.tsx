@@ -32,6 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { CommentSection } from "@/components/comments"
+import { useAuth } from "@/features/auth"
 
 import { OciHubDashboard } from "@/features/oci-hub/oci-hub-dashboard"
 import {
@@ -656,6 +657,7 @@ function extractHfModelId(url: string): string | null {
 // ─── Main Page ───
 
 export default function OciHubPage() {
+  const { user } = useAuth()
   const [models, setModels] = useState<OciModelSummary[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -820,10 +822,12 @@ export default function OciHubPage() {
                 <List className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <Button size="sm" onClick={() => setImportOpen(true)}>
-              <Import className="h-4 w-4 mr-1.5" />
-              Import from HuggingFace
-            </Button>
+            {user?.is_admin && (
+              <Button size="sm" onClick={() => setImportOpen(true)}>
+                <Import className="h-4 w-4 mr-1.5" />
+                Import from HuggingFace
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setGuideOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />
               How to Import
