@@ -190,7 +190,10 @@ async def deactivate_user(user_id: int, session: AsyncSession = Depends(get_sess
     The account is preserved and can be reactivated later.
     Returns the updated user profile, or 404 if the user does not exist.
     """
-    user = await service.deactivate_user(session, user_id)
+    try:
+        user = await service.deactivate_user(session, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user

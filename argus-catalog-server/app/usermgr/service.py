@@ -299,6 +299,9 @@ async def deactivate_user(session: AsyncSession, user_id: int) -> UserResponse |
     Returns:
         The updated user as a UserResponse, or None if the user was not found.
     """
+    if await _is_last_admin(session, user_id):
+        raise ValueError("Cannot deactivate the only admin. At least one active admin must remain.")
+
     result = await session.execute(select(ArgusUser).where(ArgusUser.id == user_id))
     user = result.scalars().first()
     if not user:
