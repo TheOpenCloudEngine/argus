@@ -25,6 +25,7 @@ cachetools>=5.3.0
 # Semantic Search (pgvector + embedding)
 pgvector>=0.3.0
 sentence-transformers>=3.0.0
+transformers>=4.40.0
 
 # Object Storage (S3/MinIO)
 aioboto3>=13.0.0
