@@ -34,6 +34,24 @@ from app.usermgr.schemas import (
 logger = logging.getLogger(__name__)
 
 
+async def _is_last_admin(session: AsyncSession, user_id: int) -> bool:
+    """Check if the given user is the only admin in the system."""
+    from app.usermgr.schemas import RoleName
+    admin_role = await _get_role_by_role_id(session, RoleName.ADMIN.value)
+    if not admin_role:
+        return False
+    # Count admins
+    admin_count = (await session.execute(
+        select(func.count()).where(ArgusUser.role_id == admin_role.id)
+    )).scalar() or 0
+    if admin_count > 1:
+        return False
+    # Check if this user is an admin
+    result = await session.execute(select(ArgusUser).where(ArgusUser.id == user_id))
+    user = result.scalars().first()
+    return user is not None and user.role_id == admin_role.id
+
+
 def _hash_password(password: str) -> str:
     """Hash a password using SHA-256.
 
@@ -153,6 +171,9 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
     Returns:
         True if the user was found and deleted, False if not found.
     """
+    if await _is_last_admin(session, user_id):
+        raise ValueError("Cannot delete the only admin. At least one admin must remain.")
+
     result = await session.execute(select(ArgusUser).where(ArgusUser.id == user_id))
     user = result.scalars().first()
     if not user:
@@ -222,6 +243,13 @@ async def change_role(
     user = result.scalars().first()
     if not user:
         return None
+
+    # Prevent removing the last admin
+    from app.usermgr.schemas import RoleName
+    admin_role = await _get_role_by_role_id(session, RoleName.ADMIN.value)
+    if admin_role and user.role_id == admin_role.id and req.role.value != RoleName.ADMIN.value:
+        if await _is_last_admin(session, user_id):
+            raise ValueError("Cannot change the role of the only admin. At least one admin must remain.")
 
     role = await _get_role_by_role_id(session, req.role.value)
     if not role:

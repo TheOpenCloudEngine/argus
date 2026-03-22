@@ -171,7 +171,10 @@ export async function createUser(payload: CreateUserPayload): Promise<User> {
  */
 export async function deleteUser(userId: string): Promise<void> {
   const res = await authFetch(`${BASE}/users/${userId}`, { method: "DELETE" })
-  if (!res.ok) throw new Error(`Failed to delete user: ${res.status}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to delete user: ${res.status}`)
+  }
 }
 
 /**
@@ -231,6 +234,9 @@ export async function changeUserRole(userId: string, role: string): Promise<User
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role }),
   })
-  if (!res.ok) throw new Error(`Failed to change role: ${res.status}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to change role: ${res.status}`)
+  }
   return res.json()
 }

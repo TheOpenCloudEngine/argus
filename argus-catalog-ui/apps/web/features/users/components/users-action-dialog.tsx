@@ -275,7 +275,8 @@ export function UsersActionDialog({
       form.reset()
       onOpenChange(false)
     } catch (err) {
-      console.error("Failed to save user:", err)
+      const msg = err instanceof Error ? err.message : "Failed to save user"
+      alert(msg)
     }
   }
 
