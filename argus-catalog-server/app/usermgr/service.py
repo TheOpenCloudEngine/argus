@@ -43,34 +43,14 @@ def _hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-async def _get_role_by_name(session: AsyncSession, name: str) -> ArgusRole | None:
-    """Look up a role by its unique name.
-
-    Args:
-        session: Active database session.
-        name: Role name to search for (e.g., "Admin", "User").
-
-    Returns:
-        The ArgusRole ORM instance if found, or None.
-    """
-    result = await session.execute(select(ArgusRole).where(ArgusRole.name == name))
+async def _get_role_by_role_id(session: AsyncSession, role_id: str) -> ArgusRole | None:
+    """Look up a role by its role_id identifier (e.g., "argus-admin")."""
+    result = await session.execute(select(ArgusRole).where(ArgusRole.role_id == role_id))
     return result.scalars().first()
 
 
 async def _build_user_response(session: AsyncSession, user: ArgusUser) -> UserResponse:
-    """Build a UserResponse from an ORM user object, resolving role name.
-
-    Performs an additional query to look up the role name from the role_id
-    foreign key. Returns "Unknown" if the role record is missing (should
-    not happen with proper foreign key constraints).
-
-    Args:
-        session: Active database session.
-        user: The ArgusUser ORM instance to convert.
-
-    Returns:
-        A fully populated UserResponse Pydantic model.
-    """
+    """Build a UserResponse from an ORM user object, resolving role."""
     result = await session.execute(select(ArgusRole).where(ArgusRole.id == user.role_id))
     role = result.scalars().first()
     return UserResponse(
@@ -81,7 +61,7 @@ async def _build_user_response(session: AsyncSession, user: ArgusUser) -> UserRe
         last_name=user.last_name,
         phone_number=user.phone_number,
         status=UserStatus(user.status),
-        role=role.name if role else "Unknown",
+        role=role.role_id if role else "unknown",
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
@@ -139,7 +119,7 @@ async def add_user(session: AsyncSession, req: UserAddRequest) -> UserResponse:
     Raises:
         ValueError: If the specified role name does not exist in the database.
     """
-    role = await _get_role_by_name(session, req.role.value)
+    role = await _get_role_by_role_id(session, req.role.value)
     if not role:
         raise ValueError(f"Role '{req.role.value}' not found")
 
@@ -243,7 +223,7 @@ async def change_role(
     if not user:
         return None
 
-    role = await _get_role_by_name(session, req.role.value)
+    role = await _get_role_by_role_id(session, req.role.value)
     if not role:
         raise ValueError(f"Role '{req.role.value}' not found")
 
@@ -356,7 +336,7 @@ async def list_users(
     """
     # Base query: join users with roles to get role name in results.
     base = (
-        select(ArgusUser, ArgusRole.name.label("role_name"))
+        select(ArgusUser, ArgusRole.role_id.label("role_code"))
         .join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
     )
 
@@ -364,9 +344,9 @@ async def list_users(
     if status:
         base = base.where(ArgusUser.status.in_([status]))
 
-    # Filter by role name (exact match).
+    # Filter by role_id (exact match).
     if role:
-        base = base.where(ArgusRole.name.in_([role]))
+        base = base.where(ArgusRole.role_id.in_([role]))
 
     # Free-text search across multiple fields using ILIKE for case-insensitive matching.
     if search:
@@ -404,11 +384,11 @@ async def list_users(
             last_name=user.last_name,
             phone_number=user.phone_number,
             status=UserStatus(user.status),
-            role=role_name or "Unknown",
+            role=role_code or "unknown",
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
-        for user, role_name in rows
+        for user, role_code in rows
     ]
 
     return PaginatedUserResponse(
@@ -450,14 +430,16 @@ async def seed_roles(session: AsyncSession) -> None:
     Args:
         session: Active database session.
     """
-    for name, desc in [
-        (RoleName.ADMIN.value, "Administrator with full access"),
-        (RoleName.USER.value, "Standard user with limited access"),
-    ]:
-        existing = await _get_role_by_name(session, name)
+    default_roles = [
+        (RoleName.ADMIN.value, "Admin", "Administrator with full access"),
+        (RoleName.SUPERUSER.value, "Superuser", "Superuser with elevated access"),
+        (RoleName.USER.value, "User", "Standard user with limited access"),
+    ]
+    for rid, display_name, desc in default_roles:
+        existing = await _get_role_by_role_id(session, rid)
         if not existing:
-            session.add(ArgusRole(name=name, description=desc))
-            logger.info("Seeded role: %s", name)
+            session.add(ArgusRole(role_id=rid, name=display_name, description=desc))
+            logger.info("Seeded role: %s (%s)", rid, display_name)
     await session.commit()
 
 
@@ -475,7 +457,7 @@ async def seed_admin_user(session: AsyncSession) -> None:
     if count > 0:
         return
 
-    admin_role = await _get_role_by_name(session, RoleName.ADMIN.value)
+    admin_role = await _get_role_by_role_id(session, RoleName.ADMIN.value)
     if not admin_role:
         return
 

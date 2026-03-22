@@ -43,7 +43,8 @@ ON CONFLICT (config_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS argus_roles (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE,
+    role_id VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(50) NOT NULL,
     description VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

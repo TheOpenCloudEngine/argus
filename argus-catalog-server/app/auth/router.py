@@ -105,7 +105,7 @@ async def _login_local(req: LoginRequest, session: AsyncSession) -> TokenRespons
     from app.usermgr.models import ArgusRole, ArgusUser
 
     result = await session.execute(
-        select(ArgusUser, ArgusRole.name.label("role_name"))
+        select(ArgusUser, ArgusRole.role_id.label("role_code"))
         .join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
         .where(ArgusUser.username == req.username)
     )
@@ -114,7 +114,7 @@ async def _login_local(req: LoginRequest, session: AsyncSession) -> TokenRespons
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-    user, role_name = row
+    user, role_code = row
 
     if user.password_hash != _hash_password(req.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
@@ -129,7 +129,7 @@ async def _login_local(req: LoginRequest, session: AsyncSession) -> TokenRespons
         email=user.email,
         first_name=user.first_name,
         last_name=user.last_name,
-        role=role_name,
+        role=role_code,
     )
     # Refresh token — longer expiry
     refresh_token = create_local_token(
@@ -138,11 +138,11 @@ async def _login_local(req: LoginRequest, session: AsyncSession) -> TokenRespons
         email=user.email,
         first_name=user.first_name,
         last_name=user.last_name,
-        role=role_name,
+        role=role_code,
         expire_minutes=60 * 24 * 7,  # 7 days
     )
 
-    logger.info("Local login: %s (role=%s)", user.username, role_name)
+    logger.info("Local login: %s (role=%s)", user.username, role_code)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -233,7 +233,7 @@ async def _refresh_local(req: RefreshRequest, session: AsyncSession) -> TokenRes
     # Re-fetch user to get current role/status
     user_id = int(payload.get("sub", "0"))
     result = await session.execute(
-        select(ArgusUser, ArgusRole.name.label("role_name"))
+        select(ArgusUser, ArgusRole.role_id.label("role_code"))
         .join(ArgusRole, ArgusUser.role_id == ArgusRole.id)
         .where(ArgusUser.id == user_id)
     )
@@ -241,7 +241,7 @@ async def _refresh_local(req: RefreshRequest, session: AsyncSession) -> TokenRes
     if not row or row[0].status != "active":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account not found or inactive")
 
-    user, role_name = row
+    user, role_code = row
 
     access_token = create_local_token(
         sub=str(user.id), username=user.username, email=user.email,

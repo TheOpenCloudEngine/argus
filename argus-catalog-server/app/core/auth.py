@@ -47,37 +47,30 @@ class TokenUser:
     realm_roles: list[str] = field(default_factory=list)
 
     @property
+    def _all_roles(self) -> list[str]:
+        """Combined roles from both local (roles) and Keycloak (realm_roles)."""
+        return self.roles + self.realm_roles
+
+    @property
     def is_admin(self) -> bool:
-        if settings.auth_type == "local":
-            return "Admin" in self.roles
-        return settings.auth_keycloak_admin_role in self.realm_roles
+        return settings.auth_keycloak_admin_role in self._all_roles
 
     @property
     def is_superuser(self) -> bool:
-        if settings.auth_type == "local":
-            return "Admin" in self.roles
-        return settings.auth_keycloak_superuser_role in self.realm_roles
+        return settings.auth_keycloak_superuser_role in self._all_roles
+
+    @property
+    def is_user(self) -> bool:
+        return settings.auth_keycloak_user_role in self._all_roles
 
     @property
     def has_argus_role(self) -> bool:
         """Check if the user has any valid role."""
-        if settings.auth_type == "local":
-            return len(self.roles) > 0
         return self.is_admin or self.is_superuser or self.is_user
-
-    @property
-    def is_user(self) -> bool:
-        if settings.auth_type == "local":
-            return len(self.roles) > 0
-        return settings.auth_keycloak_user_role in self.realm_roles
 
     @property
     def role(self) -> str:
         """Return the highest privilege role name."""
-        if settings.auth_type == "local":
-            if "Admin" in self.roles:
-                return "admin"
-            return "user"
         if self.is_admin:
             return "admin"
         if self.is_superuser:
@@ -222,8 +215,14 @@ def _verify_token_local(token: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _build_token_user(payload: dict) -> TokenUser:
-    """Build a TokenUser from a decoded JWT payload (works for both modes)."""
+    """Build a TokenUser from a decoded JWT payload (works for both modes).
+
+    Local mode: roles contain role_id values (e.g. ["argus-admin"]).
+    Keycloak mode: realm_roles contain Keycloak realm role names (e.g. ["argus-admin"]).
+    Both use the same role_id identifiers, so is_admin/is_superuser/is_user work uniformly.
+    """
     if settings.auth_type == "local":
+        # Local JWT stores role_id values in "roles" claim
         return TokenUser(
             sub=payload.get("sub", ""),
             username=payload.get("preferred_username", ""),
@@ -234,7 +233,7 @@ def _build_token_user(payload: dict) -> TokenUser:
             realm_roles=[],
         )
 
-    # Keycloak mode
+    # Keycloak mode — realm_roles contain role names matching role_id
     realm_access = payload.get("realm_access", {})
     realm_roles = realm_access.get("roles", [])
     resource_access = payload.get("resource_access", {})
