@@ -184,7 +184,7 @@ export function OciModelRegistrySettings() {
   const createdCount = initSteps.filter((s) => s.status === "created").length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl">
       {statusMessage && (
         <div
           className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm ${
