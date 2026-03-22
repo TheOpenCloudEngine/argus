@@ -3,44 +3,35 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Database, Search, ArrowLeft } from "lucide-react"
+import { Brain, Database, Loader2, Search } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from "@workspace/ui/components/tooltip"
 import { DashboardHeader } from "@/components/dashboard-header"
-import type { DatasetSummary } from "@/features/datasets/data/schema"
+import { hybridSearch, type SemanticSearchResult } from "@/features/datasets/api"
 
-const BASE = "/api/v1/catalog"
-
-type SearchResult = {
-  items: DatasetSummary[]
-  total: number
-  page: number
-  page_size: number
+function scoreColor(score: number): string {
+  if (score >= 0.8) return "text-emerald-600"
+  if (score >= 0.6) return "text-blue-600"
+  if (score >= 0.4) return "text-amber-600"
+  return "text-muted-foreground"
 }
 
-async function searchDatasets(
-  query: string,
-  page: number = 1,
-  pageSize: number = 50,
-): Promise<SearchResult> {
-  const params = new URLSearchParams({
-    search: query,
-    page: String(page),
-    page_size: String(pageSize),
-  })
-  const res = await fetch(`${BASE}/datasets?${params}`)
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`)
-  return res.json()
+function scoreBg(score: number): string {
+  if (score >= 0.8) return "bg-emerald-50 border-emerald-200"
+  if (score >= 0.6) return "bg-blue-50 border-blue-200"
+  if (score >= 0.4) return "bg-amber-50 border-amber-200"
+  return "bg-muted/50 border-muted"
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  inactive: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  deprecated: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  removed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+function MatchBadge({ type }: { type: string }) {
+  if (type === "hybrid") return <Badge variant="outline" className="text-[10px] px-1 py-0 text-purple-600 border-purple-200">hybrid</Badge>
+  if (type === "semantic") return <Badge variant="outline" className="text-[10px] px-1 py-0 text-blue-600 border-blue-200">semantic</Badge>
+  return <Badge variant="outline" className="text-[10px] px-1 py-0">keyword</Badge>
 }
 
 export default function SearchPage() {
@@ -49,9 +40,11 @@ export default function SearchPage() {
   const q = searchParams.get("q") ?? ""
 
   const [query, setQuery] = useState(q)
-  const [results, setResults] = useState<DatasetSummary[]>([])
+  const [results, setResults] = useState<SemanticSearchResult[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+  const [provider, setProvider] = useState<string | null>(null)
+  const [model, setModel] = useState<string | null>(null)
 
   const doSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
@@ -61,9 +54,11 @@ export default function SearchPage() {
     }
     setIsLoading(true)
     try {
-      const data = await searchDatasets(searchQuery.trim())
-      setResults(data.items)
-      setTotal(data.total)
+      const resp = await hybridSearch(searchQuery.trim(), 50, 0.3, 0.7)
+      setResults(resp.items)
+      setTotal(resp.total)
+      setProvider(resp.provider)
+      setModel(resp.model)
     } catch {
       setResults([])
       setTotal(0)
@@ -91,16 +86,11 @@ export default function SearchPage() {
       <div className="flex flex-1 flex-col gap-4 p-4">
         {/* Search bar */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
-            <Link href="/dashboard/datasets">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
           <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search dataset..."
+              placeholder="Search datasets..."
               className="pl-8 h-9 text-sm"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -108,16 +98,37 @@ export default function SearchPage() {
               autoFocus
             />
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center">
+                <Brain className={`h-4 w-4 ${provider ? "text-purple-500" : "text-muted-foreground/40"}`} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {provider
+                ? `Semantic search active (${provider}/${model})`
+                : "Keyword search only (embedding disabled)"
+              }
+            </TooltipContent>
+          </Tooltip>
           {!isLoading && q && (
-            <span className="text-sm text-muted-foreground">
-              {total} result{total !== 1 ? "s" : ""} for &ldquo;{q}&rdquo;
-            </span>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>{total} result{total !== 1 ? "s" : ""} for &ldquo;{q}&rdquo;</span>
+              {provider ? (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{provider}/{model}</Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">keyword only</Badge>
+              )}
+            </div>
           )}
         </div>
 
         {/* Loading */}
         {isLoading && (
-          <p className="text-sm text-muted-foreground text-center py-8">Searching...</p>
+          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Searching...</span>
+          </div>
         )}
 
         {/* No results */}
@@ -132,48 +143,55 @@ export default function SearchPage() {
 
         {/* Results */}
         {!isLoading && results.length > 0 && (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {results.map((ds) => (
-              <Link key={ds.id} href={`/dashboard/datasets/${ds.id}`}>
-                <Card className="h-full transition-colors hover:bg-muted cursor-pointer">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-sm font-medium leading-snug line-clamp-1">
-                        {ds.name}
-                      </CardTitle>
-                      <Badge
-                        variant="outline"
-                        className={`shrink-0 text-xs ${STATUS_COLORS[ds.status] ?? ""}`}
-                      >
-                        {ds.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-2">
-                    {ds.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {ds.description}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="overflow-hidden rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Dataset</th>
+                  <th className="px-3 py-2 text-left font-medium w-36">Platform</th>
+                  <th className="px-3 py-2 text-center font-medium w-20">Origin</th>
+                  <th className="px-3 py-2 text-center font-medium w-16">Fields</th>
+                  <th className="px-3 py-2 text-center font-medium w-16">Tags</th>
+                  <th className="px-3 py-2 text-center font-medium w-20">Match</th>
+                  <th className="px-3 py-2 text-center font-medium w-20">Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {results.map((r) => (
+                  <tr
+                    key={r.dataset.id}
+                    className="hover:bg-muted/30 cursor-pointer"
+                    onClick={() => router.push(`/dashboard/datasets/${r.dataset.id}`)}
+                  >
+                    <td className="px-3 py-2.5">
+                      <div className="font-medium">{r.dataset.name}</div>
+                      {r.dataset.description && (
+                        <p className="text-xs text-muted-foreground truncate max-w-[500px]">
+                          {r.dataset.description}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Database className="h-3 w-3" />
-                        {ds.platform_name}
+                        {r.dataset.platform_name}
                       </span>
-                      <Badge variant="outline" className="text-xs">
-                        {ds.origin}
-                      </Badge>
-                      {ds.schema_field_count > 0 && (
-                        <span>{ds.schema_field_count} fields</span>
-                      )}
-                      {ds.tag_count > 0 && (
-                        <span>{ds.tag_count} tags</span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <Badge variant="outline" className="text-xs">{r.dataset.origin}</Badge>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-muted-foreground">{r.dataset.schema_field_count}</td>
+                    <td className="px-3 py-2.5 text-center text-muted-foreground">{r.dataset.tag_count}</td>
+                    <td className="px-3 py-2.5 text-center"><MatchBadge type={r.match_type} /></td>
+                    <td className="px-3 py-2.5 text-center">
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${scoreBg(r.score)} ${scoreColor(r.score)}`}>
+                        {(r.score * 100).toFixed(0)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -2,11 +2,14 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Search } from "lucide-react"
+import { Brain, Search } from "lucide-react"
 
 import { Input } from "@workspace/ui/components/input"
 import { Separator } from "@workspace/ui/components/separator"
 import { SidebarTrigger } from "@workspace/ui/components/sidebar"
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from "@workspace/ui/components/tooltip"
 
 interface DashboardHeaderProps {
   title: string
@@ -34,13 +37,21 @@ export function DashboardHeader({ title }: DashboardHeaderProps) {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search dataset..."
+            placeholder="Search datasets..."
             className="pl-8 w-64 h-9 text-sm"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="hidden md:flex items-center">
+              <Brain className="h-4 w-4 text-purple-500" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Hybrid search (keyword + semantic)</TooltipContent>
+        </Tooltip>
       </div>
     </header>
   )
