@@ -187,22 +187,34 @@ export function AuthSettings() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Server URL</Label>
+              <Label>Server URL <span className="text-red-500">*</span></Label>
               <Input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="http://localhost:8180" />
             </div>
             <div className="space-y-1.5">
-              <Label>Realm</Label>
+              <Label>Realm <span className="text-red-500">*</span></Label>
               <Input value={realm} onChange={(e) => setRealm(e.target.value)} placeholder="argus" />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Client ID</Label>
+              <Label>Admin Username</Label>
+              <Input value={initAdminUser} onChange={(e) => setInitAdminUser(e.target.value)} placeholder="admin" />
+              <p className="text-xs text-muted-foreground">Keycloak admin account for Initialize.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Admin Password</Label>
+              <Input type="password" value={initAdminPass} onChange={(e) => setInitAdminPass(e.target.value)} placeholder="admin" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Client ID <span className="text-red-500">*</span></Label>
               <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="argus-client" />
             </div>
             <div className="space-y-1.5">
-              <Label>Client Secret</Label>
+              <Label>Client Secret <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Input
                   type={showSecret ? "text" : "password"}
@@ -226,15 +238,15 @@ export function AuthSettings() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label>Admin Role</Label>
-              <Input value={adminRole} onChange={(e) => setAdminRole(e.target.value)} placeholder="argus-admin" />
+              <Input value={adminRole} readOnly className="bg-muted" />
             </div>
             <div className="space-y-1.5">
               <Label>Superuser Role</Label>
-              <Input value={superuserRole} onChange={(e) => setSuperuserRole(e.target.value)} placeholder="argus-superuser" />
+              <Input value={superuserRole} readOnly className="bg-muted" />
             </div>
             <div className="space-y-1.5">
               <Label>User Role</Label>
-              <Input value={userRole} onChange={(e) => setUserRole(e.target.value)} placeholder="argus-user" />
+              <Input value={userRole} readOnly className="bg-muted" />
             </div>
           </div>
 
@@ -270,17 +282,9 @@ export function AuthSettings() {
           </DialogHeader>
 
           {initSteps.length === 0 && (
-            <div className="space-y-3 py-2">
-              <div className="space-y-1.5">
-                <Label>Keycloak Admin Username</Label>
-                <Input value={initAdminUser} onChange={(e) => setInitAdminUser(e.target.value)} placeholder="admin" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Keycloak Admin Password</Label>
-                <Input type="password" value={initAdminPass} onChange={(e) => setInitAdminPass(e.target.value)} placeholder="admin" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                These credentials are used once to access the Keycloak Admin API and are not stored.
+            <div className="py-2">
+              <p className="text-sm text-muted-foreground">
+                Uses the Admin Username and Password configured above to access the Keycloak Admin API.
               </p>
             </div>
           )}
