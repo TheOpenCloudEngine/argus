@@ -180,7 +180,7 @@ export function UsersActionDialog({
           lastName: "",
           username: "",
           email: "",
-          role: "user",
+          role: "argus-user",
           phoneNumber: "",
           password: "",
           confirmPassword: "",
@@ -257,7 +257,6 @@ export function UsersActionDialog({
           phone_number: values.phoneNumber,
         })
       } else {
-        const roleMap: Record<string, "Admin" | "User"> = { admin: "Admin", user: "User" }
         await createUser({
           username: values.username,
           email: values.email,
@@ -265,7 +264,7 @@ export function UsersActionDialog({
           last_name: values.lastName,
           phone_number: values.phoneNumber,
           password: values.password,
-          role: roleMap[values.role] || "User",
+          role: values.role,
         })
       }
       await refreshUsers()

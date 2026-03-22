@@ -61,7 +61,7 @@ function mapUser(u: Record<string, unknown>): User {
     firstName: u.first_name,
     lastName: u.last_name,
     phoneNumber: u.phone_number ?? "",
-    role: typeof u.role === "string" ? u.role.toLowerCase() : u.role,
+    role: u.role,
     createdAt: new Date(u.created_at as string),
     updatedAt: new Date(u.updated_at as string),
   } as User
@@ -125,7 +125,7 @@ export async function checkUserExists(params: {
  * Payload for creating a new user.
  *
  * Uses snake_case field names to match the backend's expected request body.
- * The role field uses title-case ("Admin" | "User") to match the backend enum.
+ * The role field uses role_id values (e.g., "argus-admin", "argus-user").
  */
 type CreateUserPayload = {
   username: string
@@ -134,7 +134,7 @@ type CreateUserPayload = {
   last_name: string
   phone_number: string
   password: string
-  role: "Admin" | "User"
+  role: string
 }
 
 /**
