@@ -1451,7 +1451,7 @@ export default function DatasetDetailPage() {
 
           {/* =============== Sample tab =============== */}
           <TabsContent value="sample" className="mt-4">
-            <SampleDataTab datasetId={datasetId} isSynced={dataset.is_synced === "true"} />
+            <SampleDataTab datasetId={datasetId} isSynced={dataset.is_synced === "true"} isAdmin={!!user?.is_admin} />
           </TabsContent>
 
           {/* =============== Avro tab =============== */}
