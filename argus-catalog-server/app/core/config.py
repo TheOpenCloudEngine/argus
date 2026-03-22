@@ -74,11 +74,12 @@ class Settings:
         # Added for SSO AUTH - Keycloak OIDC configuration
         self.auth_type: str = _get("auth", "type", "keycloak")
         self.auth_keycloak_server_url: str = _get_nested("auth", "keycloak", "server_url", "http://localhost:8180")
-        self.auth_keycloak_realm: str = _get_nested("auth", "keycloak", "realm", "argus-catalog")
-        self.auth_keycloak_client_id: str = _get_nested("auth", "keycloak", "client_id", "argus-catalog-server")
-        self.auth_keycloak_client_secret: str = _get_nested("auth", "keycloak", "client_secret", "argus-catalog-server-secret")
-        self.auth_keycloak_admin_role: str = _get_nested("auth", "keycloak", "admin_role", "catalog-admin")
-        self.auth_keycloak_user_role: str = _get_nested("auth", "keycloak", "user_role", "catalog-user")
+        self.auth_keycloak_realm: str = _get_nested("auth", "keycloak", "realm", "argus")
+        self.auth_keycloak_client_id: str = _get_nested("auth", "keycloak", "client_id", "argus-client")
+        self.auth_keycloak_client_secret: str = _get_nested("auth", "keycloak", "client_secret", "argus-client-secret")
+        self.auth_keycloak_admin_role: str = _get_nested("auth", "keycloak", "admin_role", "argus-admin")
+        self.auth_keycloak_superuser_role: str = _get_nested("auth", "keycloak", "superuser_role", "argus-superuser")
+        self.auth_keycloak_user_role: str = _get_nested("auth", "keycloak", "user_role", "argus-user")
 
         # Object Storage (MinIO / S3) — defaults, overwritten from DB at startup
         self.os_endpoint: str = "http://localhost:9000"

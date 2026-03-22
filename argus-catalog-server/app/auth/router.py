@@ -4,9 +4,10 @@ import logging
 
 import httpx
 from fastapi import APIRouter, HTTPException, status
+from jose import jwt as jose_jwt
 from pydantic import BaseModel
 
-from app.core.auth import CurrentUser, TokenUser
+from app.core.auth import CurrentUser, TokenUser, _build_token_user
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,9 @@ class UserInfoResponse(BaseModel):
     last_name: str
     roles: list[str]
     realm_roles: list[str]
+    role: str
     is_admin: bool
+    is_superuser: bool
 
 
 class LogoutRequest(BaseModel):
@@ -87,6 +90,26 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
     data = resp.json()
+
+    # Check if user has an argus-* role before returning tokens
+    payload = jose_jwt.get_unverified_claims(data["access_token"])
+    token_user = _build_token_user(payload)
+    if not token_user.has_argus_role:
+        # Revoke the token since user has no access
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                _logout_url(),
+                data={
+                    "client_id": settings.auth_keycloak_client_id,
+                    "client_secret": settings.auth_keycloak_client_secret,
+                    "refresh_token": data["refresh_token"],
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No Argus role assigned. Contact your administrator to request access.",
+        )
+
     return TokenResponse(
         access_token=data["access_token"],
         refresh_token=data["refresh_token"],
@@ -137,7 +160,9 @@ async def get_me(user: CurrentUser):
         last_name=user.last_name,
         roles=user.roles,
         realm_roles=user.realm_roles,
+        role=user.role,
         is_admin=user.is_admin,
+        is_superuser=user.is_superuser,
     )
 
 

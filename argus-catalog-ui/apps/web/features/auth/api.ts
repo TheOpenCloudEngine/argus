@@ -23,7 +23,9 @@ export type UserInfo = {
   last_name: string
   roles: string[]
   realm_roles: string[]
+  role: string
   is_admin: boolean
+  is_superuser: boolean
 }
 
 export async function login(

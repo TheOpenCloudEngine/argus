@@ -57,63 +57,61 @@ cd keycloak && docker compose down
 docker logs -f argus-keycloak
 ```
 
-### Realm: argus-catalog
+### Realm: argus
 
 | Property                | Value                             |
 |-------------------------|-----------------------------------|
-| Realm Name              | `argus-catalog`                   |
+| Realm Name              | `argus`                   |
 | SSL Required             | `none` (dev mode)                |
 | Access Token Lifespan   | `3600` seconds (1 hour)           |
 | SSO Session Idle Timeout| `1800` seconds (30 minutes)       |
 | SSO Session Max Lifespan| `36000` seconds (10 hours)        |
 | Brute Force Protection  | Enabled                           |
 
-### Clients
-
-#### argus-catalog-server (Backend - Confidential)
+### Client
 
 | Property                    | Value                               |
 |-----------------------------|-------------------------------------|
-| Client ID                   | `argus-catalog-server`              |
+| Client ID                   | `argus-client`                      |
 | Client Type                 | Confidential (non-public)           |
-| Client Secret               | `argus-catalog-server-secret`       |
-| Standard Flow Enabled       | `false`                             |
+| Client Secret               | `argus-client-secret`               |
+| Standard Flow Enabled       | `true`                              |
 | Direct Access Grants        | `true`                              |
 | Service Accounts Enabled    | `true`                              |
-
-#### argus-catalog-ui (Frontend - Public)
-
-| Property                    | Value                               |
-|-----------------------------|-------------------------------------|
-| Client ID                   | `argus-catalog-ui`                  |
-| Client Type                 | Public                              |
-| Standard Flow Enabled       | `true`                              |
 | Redirect URIs               | `http://localhost:3000/*`, `http://localhost:4600/*` |
 | Web Origins                 | `http://localhost:3000`, `http://localhost:4600`, `+` |
 
 ### Realm Roles
 
-| Role Name       | Description                  |
-|-----------------|------------------------------|
-| `catalog-admin` | Argus Catalog Administrator  |
-| `catalog-user`  | Argus Catalog User           |
+| Role Name          | Description            | Icon (UI)     |
+|--------------------|------------------------|---------------|
+| `argus-admin`      | Argus Administrator    | `ShieldCheck` |
+| `argus-superuser`  | Argus Super User       | `ShieldAlert` |
+| `argus-user`       | Argus User             | `User`        |
+
+> Users without any `argus-*` role are denied login (403 Forbidden).
+
+### Default Role
+
+`argus-user` is set as the default role so that every new user automatically gets basic access.
 
 ### Test Users
 
-| Username | Password | Email                        | Roles          |
-|----------|----------|------------------------------|----------------|
-| `admin`  | `admin`  | `admin@argus-catalog.local`  | `catalog-admin` |
+| Username      | Password | Email                        | Roles          |
+|---------------|----------|------------------------------|----------------|
+| `admin`       | `admin`  | `admin@argus.local`          | `argus-admin`  |
+| `fharenheit`  | `princo` | `fharenheit@argus.local`     | `argus-user`   |
 
 ## OIDC Endpoints
 
 | Endpoint     | URL                                                                            |
 |--------------|--------------------------------------------------------------------------------|
-| Token        | `http://localhost:8180/realms/argus-catalog/protocol/openid-connect/token`      |
-| Authorization| `http://localhost:8180/realms/argus-catalog/protocol/openid-connect/auth`       |
-| UserInfo     | `http://localhost:8180/realms/argus-catalog/protocol/openid-connect/userinfo`   |
-| JWKS         | `http://localhost:8180/realms/argus-catalog/protocol/openid-connect/certs`      |
-| Logout       | `http://localhost:8180/realms/argus-catalog/protocol/openid-connect/logout`     |
-| Well-Known   | `http://localhost:8180/realms/argus-catalog/.well-known/openid-configuration`   |
+| Token        | `http://localhost:8180/realms/argus/protocol/openid-connect/token`      |
+| Authorization| `http://localhost:8180/realms/argus/protocol/openid-connect/auth`       |
+| UserInfo     | `http://localhost:8180/realms/argus/protocol/openid-connect/userinfo`   |
+| JWKS         | `http://localhost:8180/realms/argus/protocol/openid-connect/certs`      |
+| Logout       | `http://localhost:8180/realms/argus/protocol/openid-connect/logout`     |
+| Well-Known   | `http://localhost:8180/realms/argus/.well-known/openid-configuration`   |
 
 ## Backend (argus-catalog-server) Integration
 
@@ -125,22 +123,24 @@ auth:
   type: keycloak
   keycloak:
     server_url: http://localhost:8180
-    realm: argus-catalog
-    client_id: argus-catalog-server
-    client_secret: argus-catalog-server-secret
-    admin_role: catalog-admin
-    user_role: catalog-user
+    realm: argus
+    client_id: argus-client
+    client_secret: argus-client-secret
+    admin_role: argus-admin
+    superuser_role: argus-superuser
+    user_role: argus-user
 ```
 
 **config.properties** (`packaging/config/config.properties`):
 ```properties
 auth.type=keycloak
 auth.keycloak.server_url=http://localhost:8180
-auth.keycloak.realm=argus-catalog
-auth.keycloak.client_id=argus-catalog-server
-auth.keycloak.client_secret=argus-catalog-server-secret
-auth.keycloak.admin_role=catalog-admin
-auth.keycloak.user_role=catalog-user
+auth.keycloak.realm=argus
+auth.keycloak.client_id=argus-client
+auth.keycloak.client_secret=argus-client-secret
+auth.keycloak.admin_role=argus-admin
+auth.keycloak.superuser_role=argus-superuser
+auth.keycloak.user_role=argus-user
 ```
 
 ### Dependencies
@@ -181,8 +181,8 @@ async def public(user: OptionalUser):
 - `email` - Email address
 - `first_name`, `last_name` - Full name
 - `roles` - Client-level roles
-- `realm_roles` - Realm-level roles (includes `catalog-admin`, `catalog-user`)
-- `is_admin` - `True` if user has `catalog-admin` realm role
+- `realm_roles` - Realm-level roles (includes `argus-admin`, `argus-user`)
+- `is_admin` - `True` if user has `argus-admin` realm role
 
 ### Auth API Endpoints (`app/auth/router.py`)
 
@@ -289,6 +289,92 @@ Docker network access was added to allow the Keycloak container to connect:
 host    all    argus    172.16.0.0/12    md5
 ```
 
+## Keycloak Setup Guide (Admin Console)
+
+This section describes how to manually set up the Keycloak realm, client, roles, and users via the Admin Console at `http://localhost:8180/admin` (login with `admin` / `admin`).
+
+### Step 1: Create Realm
+
+1. Click the realm dropdown (top-left, shows "master") > **Create realm**
+2. Enter **Realm name**: `argus`
+3. **Enabled**: ON
+4. Click **Create**
+
+### Step 2: Create Client
+
+1. Go to **Clients** > **Create client**
+2. **Client ID**: `argus-client`
+3. **Client authentication**: ON (confidential)
+4. Click **Next**
+5. Enable:
+   - **Standard flow**: ON
+   - **Direct access grants**: ON
+   - **Service accounts roles**: ON
+6. Click **Next**
+7. **Valid redirect URIs**: `http://localhost:3000/*` and `http://localhost:4600/*`
+8. **Web origins**: `http://localhost:3000`, `http://localhost:4600`, `+`
+9. Click **Save**
+10. Go to **Credentials** tab > copy or set **Client secret** to `argus-client-secret`
+
+### Step 3: Create Realm Roles
+
+1. Go to **Realm roles** > **Create role**
+2. Create each role:
+
+| Role Name          | Description            |
+|--------------------|------------------------|
+| `argus-admin`      | Argus Administrator    |
+| `argus-superuser`  | Argus Super User       |
+| `argus-user`       | Argus User             |
+
+### Step 4: Set Default Role
+
+This makes `argus-user` automatically assigned to every new user.
+
+1. Go to **Realm roles** > click **`default-roles-argus`**
+2. Click **Associated roles** tab > **Assign role**
+3. Change filter from "Filter by clients" to **"Filter by realm roles"**
+4. Select `argus-user` > **Assign**
+
+### Step 5: Create Users
+
+1. Go to **Users** > **Create user**
+2. Fill in:
+   - **Username**: (required)
+   - **Email**: (required - login fails without it)
+   - **Email verified**: ON
+   - **First name**, **Last name**: (optional)
+3. Click **Create**
+4. Go to **Credentials** tab > **Set password**
+   - Enter password
+   - **Temporary**: OFF
+   - Click **Save**
+
+### Step 6: Assign Roles to Users
+
+1. Go to **Users** > click the user
+2. Go to **Role mapping** tab > **Assign role**
+3. Change filter from "Filter by clients" to **"Filter by realm roles"**
+4. Select the desired role (`argus-admin`, `argus-superuser`, or `argus-user`) > **Assign**
+
+> **Note**: If `argus-user` was set as a default role (Step 4), new users already have it. You only need to manually assign `argus-admin` or `argus-superuser` for elevated access.
+
+### Step 7: Remove a Role from a User
+
+1. Go to **Users** > click the user
+2. Go to **Role mapping** tab
+3. Check the role to remove > **Unassign**
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "Invalid client or Invalid client credentials" | Client `argus-client` doesn't exist or wrong secret | Check Clients > argus-client > Credentials tab |
+| "Account is not fully set up" | User has no email or has pending required actions | Set email + Email verified ON, clear Required actions |
+| "Invalid user credentials" | Wrong password | Reset via Users > user > Credentials > Set password |
+| "No Argus role assigned" | User has no `argus-*` realm role | Assign role via Users > user > Role mapping |
+| Realm roles not visible in "Assign role" | Filter defaults to "Filter by clients" | Switch to **"Filter by realm roles"** |
+
 ## Keycloak Admin API Examples
 
 ```bash
@@ -298,11 +384,11 @@ TOKEN=$(curl -s -X POST "http://localhost:8180/realms/master/protocol/openid-con
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # List realm users
-curl -s "http://localhost:8180/admin/realms/argus-catalog/users" \
+curl -s "http://localhost:8180/admin/realms/argus/users" \
   -H "Authorization: Bearer $TOKEN"
 
 # Create a new user
-curl -s -X POST "http://localhost:8180/admin/realms/argus-catalog/users" \
+curl -s -X POST "http://localhost:8180/admin/realms/argus/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

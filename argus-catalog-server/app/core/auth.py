@@ -66,6 +66,30 @@ class TokenUser:
     def is_admin(self) -> bool:
         return settings.auth_keycloak_admin_role in self.realm_roles
 
+    @property
+    def is_superuser(self) -> bool:
+        return settings.auth_keycloak_superuser_role in self.realm_roles
+
+    @property
+    def has_argus_role(self) -> bool:
+        """Check if the user has any argus-* role assigned."""
+        return self.is_admin or self.is_superuser or self.is_user
+
+    @property
+    def is_user(self) -> bool:
+        return settings.auth_keycloak_user_role in self.realm_roles
+
+    @property
+    def role(self) -> str:
+        """Return the highest privilege role name: admin > superuser > user."""
+        if self.is_admin:
+            return "admin"
+        if self.is_superuser:
+            return "superuser"
+        if self.is_user:
+            return "user"
+        return "none"
+
 
 def _extract_bearer_token(request: Request) -> str | None:
     """Extract Bearer token from Authorization header."""
@@ -162,7 +186,13 @@ async def get_current_user(request: Request) -> TokenUser:
             headers={"WWW-Authenticate": "Bearer"},
         )
     payload = await _verify_token(token)
-    return _build_token_user(payload)
+    user = _build_token_user(payload)
+    if not user.has_argus_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No Argus role assigned. Contact your administrator to request access.",
+        )
+    return user
 
 
 async def get_optional_user(request: Request) -> TokenUser | None:
@@ -175,6 +205,18 @@ async def get_optional_user(request: Request) -> TokenUser | None:
         return _build_token_user(payload)
     except HTTPException:
         return None
+
+
+async def require_superuser(
+    user: Annotated[TokenUser, Depends(get_current_user)],
+) -> TokenUser:
+    """FastAPI dependency: require superuser or admin role."""
+    if not (user.is_admin or user.is_superuser):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superuser or admin role required",
+        )
+    return user
 
 
 async def require_admin(
@@ -192,4 +234,5 @@ async def require_admin(
 # Type aliases for use in route signatures
 CurrentUser = Annotated[TokenUser, Depends(get_current_user)]
 OptionalUser = Annotated[TokenUser | None, Depends(get_optional_user)]
+SuperUser = Annotated[TokenUser, Depends(require_superuser)]
 AdminUser = Annotated[TokenUser, Depends(require_admin)]
