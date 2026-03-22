@@ -1314,7 +1314,7 @@ export default function DatasetDetailPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {dataset.owners.length > 0 ? (
-                  <Table>
+                  <Table className="w-[80%] mx-auto">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Owner</TableHead>
@@ -1406,7 +1406,7 @@ export default function DatasetDetailPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {dataset.glossary_terms.length > 0 ? (
-                  <Table>
+                  <Table className="w-[80%] mx-auto">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Term</TableHead>
