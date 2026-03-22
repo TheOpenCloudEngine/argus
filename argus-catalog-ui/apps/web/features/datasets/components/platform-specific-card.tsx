@@ -105,6 +105,8 @@ function hiveImpalaTableProps(table: Record<string, unknown>): PropItem[] {
   if (table.transactional != null)
     items.push({ label: "Transactional", value: table.transactional ? "Yes" : "No" })
   if (table.table_format) items.push({ label: "Table Format", value: String(table.table_format) })
+  if (table.metadata_location) items.push({ label: "Metadata Location", value: String(table.metadata_location) })
+  if (table.spark_provider) items.push({ label: "Spark Provider", value: String(table.spark_provider) })
   if (table.kudu_master_hosts) items.push({ label: "Kudu Masters", value: String(table.kudu_master_hosts) })
   if (table.estimated_rows != null)
     items.push({ label: "Estimated Rows", value: formatNumber(Number(table.estimated_rows)) })
@@ -301,9 +303,17 @@ function DDLViewer({ ddl }: { ddl: string }) {
 // Main component
 // ---------------------------------------------------------------------------
 
+type DatasetPropertyItem = {
+  id: number
+  property_key: string
+  property_value: string
+}
+
 type PlatformSpecificCardProps = {
   platformType: string
   properties: Record<string, unknown>
+  /** Dataset properties from catalog_dataset_properties (hive.* keys) */
+  datasetProperties?: DatasetPropertyItem[]
 }
 
 function TblPropertiesGrid({ tblProperties }: { tblProperties: Record<string, string> }) {
@@ -345,18 +355,47 @@ function TblPropertiesGrid({ tblProperties }: { tblProperties: Record<string, st
   )
 }
 
-export function PlatformSpecificCard({ platformType, properties }: PlatformSpecificCardProps) {
+export function PlatformSpecificCard({ platformType, properties, datasetProperties }: PlatformSpecificCardProps) {
   const table = (properties.table ?? {}) as Record<string, unknown>
   const columns = (properties.columns ?? {}) as Record<string, Record<string, unknown>>
   const indexes = (properties.indexes ?? []) as { name: string; definition: string }[]
   const ddl = (properties.ddl ?? "") as string
-  const tblProperties = (properties.tbl_properties ?? {}) as Record<string, string>
+  let tblProperties = (properties.tbl_properties ?? {}) as Record<string, string>
 
   const isMySQL = platformType === "mysql"
   const isHiveImpala = platformType === "hive" || platformType === "impala"
 
+  // For Hive/Impala: merge hive.* dataset properties into table props and tbl_properties
+  let mergedTable = { ...table }
+  if (isHiveImpala && datasetProperties && datasetProperties.length > 0) {
+    const dsProps: Record<string, string> = {}
+    for (const p of datasetProperties) {
+      const key = p.property_key.startsWith("hive.") ? p.property_key.slice(5) : p.property_key
+      dsProps[key] = p.property_value
+    }
+
+    // Map known keys to hiveImpalaTableProps format
+    if (dsProps.table_format && !mergedTable.table_format) mergedTable.table_format = dsProps.table_format
+    if (dsProps.location && !mergedTable.location) mergedTable.location = dsProps.location
+    if (dsProps.input_format && !mergedTable.input_format) mergedTable.input_format = dsProps.input_format
+    if (dsProps.partition_keys && !mergedTable.partition_keys) mergedTable.partition_keys = dsProps.partition_keys
+    if (dsProps.numRows && !mergedTable.estimated_rows) mergedTable.estimated_rows = dsProps.numRows
+    if (dsProps.totalSize && !mergedTable.total_size) mergedTable.total_size = dsProps.totalSize
+    if (dsProps.metadata_location && !mergedTable.metadata_location) mergedTable.metadata_location = dsProps.metadata_location
+    if (dsProps["spark.sql.sources.provider"] && !mergedTable.spark_provider) mergedTable.spark_provider = dsProps["spark.sql.sources.provider"]
+
+    // Build tbl_properties from remaining hive.* keys
+    if (Object.keys(tblProperties).length === 0) {
+      const merged: Record<string, string> = {}
+      for (const p of datasetProperties) {
+        merged[p.property_key] = p.property_value
+      }
+      tblProperties = merged
+    }
+  }
+
   const tableProps = isHiveImpala
-    ? hiveImpalaTableProps(table)
+    ? hiveImpalaTableProps(mergedTable)
     : isMySQL ? mysqlTableProps(table) : pgTableProps(table)
 
   const hasContent =

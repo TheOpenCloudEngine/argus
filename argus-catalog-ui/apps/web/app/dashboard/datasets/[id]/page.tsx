@@ -1570,10 +1570,11 @@ export default function DatasetDetailPage() {
         </Tabs>
 
         {/* Platform Specific */}
-        {dataset.platform_properties && (
+        {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
           <PlatformSpecificCard
             platformType={dataset.platform.type}
-            properties={dataset.platform_properties}
+            properties={dataset.platform_properties || {}}
+            datasetProperties={dataset.properties}
           />
         )}
       </div>
