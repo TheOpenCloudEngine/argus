@@ -662,6 +662,7 @@ export default function OciHubPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("dashboard")
   const [viewMode, setViewMode] = useState<"card" | "list">("card")
   const [guideOpen, setGuideOpen] = useState(false)
   const [guideTab, setGuideTab] = useState<"cli" | "sdk" | "api">("cli")
@@ -763,22 +764,11 @@ export default function OciHubPage() {
     }
   }
 
-  if (selectedModel) {
-    return (
-      <>
-        <DashboardHeader title="OCI Model Hub" />
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <ModelDetail name={selectedModel} onBack={() => { setSelectedModel(null); load(page, search) }} />
-        </div>
-      </>
-    )
-  }
-
   return (
     <>
       <DashboardHeader title="OCI Model Hub" />
       <div className="flex flex-1 flex-col gap-4 p-4">
-        <Tabs defaultValue="dashboard">
+        <Tabs value={selectedModel ? "models" : activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedModel(null) }}>
           <TabsList variant="line">
             <TabsTrigger value="dashboard" className="text-base">Dashboard</TabsTrigger>
             <TabsTrigger value="models" className="text-base">Models</TabsTrigger>
@@ -789,6 +779,9 @@ export default function OciHubPage() {
           </TabsContent>
 
           <TabsContent value="models" className="mt-4">
+          {selectedModel ? (
+            <ModelDetail name={selectedModel} onBack={() => { setSelectedModel(null); load(page, search) }} />
+          ) : (
         <div className="space-y-4">
         {/* Toolbar */}
         <div className="flex items-center gap-2">
@@ -1312,6 +1305,7 @@ curl "${serverUrl}/api/v1/model-store/my-bert/versions/1/manifest"`}
           </div>
         )}
         </div>
+          )}
           </TabsContent>
         </Tabs>
       </div>

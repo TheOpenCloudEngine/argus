@@ -226,6 +226,7 @@ async def list_versions(
     name: str, session: AsyncSession = Depends(get_session),
 ):
     """List all versions for a model."""
+    logger.info("GET /oci-models/%s/versions", name)
     return await service.list_versions(session, name)
 
 

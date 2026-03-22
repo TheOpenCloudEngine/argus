@@ -125,5 +125,5 @@ async def test_object_storage(body: ObjectStorageTestRequest):
             msg = f"Connection failed: unable to reach {body.endpoint}."
         else:
             msg = f"Error: {error_msg}"
-        logger.info("Object Storage test failed: %s", msg)
+        logger.warning("Object Storage test failed: %s", msg)
         return TestResponse(success=False, message=msg)

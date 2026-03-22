@@ -62,6 +62,7 @@ async def update_config(session: AsyncSession, category: str, items: dict[str, s
                 config_value=value,
             ))
     await session.commit()
+    logger.info("Configuration updated: category=%s, %d item(s)", category, len(items))
 
 
 async def load_os_settings(session: AsyncSession) -> dict[str, str]:

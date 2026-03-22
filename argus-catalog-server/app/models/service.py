@@ -73,6 +73,7 @@ def _generate_model_urn(name: str) -> str:
 async def create_registered_model(
     session: AsyncSession, req: RegisteredModelCreate,
 ) -> RegisteredModelResponse:
+    """Register a new ML model. Raises ValueError if name already exists."""
     # Check name uniqueness
     existing = await session.execute(
         select(RegisteredModel).where(RegisteredModel.name == req.name)
