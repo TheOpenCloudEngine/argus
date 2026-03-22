@@ -478,7 +478,7 @@ export function ModelsDetail({ modelName, onBack }: ModelsDetailProps) {
           <DownloadTab modelName={detail.name} />
         </TabsContent>
         <TabsContent value="comments" className="mt-4">
-          <CommentSection entityType="model" entityId={detail.name} currentUser="admin" />
+          <CommentSection entityType="model" entityId={detail.name} />
         </TabsContent>
       </Tabs>
     </div>

@@ -630,7 +630,7 @@ for filename, url in urls["files"].items():
 
         {/* Comments */}
         <TabsContent value="comments" className="mt-4">
-          <CommentSection entityType="oci-model" entityId={detail.name} currentUser="admin" />
+          <CommentSection entityType="oci-model" entityId={detail.name} />
         </TabsContent>
       </Tabs>
     </div>

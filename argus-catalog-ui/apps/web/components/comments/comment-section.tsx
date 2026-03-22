@@ -12,6 +12,7 @@ import {
   type CommentData,
   type PaginatedComments,
 } from "@/features/comments/api"
+import { useAuth } from "@/features/auth"
 import { CommentEditor } from "./comment-editor"
 import { CommentItem } from "./comment-item"
 
@@ -22,16 +23,17 @@ type CommentSectionProps = {
   entityId: string
   /** Number of top-level comments per page (default: 10). */
   pageSize?: number
-  /** Current logged-in user name. */
-  currentUser?: string
 }
 
 export function CommentSection({
   entityType,
   entityId,
   pageSize = 5,
-  currentUser = "anonymous",
 }: CommentSectionProps) {
+  const { user } = useAuth()
+  const currentUser = user
+    ? `${user.first_name} ${user.last_name} (${user.username})`
+    : "anonymous"
   const [comments, setComments] = useState<CommentData[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)

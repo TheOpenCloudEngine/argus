@@ -1502,7 +1502,6 @@ export default function DatasetDetailPage() {
             <CommentSection
               entityType="dataset"
               entityId={String(datasetId)}
-              currentUser="admin"
             />
           </TabsContent>
         </Tabs>
