@@ -69,14 +69,14 @@ export function ModelsDashboard() {
     )
   }
 
-  const sizeData = stats.model_sizes.map((m) => ({
+  const sizeData = stats.model_sizes.slice(0, 10).map((m) => ({
     name: shortName(m.model_name),
     fullName: m.model_name,
     size: m.model_size_bytes,
     sizeLabel: formatSize(m.model_size_bytes),
   }))
 
-  const versionData = stats.versions_per_model.map((m) => ({
+  const versionData = stats.versions_per_model.slice(0, 10).map((m) => ({
     name: shortName(m.model_name),
     fullName: m.model_name,
     versions: m.version_count,
@@ -84,19 +84,19 @@ export function ModelsDashboard() {
 
   const pieData = stats.status_distribution.filter((s) => s.count > 0)
 
-  const daily1dData = stats.daily_access_1d.map((d) => ({
+  const daily1dData = stats.daily_download_1d.map((d) => ({
     date: d.date,
     fullDate: d.date,
     count: d.count,
   }))
 
-  const daily7dData = stats.daily_access_7d.map((d) => ({
+  const daily7dData = stats.daily_download_7d.map((d) => ({
     date: shortDate(d.date),
     fullDate: d.date,
     count: d.count,
   }))
 
-  const daily30dData = stats.daily_access_30d.map((d) => ({
+  const daily30dData = stats.daily_download_30d.map((d) => ({
     date: shortDate(d.date),
     fullDate: d.date,
     count: d.count,
@@ -173,11 +173,11 @@ export function ModelsDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Access</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Download</CardTitle>
             <Activity className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-500">{stats.total_access}</div>
+            <div className="text-2xl font-bold text-emerald-500">{stats.total_download}</div>
           </CardContent>
         </Card>
       </div>
@@ -309,12 +309,12 @@ export function ModelsDashboard() {
         </Card>
       </div>
 
-      {/* Charts Row 2: Access Trends */}
+      {/* Charts Row 2: Download Trends */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Hourly Access (1 day) */}
+        {/* Hourly Download (1 day) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Hourly Access (24h)</CardTitle>
+            <CardTitle className="text-sm font-medium">Hourly Download (24h)</CardTitle>
           </CardHeader>
           <CardContent>
             {daily1dData.length > 0 ? (
@@ -328,15 +328,15 @@ export function ModelsDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No access data yet</p>
+              <p className="text-sm text-muted-foreground text-center py-8">No download data yet</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Daily Access (7 days) */}
+        {/* Daily Download (7 days) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Daily Access (7 days)</CardTitle>
+            <CardTitle className="text-sm font-medium">Daily Download (7 days)</CardTitle>
           </CardHeader>
           <CardContent>
             {daily7dData.length > 0 ? (
@@ -361,15 +361,15 @@ export function ModelsDashboard() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No access data yet</p>
+              <p className="text-sm text-muted-foreground text-center py-8">No download data yet</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Daily Access (30 days) */}
+        {/* Daily Download (30 days) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Daily Access (30 days)</CardTitle>
+            <CardTitle className="text-sm font-medium">Daily Download (30 days)</CardTitle>
           </CardHeader>
           <CardContent>
             {daily30dData.length > 0 ? (
@@ -394,7 +394,7 @@ export function ModelsDashboard() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No access data yet</p>
+              <p className="text-sm text-muted-foreground text-center py-8">No download data yet</p>
             )}
           </CardContent>
         </Card>

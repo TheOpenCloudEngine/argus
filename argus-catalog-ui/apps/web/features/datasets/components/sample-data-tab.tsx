@@ -86,9 +86,10 @@ type SampleDataTabProps = {
   /** When true (synced dataset), the Delete button is hidden to prevent
    *  accidental removal of sync-managed sample data. */
   isSynced?: boolean
+  isAdmin?: boolean
 }
 
-export function SampleDataTab({ datasetId, isSynced = false }: SampleDataTabProps) {
+export function SampleDataTab({ datasetId, isSynced = false, isAdmin = false }: SampleDataTabProps) {
   // Format: "parquet" when served from synced parquet, "csv" for uploaded CSV
   const [sampleFormat, setSampleFormat] = useState<"parquet" | "csv" | null>(null)
 
@@ -631,8 +632,8 @@ export function SampleDataTab({ datasetId, isSynced = false }: SampleDataTabProp
   // ---------------------------------------------------------------------------
   return (
     <Card>
-      {/* Hide Delete button for synced datasets — sample data is managed by sync */}
-      {hasSample && !isSynced && (
+      {/* Hide Delete button for synced datasets and non-admin users */}
+      {hasSample && !isSynced && isAdmin && (
         <div className="flex justify-end px-4 pt-3">
           <Button size="sm" variant="outline" onClick={handleDelete} className="text-destructive">
             <Trash2 className="mr-1 h-3.5 w-3.5" />
@@ -655,7 +656,7 @@ export function SampleDataTab({ datasetId, isSynced = false }: SampleDataTabProp
         {hasSample && sampleFormat === "csv" && renderCsvView()}
 
         {/* Empty state: no sample file */}
-        {hasSample === false && (
+        {hasSample === false && isAdmin && (
           <div className="flex flex-col items-center justify-center gap-4 p-8">
             {uploadError && (
               <p className="text-sm text-destructive">{uploadError}</p>
@@ -672,6 +673,11 @@ export function SampleDataTab({ datasetId, isSynced = false }: SampleDataTabProp
                 Supported formats: .csv, .tsv (max 100 KB)
               </p>
             </div>
+          </div>
+        )}
+        {hasSample === false && !isAdmin && (
+          <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+            No sample data available.
           </div>
         )}
 

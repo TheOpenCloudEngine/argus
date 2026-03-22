@@ -4,11 +4,12 @@ import type {
   FilesystemFolder,
   ListDirectoryResponse,
 } from "@/components/local-filesystem-browser"
+import { authFetch } from "@/features/auth/auth-fetch" // Added for SSO AUTH
 
 const API_BASE = "/api/v1/filesystem"
 
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init)
+  const res = await authFetch(url, init)
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(body.detail || `API error ${res.status}`)
@@ -154,6 +155,61 @@ export function createFilesystemDataSource(rootSub?: string): FilesystemDataSour
       if (options?.sheet) params.set("sheet", options.sheet)
       if (options?.maxRows) params.set("max_rows", String(options.maxRows))
       return apiFetch(`${API_BASE}/preview?${params}`)
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// S3 Bucket Browser (for OCI Model Files)
+// ---------------------------------------------------------------------------
+
+const S3_BROWSE_BASE = "/api/v1/model-store/browse"
+
+/**
+ * Create a FilesystemDataSource that browses S3 bucket via model-store API.
+ * Used for OCI Model Files page.
+ */
+export function createS3DataSource(): FilesystemDataSource {
+  return {
+    async listDirectory(path: string): Promise<ListDirectoryResponse> {
+      const params = new URLSearchParams({ path })
+      const data = await apiFetch<{
+        folders: Array<{ key: string; name: string; owner?: string; group?: string; permissions?: string }>
+        files: Array<{ key: string; name: string; size: number; last_modified: string; owner?: string; group?: string; permissions?: string }>
+        current_path: string
+      }>(`${S3_BROWSE_BASE}/list?${params}`)
+      return {
+        folders: data.folders.map(toFolder),
+        files: data.files.map(toFile),
+        currentPath: data.current_path,
+      }
+    },
+
+    async deletePaths(): Promise<void> {
+      // S3 delete not supported from browser
+      throw new Error("Delete is not supported for S3 objects from the browser")
+    },
+
+    async createFolder(): Promise<void> {
+      throw new Error("Create folder is not supported for S3 from the browser")
+    },
+
+    async uploadFiles(): Promise<void> {
+      throw new Error("Upload is not supported from the browser. Use SDK or API.")
+    },
+
+    async getDownloadUrl(path: string): Promise<string> {
+      const params = new URLSearchParams({ path })
+      const data = await apiFetch<{ url: string }>(`${S3_BROWSE_BASE}/download?${params}`)
+      return data.url
+    },
+
+    async renamePath(): Promise<void> {
+      throw new Error("Rename is not supported for S3 from the browser")
+    },
+
+    async previewFile(): Promise<unknown> {
+      throw new Error("Preview is not supported for S3 files")
     },
   }
 }

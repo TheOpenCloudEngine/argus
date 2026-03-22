@@ -40,6 +40,9 @@ type ModelsContextType = {
   setDeleteTargetNames: React.Dispatch<React.SetStateAction<string[]>>
   /** Clear selection after delete. */
   clearSelection: () => void
+  /** Currently selected model name for detail view (null = show grid). */
+  selectedModelName: string | null
+  setSelectedModelName: React.Dispatch<React.SetStateAction<string | null>>
 }
 
 const ModelsContext = React.createContext<ModelsContextType | null>(null)
@@ -58,6 +61,7 @@ export function ModelsProvider({
   const [isLoading, setIsLoading] = useState(true)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [deleteTargetNames, setDeleteTargetNames] = useState<string[]>([])
+  const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
 
   const appliedFiltersRef = useRef<SearchParams>({
     search: "", status: "", python_version: "", sklearn_version: "",
@@ -160,6 +164,8 @@ export function ModelsProvider({
         deleteTargetNames,
         setDeleteTargetNames,
         clearSelection,
+        selectedModelName,
+        setSelectedModelName,
       }}
     >
       {children}

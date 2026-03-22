@@ -79,7 +79,7 @@ class ModelSummary(BaseModel):
     sklearn_version: str | None = None
     python_version: str | None = None
     model_size_bytes: int | None = None
-    access_count: int = 0
+    download_count: int = 0
     updated_at: datetime
 
 
@@ -105,13 +105,13 @@ class ModelVersionCount(BaseModel):
     version_count: int
 
 
-class AccessDataPoint(BaseModel):
+class DataPoint(BaseModel):
     date: str
     count: int
 
 
 class ModelStats(BaseModel):
-    """Dashboard statistics for MLFlow Models page."""
+    """Dashboard statistics for MLflow Models page."""
 
     total_models: int
     total_versions: int
@@ -119,18 +119,72 @@ class ModelStats(BaseModel):
     ready_versions: int
     pending_count: int
     failed_count: int
-    total_access: int
+    total_download: int
     status_distribution: list[ModelVersionStatusCount]
     model_sizes: list[ModelSizeInfo]
     versions_per_model: list[ModelVersionCount]
-    daily_access_1d: list[AccessDataPoint]
-    daily_access_7d: list[AccessDataPoint]
-    daily_access_30d: list[AccessDataPoint]
-    access_by_model: dict[str, int]
+    daily_download_1d: list[DataPoint]
+    daily_download_7d: list[DataPoint]
+    daily_download_30d: list[DataPoint]
+    download_by_model: dict[str, int]
     total_publish: int
-    daily_publish_1d: list[AccessDataPoint]
-    daily_publish_7d: list[AccessDataPoint]
-    daily_publish_30d: list[AccessDataPoint]
+    daily_publish_1d: list[DataPoint]
+    daily_publish_7d: list[DataPoint]
+    daily_publish_30d: list[DataPoint]
+
+
+class CatalogModelDetail(BaseModel):
+    """Parsed metadata from catalog_models table."""
+
+    predict_fn: str | None = None
+    python_version: str | None = None
+    serialization_format: str | None = None
+    sklearn_version: str | None = None
+    mlflow_version: str | None = None
+    mlflow_model_id: str | None = None
+    model_size_bytes: int | None = None
+    utc_time_created: str | None = None
+    requirements: str | None = None
+    conda: str | None = None
+    python_env: str | None = None
+    source_type: str | None = None
+
+
+class ModelDetailResponse(BaseModel):
+    """Full model detail with latest version metadata."""
+
+    id: int
+    name: str
+    urn: str
+    description: str | None = None
+    owner: str | None = None
+    storage_type: str = "local"
+    storage_location: str | None = None
+    max_version_number: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    latest_version_status: str | None = None
+    catalog: CatalogModelDetail | None = None
+    download_count: int = 0
+
+
+class DownloadLogEntry(BaseModel):
+    """Single download log entry."""
+
+    downloaded_at: datetime
+    version: int
+    download_type: str
+    client_ip: str | None = None
+    user_agent: str | None = None
+
+
+class ModelDownloadStats(BaseModel):
+    """Download statistics for a single model."""
+
+    total_download: int
+    daily_download: list[DataPoint]
+    recent_logs: list[DownloadLogEntry]
 
 
 # ---------------------------------------------------------------------------

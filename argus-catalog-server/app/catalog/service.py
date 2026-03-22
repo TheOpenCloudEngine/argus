@@ -81,6 +81,7 @@ def _generate_urn(platform_id: str, path: str, env: str, entity_type: str = "dat
 # ---------------------------------------------------------------------------
 
 async def list_platforms(session: AsyncSession) -> list[PlatformResponse]:
+    """List all registered data platforms ordered by name."""
     result = await session.execute(select(Platform).order_by(Platform.name))
     return [PlatformResponse.model_validate(p) for p in result.scalars().all()]
 
@@ -100,6 +101,7 @@ async def create_platform(session: AsyncSession, req: PlatformCreate) -> Platfor
 
 
 async def get_platform(session: AsyncSession, platform_id: int) -> PlatformResponse | None:
+    """Get a single platform by ID, or None if not found."""
     result = await session.execute(select(Platform).where(Platform.id == platform_id))
     platform = result.scalars().first()
     if not platform:
@@ -110,9 +112,11 @@ async def get_platform(session: AsyncSession, platform_id: int) -> PlatformRespo
 async def update_platform(
     session: AsyncSession, platform_id: int, req: PlatformUpdate
 ) -> PlatformResponse | None:
+    """Update platform metadata. Returns None if not found."""
     result = await session.execute(select(Platform).where(Platform.id == platform_id))
     platform = result.scalars().first()
     if not platform:
+        logger.warning("Platform not found for update: id=%d", platform_id)
         return None
     if req.name is not None:
         platform.name = req.name
@@ -123,12 +127,15 @@ async def update_platform(
 
 
 async def delete_platform(session: AsyncSession, platform_id: int) -> bool:
+    """Delete a platform and all associated datasets/configurations."""
     result = await session.execute(select(Platform).where(Platform.id == platform_id))
     platform = result.scalars().first()
     if not platform:
+        logger.warning("Platform not found for delete: id=%d", platform_id)
         return False
     await session.delete(platform)
     await session.commit()
+    logger.info("Platform deleted: %s (id=%d)", platform.name, platform.id)
     return True
 
 
@@ -207,6 +214,7 @@ async def get_platform_dataset_count(session: AsyncSession, platform_id: int) ->
 # ---------------------------------------------------------------------------
 
 async def list_tags(session: AsyncSession) -> list[TagResponse]:
+    """List all tags ordered by name."""
     result = await session.execute(select(Tag).order_by(Tag.name))
     return [TagResponse.model_validate(t) for t in result.scalars().all()]
 
@@ -278,12 +286,15 @@ async def get_tag_usage(session: AsyncSession, tag_id: int) -> TagUsage | None:
 
 
 async def delete_tag(session: AsyncSession, tag_id: int) -> bool:
+    """Delete a tag and remove all dataset associations."""
     result = await session.execute(select(Tag).where(Tag.id == tag_id))
     tag = result.scalars().first()
     if not tag:
+        logger.warning("Tag not found for delete: id=%d", tag_id)
         return False
     await session.delete(tag)
     await session.commit()
+    logger.info("Tag deleted: %s (id=%d)", tag.name, tag.id)
     return True
 
 
@@ -292,6 +303,7 @@ async def delete_tag(session: AsyncSession, tag_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 async def list_glossary_terms(session: AsyncSession) -> list[GlossaryTermResponse]:
+    """List all glossary terms ordered by name."""
     result = await session.execute(select(GlossaryTerm).order_by(GlossaryTerm.name))
     return [GlossaryTermResponse.model_validate(t) for t in result.scalars().all()]
 
@@ -311,14 +323,17 @@ async def create_glossary_term(
 
 
 async def delete_glossary_term(session: AsyncSession, term_id: int) -> bool:
+    """Delete a glossary term and remove all dataset associations."""
     result = await session.execute(
         select(GlossaryTerm).where(GlossaryTerm.id == term_id)
     )
     term = result.scalars().first()
     if not term:
+        logger.warning("Glossary term not found for delete: id=%d", term_id)
         return False
     await session.delete(term)
     await session.commit()
+    logger.info("Glossary term deleted: %s (id=%d)", term.name, term.id)
     return True
 
 
@@ -462,10 +477,16 @@ async def create_dataset(session: AsyncSession, req: DatasetCreate) -> DatasetRe
     await session.commit()
     await session.refresh(dataset)
     logger.info("Dataset created: %s (id=%d, urn=%s)", dataset.name, dataset.id, dataset.urn)
+
+    # Trigger background embedding for semantic search
+    from app.embedding.service import embed_dataset_background
+    await embed_dataset_background(dataset.id)
+
     return await _build_dataset_response(session, dataset)
 
 
 async def get_dataset(session: AsyncSession, dataset_id: int) -> DatasetResponse | None:
+    """Get a single dataset by ID with all relationships."""
     result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
     dataset = result.scalars().first()
     if not dataset:
@@ -474,6 +495,7 @@ async def get_dataset(session: AsyncSession, dataset_id: int) -> DatasetResponse
 
 
 async def get_dataset_by_urn(session: AsyncSession, urn: str) -> DatasetResponse | None:
+    """Get a single dataset by URN with all relationships."""
     result = await session.execute(select(Dataset).where(Dataset.urn == urn))
     dataset = result.scalars().first()
     if not dataset:
@@ -519,10 +541,16 @@ async def update_dataset(
     await session.commit()
     await session.refresh(dataset)
     logger.info("Dataset updated: %s (id=%d)", dataset.name, dataset.id)
+
+    # Re-embed for semantic search
+    from app.embedding.service import embed_dataset_background
+    await embed_dataset_background(dataset.id)
+
     return await _build_dataset_response(session, dataset)
 
 
 async def delete_dataset(session: AsyncSession, dataset_id: int) -> bool:
+    """Delete a dataset and all associated relationships (tags, owners, schema, etc.)."""
     result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
     dataset = result.scalars().first()
     if not dataset:
@@ -641,15 +669,19 @@ async def list_datasets(
 # ---------------------------------------------------------------------------
 
 async def add_dataset_tag(session: AsyncSession, dataset_id: int, tag_id: int) -> bool:
+    """Associate a tag with a dataset."""
     result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
     if not result.scalars().first():
+        logger.warning("Dataset not found for tag add: dataset_id=%d", dataset_id)
         return False
     session.add(DatasetTag(dataset_id=dataset_id, tag_id=tag_id))
     await session.commit()
+    logger.info("Tag %d added to dataset %d", tag_id, dataset_id)
     return True
 
 
 async def remove_dataset_tag(session: AsyncSession, dataset_id: int, tag_id: int) -> bool:
+    """Remove a tag association from a dataset."""
     result = await session.execute(
         select(DatasetTag)
         .where(DatasetTag.dataset_id == dataset_id, DatasetTag.tag_id == tag_id)
@@ -659,14 +691,17 @@ async def remove_dataset_tag(session: AsyncSession, dataset_id: int, tag_id: int
         return False
     await session.delete(dt)
     await session.commit()
+    logger.info("Tag %d removed from dataset %d", tag_id, dataset_id)
     return True
 
 
 async def add_dataset_owner(
     session: AsyncSession, dataset_id: int, req: OwnerCreate
 ) -> OwnerResponse | None:
+    """Add an owner to a dataset."""
     result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
     if not result.scalars().first():
+        logger.warning("Dataset not found for owner add: dataset_id=%d", dataset_id)
         return None
     owner = Owner(
         dataset_id=dataset_id,
@@ -676,33 +711,40 @@ async def add_dataset_owner(
     session.add(owner)
     await session.commit()
     await session.refresh(owner)
+    logger.info("Owner '%s' (%s) added to dataset %d", req.owner_name, req.owner_type.value, dataset_id)
     return OwnerResponse.model_validate(owner)
 
 
 async def remove_dataset_owner(session: AsyncSession, owner_id: int) -> bool:
+    """Remove an owner from a dataset."""
     result = await session.execute(select(Owner).where(Owner.id == owner_id))
     owner = result.scalars().first()
     if not owner:
         return False
     await session.delete(owner)
     await session.commit()
+    logger.info("Owner removed: id=%d", owner_id)
     return True
 
 
 async def add_dataset_glossary_term(
     session: AsyncSession, dataset_id: int, term_id: int
 ) -> bool:
+    """Associate a glossary term with a dataset."""
     result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
     if not result.scalars().first():
+        logger.warning("Dataset not found for glossary term add: dataset_id=%d", dataset_id)
         return False
     session.add(DatasetGlossaryTerm(dataset_id=dataset_id, term_id=term_id))
     await session.commit()
+    logger.info("Glossary term %d added to dataset %d", term_id, dataset_id)
     return True
 
 
 async def remove_dataset_glossary_term(
     session: AsyncSession, dataset_id: int, term_id: int
 ) -> bool:
+    """Remove a glossary term association from a dataset."""
     result = await session.execute(
         select(DatasetGlossaryTerm)
         .where(DatasetGlossaryTerm.dataset_id == dataset_id,
@@ -713,6 +755,7 @@ async def remove_dataset_glossary_term(
         return False
     await session.delete(dgt)
     await session.commit()
+    logger.info("Glossary term %d removed from dataset %d", term_id, dataset_id)
     return True
 
 
@@ -753,8 +796,13 @@ async def update_schema_fields(
 # ---------------------------------------------------------------------------
 
 async def get_catalog_stats(session: AsyncSession) -> CatalogStats:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text
+
+    active_filter = Dataset.status != "removed"
+
     total_datasets = (await session.execute(
-        select(func.count()).select_from(Dataset).where(Dataset.status != "removed")
+        select(func.count()).select_from(Dataset).where(active_filter)
     )).scalar() or 0
 
     total_platforms = (await session.execute(
@@ -769,11 +817,20 @@ async def get_catalog_stats(session: AsyncSession) -> CatalogStats:
         select(func.count()).select_from(GlossaryTerm)
     )).scalar() or 0
 
-    # Datasets by platform
+    total_owners = (await session.execute(
+        select(func.count()).select_from(Owner)
+    )).scalar() or 0
+
+    synced_datasets = (await session.execute(
+        select(func.count()).select_from(Dataset)
+        .where(active_filter, Dataset.is_synced == "true")
+    )).scalar() or 0
+
+    # Datasets by platform name (for bar chart)
     result = await session.execute(
         select(Platform.name, func.count(Dataset.id))
         .join(Dataset, Dataset.platform_id == Platform.id)
-        .where(Dataset.status != "removed")
+        .where(active_filter)
         .group_by(Platform.name)
         .order_by(func.count(Dataset.id).desc())
     )
@@ -781,26 +838,113 @@ async def get_catalog_stats(session: AsyncSession) -> CatalogStats:
         {"platform": name, "count": count} for name, count in result.all()
     ]
 
-    # Datasets by origin
+    # Datasets by platform type (for donut chart)
+    result = await session.execute(
+        select(Platform.type, func.count(Dataset.id))
+        .join(Dataset, Dataset.platform_id == Platform.id)
+        .where(active_filter)
+        .group_by(Platform.type)
+        .order_by(func.count(Dataset.id).desc())
+    )
+    datasets_by_platform_type = [
+        {"type": ptype, "count": count} for ptype, count in result.all()
+    ]
+
+    # Datasets by origin (for donut chart)
     result = await session.execute(
         select(Dataset.origin, func.count(Dataset.id))
-        .where(Dataset.status != "removed")
+        .where(active_filter)
         .group_by(Dataset.origin)
     )
     datasets_by_origin = [
         {"origin": origin, "count": count} for origin, count in result.all()
     ]
 
+    # Schema field count by platform (bar chart)
+    result = await session.execute(
+        select(Platform.name, func.count(DatasetSchema.id))
+        .join(Dataset, Dataset.platform_id == Platform.id)
+        .join(DatasetSchema, DatasetSchema.dataset_id == Dataset.id)
+        .where(active_filter)
+        .group_by(Platform.name)
+        .order_by(func.count(DatasetSchema.id).desc())
+        .limit(10)
+    )
+    schema_fields_by_platform = [
+        {"platform": name, "count": count} for name, count in result.all()
+    ]
+
+    # Top tagged datasets (datasets with most tags)
+    result = await session.execute(
+        select(Dataset.name, func.count(DatasetTag.id).label("tag_count"))
+        .join(DatasetTag, DatasetTag.dataset_id == Dataset.id)
+        .where(active_filter)
+        .group_by(Dataset.name)
+        .order_by(text("tag_count DESC"))
+        .limit(10)
+    )
+    top_tagged_datasets = [
+        {"name": name, "count": count} for name, count in result.all()
+    ]
+
+    # Daily dataset creation trends
+    now = datetime.now(timezone.utc)
+
+    # Hourly (24h)
+    since_1d = now - timedelta(hours=24)
+    result = await session.execute(
+        select(
+            func.date_trunc("hour", Dataset.created_at).label("hour"),
+            func.count().label("count"),
+        )
+        .where(active_filter, Dataset.created_at >= since_1d)
+        .group_by(text("hour")).order_by(text("hour"))
+    )
+    daily_datasets_1d = [
+        {"date": r.hour.strftime("%H:%M") if r.hour else "", "count": r.count}
+        for r in result.all()
+    ]
+
+    # Daily (7d)
+    since_7d = now - timedelta(days=7)
+    result = await session.execute(
+        select(func.date(Dataset.created_at).label("day"), func.count().label("count"))
+        .where(active_filter, Dataset.created_at >= since_7d)
+        .group_by(func.date(Dataset.created_at)).order_by(text("day"))
+    )
+    daily_datasets_7d = [
+        {"date": str(r.day), "count": r.count} for r in result.all()
+    ]
+
+    # Daily (30d)
+    since_30d = now - timedelta(days=30)
+    result = await session.execute(
+        select(func.date(Dataset.created_at).label("day"), func.count().label("count"))
+        .where(active_filter, Dataset.created_at >= since_30d)
+        .group_by(func.date(Dataset.created_at)).order_by(text("day"))
+    )
+    daily_datasets_30d = [
+        {"date": str(r.day), "count": r.count} for r in result.all()
+    ]
+
     # Recent datasets
-    recent = await list_datasets(session, page=1, page_size=5)
+    recent = await list_datasets(session, page=1, page_size=10)
 
     return CatalogStats(
         total_datasets=total_datasets,
         total_platforms=total_platforms,
         total_tags=total_tags,
         total_glossary_terms=total_glossary_terms,
+        total_owners=total_owners,
+        synced_datasets=synced_datasets,
         datasets_by_platform=datasets_by_platform,
         datasets_by_origin=datasets_by_origin,
+        datasets_by_platform_type=datasets_by_platform_type,
+        schema_fields_by_platform=schema_fields_by_platform,
+        top_tagged_datasets=top_tagged_datasets,
+        daily_datasets_1d=daily_datasets_1d,
+        daily_datasets_7d=daily_datasets_7d,
+        daily_datasets_30d=daily_datasets_30d,
         recent_datasets=recent.items,
     )
 

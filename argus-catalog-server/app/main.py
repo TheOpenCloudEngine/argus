@@ -12,12 +12,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.catalog.router import router as catalog_router
+from app.comments.router import router as comments_router
 from app.filesystemmgr.router import router as filesystem_router
 from app.models.router import router as models_router
 from app.models.store_router import router as model_store_router
+from app.oci_hub.router import router as oci_hub_router
 from app.models.uc_compat import router as uc_compat_router
+from app.search.router import router as search_router
 from app.settings.router import router as settings_router
 from app.usermgr.router import router as usermgr_router
+from app.auth.router import router as auth_router  # Added for SSO AUTH
 from app.core.config import settings
 from app.core.database import Base, close_database, engine, init_database
 from app.core.logging import setup_logging
@@ -54,7 +58,10 @@ async def lifespan(app: FastAPI):
     await init_database()
 
     import app.catalog.models  # noqa: F401
+    import app.comments.models  # noqa: F401
     import app.models.models  # noqa: F401
+    import app.oci_hub.models  # noqa: F401
+    import app.embedding.models  # noqa: F401
     import app.settings.models  # noqa: F401
     import app.usermgr.models  # noqa: F401
 
@@ -65,7 +72,7 @@ async def lifespan(app: FastAPI):
     # Seed default data
     from app.core.database import async_session
     from app.catalog.service import seed_platforms, seed_platform_metadata
-    from app.settings.service import seed_configuration, load_os_settings
+    from app.settings.service import seed_configuration, load_os_settings, load_embedding_settings
     from app.usermgr.service import seed_roles
 
     async with async_session() as session:
@@ -74,6 +81,7 @@ async def lifespan(app: FastAPI):
         await seed_roles(session)
         await seed_configuration(session)
         await load_os_settings(session)
+        await load_embedding_settings(session)
 
     # Ensure S3 bucket exists
     try:
@@ -84,6 +92,8 @@ async def lifespan(app: FastAPI):
         logger.warning("S3 bucket check skipped (MinIO may not be available): %s", e)
 
     yield
+    from app.embedding.registry import shutdown_provider
+    await shutdown_provider()
     await close_database()
     logger.info("Catalog Server shutting down")
 
@@ -104,12 +114,16 @@ app.add_middleware(
 )
 
 app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(comments_router, prefix="/api/v1")
 app.include_router(filesystem_router, prefix="/api/v1")
 app.include_router(models_router, prefix="/api/v1")
 app.include_router(model_store_router, prefix="/api/v1")
+app.include_router(oci_hub_router, prefix="/api/v1")
 app.include_router(uc_compat_router)  # /api/2.0/mlflow/unity-catalog (no extra prefix)
+app.include_router(search_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(usermgr_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")  # Added for SSO AUTH
 
 
 @app.get("/health")

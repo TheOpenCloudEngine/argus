@@ -3,6 +3,7 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { OciModelRegistrySettings } from "@/features/settings/oci-model-registry-settings"
+import { EmbeddingSettings } from "@/features/settings/embedding-settings"
 
 export default function SettingsPage() {
   return (
@@ -12,9 +13,13 @@ export default function SettingsPage() {
         <Tabs defaultValue="oci-model-registry">
           <TabsList>
             <TabsTrigger value="oci-model-registry">OCI Model Registry</TabsTrigger>
+            <TabsTrigger value="embedding">Embedding</TabsTrigger>
           </TabsList>
           <TabsContent value="oci-model-registry" className="mt-4">
             <OciModelRegistrySettings />
+          </TabsContent>
+          <TabsContent value="embedding" className="mt-4">
+            <EmbeddingSettings />
           </TabsContent>
         </Tabs>
       </div>
