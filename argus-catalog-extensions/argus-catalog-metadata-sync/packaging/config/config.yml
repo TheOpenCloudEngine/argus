@@ -52,6 +52,14 @@ platforms:
       interval_minutes: ${hive.schedule.interval_minutes:60}
       enabled: ${hive.schedule.enabled:true}
     origin: ${hive.origin:PROD}
+    sync_mode: ${hive.sync_mode:thrift}  # "thrift" or "sql"
+    metastore_db:
+      type: ${hive.metastore_db.type:mysql}
+      host: ${hive.metastore_db.host:localhost}
+      port: ${hive.metastore_db.port:3306}
+      name: ${hive.metastore_db.name:hive}
+      username: ${hive.metastore_db.username:hive}
+      password: ${hive.metastore_db.password:hive}
 
   impala:
     enabled: ${impala.enabled:false}
