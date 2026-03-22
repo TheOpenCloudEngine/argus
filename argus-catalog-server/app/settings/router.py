@@ -241,6 +241,13 @@ async def get_auth_config(session: AsyncSession = Depends(get_session)):
     )
 
 
+@router.get("/auth/secret")
+async def get_auth_secret(session: AsyncSession = Depends(get_session)):
+    """Return the actual client_secret (unmasked). Admin only."""
+    cfg = await get_config_by_category(session, "auth")
+    return {"client_secret": cfg.get("auth_keycloak_client_secret", "")}
+
+
 @router.put("/auth")
 async def update_auth_config(
     body: AuthConfig,

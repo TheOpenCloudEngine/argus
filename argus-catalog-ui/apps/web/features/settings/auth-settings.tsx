@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@work
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 
-import { fetchAuthConfig, testAuthConnection, updateAuthConfig, type AuthConfig } from "./api"
+import { fetchAuthConfig, fetchAuthSecret, testAuthConnection, updateAuthConfig, type AuthConfig } from "./api"
 
 export function AuthSettings() {
   const [loading, setLoading] = useState(true)
@@ -24,6 +24,21 @@ export function AuthSettings() {
   const [superuserRole, setSuperuserRole] = useState("")
   const [userRole, setUserRole] = useState("")
   const [showSecret, setShowSecret] = useState(false)
+  const [realSecret, setRealSecret] = useState<string | null>(null)
+
+  const handleToggleSecret = async () => {
+    if (!showSecret && realSecret === null) {
+      // First reveal — fetch the actual secret from server
+      try {
+        const secret = await fetchAuthSecret()
+        setRealSecret(secret)
+        setClientSecret(secret)
+      } catch {
+        // ignore
+      }
+    }
+    setShowSecret(!showSecret)
+  }
 
   const loadConfig = useCallback(async () => {
     try {
@@ -139,7 +154,7 @@ export function AuthSettings() {
                 <button
                   type="button"
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  onClick={() => setShowSecret(!showSecret)}
+                  onClick={handleToggleSecret}
                 >
                   {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

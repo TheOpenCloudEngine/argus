@@ -143,6 +143,13 @@ export async function fetchAuthConfig(): Promise<AuthConfig> {
   return res.json()
 }
 
+export async function fetchAuthSecret(): Promise<string> {
+  const res = await authFetch(`${BASE}/auth/secret`)
+  if (!res.ok) throw new Error(`Failed to fetch secret: ${res.status}`)
+  const data = await res.json()
+  return data.client_secret
+}
+
 export async function updateAuthConfig(config: AuthConfig): Promise<void> {
   const res = await authFetch(`${BASE}/auth`, {
     method: "PUT",
