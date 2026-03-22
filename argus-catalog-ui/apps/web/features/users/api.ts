@@ -224,3 +224,13 @@ export async function modifyUser(
   if (!res.ok) throw new Error(`Failed to modify user: ${res.status}`)
   return res.json()
 }
+
+export async function changeUserRole(userId: string, role: string): Promise<User> {
+  const res = await authFetch(`${BASE}/users/${userId}/role`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  })
+  if (!res.ok) throw new Error(`Failed to change role: ${res.status}`)
+  return res.json()
+}

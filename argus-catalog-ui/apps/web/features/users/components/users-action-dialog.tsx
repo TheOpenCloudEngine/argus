@@ -47,7 +47,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { PasswordInput } from "@/components/password-input"
 import { SelectDropdown } from "@/components/select-dropdown"
-import { checkUserExists, createUser, modifyUser } from "../api"
+import { changeUserRole, checkUserExists, createUser, modifyUser } from "../api"
 import { roles } from "../data/data"
 import { type User } from "../data/schema"
 import { useUsers } from "./users-provider"
@@ -256,6 +256,10 @@ export function UsersActionDialog({
           email: values.email,
           phone_number: values.phoneNumber,
         })
+        // Change role if it was modified
+        if (values.role && values.role !== currentRow.role) {
+          await changeUserRole(currentRow.id, values.role)
+        }
       } else {
         await createUser({
           username: values.username,
