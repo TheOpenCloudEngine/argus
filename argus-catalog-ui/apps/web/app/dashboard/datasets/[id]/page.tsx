@@ -87,6 +87,7 @@ import { fetchGlossaryTerms } from "@/features/glossary/api"
 import { fetchUsers } from "@/features/users/api"
 import type { User } from "@/features/users/data/schema"
 import type { DatasetDetail, GlossaryTerm, SchemaField, Tag } from "@/features/datasets/data/schema"
+import { useAuth } from "@/features/auth"
 import { SampleDataTab } from "@/features/datasets/components/sample-data-tab"
 import { SchemaHistoryTab } from "@/features/datasets/components/schema-history-tab"
 import { PlatformSpecificCard } from "@/features/datasets/components/platform-specific-card"
@@ -412,6 +413,7 @@ spark.stop()
 // Main page component
 // ---------------------------------------------------------------------------
 export default function DatasetDetailPage() {
+  const { user } = useAuth()
   const params = useParams()
   const router = useRouter()
   const datasetId = Number(params.id)
@@ -794,66 +796,75 @@ export default function DatasetDetailPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* Status dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="sm"
-                      disabled={statusUpdating}
-                      className={currentStatusConfig?.className}
-                    >
-                      {currentStatusConfig?.icon}
-                      {currentStatusConfig?.label}
-                      <ChevronDown className="ml-1.5 h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {allStatuses
-                      .filter((s) => s !== dataset.status)
-                      .map((s) => {
-                        const cfg = statusConfig[s]
-                        return (
-                          <DropdownMenuItem
-                            key={s}
-                            onClick={() => handleStatusChange(s)}
-                          >
-                            {cfg?.icon}
-                            {cfg?.label}
-                          </DropdownMenuItem>
-                        )
-                      })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {/* Origin dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="sm"
-                      disabled={originUpdating}
-                      className={currentOriginConfig?.className}
-                    >
-                      {currentOriginConfig?.icon}
-                      {currentOriginConfig?.label}
-                      <ChevronDown className="ml-1.5 h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {allOrigins
-                      .filter((o) => o !== dataset.origin)
-                      .map((o) => {
-                        const cfg = originConfig[o]
-                        return (
-                          <DropdownMenuItem
-                            key={o}
-                            onClick={() => handleOriginChange(o)}
-                          >
-                            {cfg?.icon}
-                            {cfg?.label}
-                          </DropdownMenuItem>
-                        )
-                      })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {user?.is_admin ? (
+                  <>
+                    {/* Status dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={statusUpdating}
+                          className={currentStatusConfig?.className}
+                        >
+                          {currentStatusConfig?.icon}
+                          {currentStatusConfig?.label}
+                          <ChevronDown className="ml-1.5 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {allStatuses
+                          .filter((s) => s !== dataset.status)
+                          .map((s) => {
+                            const cfg = statusConfig[s]
+                            return (
+                              <DropdownMenuItem
+                                key={s}
+                                onClick={() => handleStatusChange(s)}
+                              >
+                                {cfg?.icon}
+                                {cfg?.label}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* Origin dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={originUpdating}
+                          className={currentOriginConfig?.className}
+                        >
+                          {currentOriginConfig?.icon}
+                          {currentOriginConfig?.label}
+                          <ChevronDown className="ml-1.5 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {allOrigins
+                          .filter((o) => o !== dataset.origin)
+                          .map((o) => {
+                            const cfg = originConfig[o]
+                            return (
+                              <DropdownMenuItem
+                                key={o}
+                                onClick={() => handleOriginChange(o)}
+                              >
+                                {cfg?.icon}
+                                {cfg?.label}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                ) : (
+                  <>
+                    <Badge className={currentStatusConfig?.className}>{currentStatusConfig?.label}</Badge>
+                    <Badge className={currentOriginConfig?.className}>{currentOriginConfig?.label}</Badge>
+                  </>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -1004,10 +1015,12 @@ export default function DatasetDetailPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={startSchemaEdit}>
-                    <Pencil className="mr-1 h-3.5 w-3.5" />
-                    Edit Schema
-                  </Button>
+                  {user?.is_admin && (
+                    <Button size="sm" variant="outline" onClick={startSchemaEdit}>
+                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                      Edit Schema
+                    </Button>
+                  )}
                 )}
               </div>
               <CardContent className="p-0">
