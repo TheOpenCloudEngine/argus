@@ -20,21 +20,36 @@ _OS_DEFAULTS: list[tuple[str, str, str]] = [
     ("object_storage_presigned_url_expiry", "3600", "Presigned URL expiry in seconds"),
 ]
 
+# Default Embedding settings
+_EMBEDDING_DEFAULTS: list[tuple[str, str, str]] = [
+    ("embedding_enabled", "false", "Enable semantic search embedding"),
+    ("embedding_provider", "local", "Embedding provider: local, openai, ollama"),
+    ("embedding_model", "all-MiniLM-L6-v2", "Embedding model identifier"),
+    ("embedding_api_key", "", "API key for remote providers (OpenAI)"),
+    ("embedding_api_url", "", "API URL override for remote providers"),
+    ("embedding_dimension", "384", "Embedding vector dimension"),
+]
+
 
 async def seed_configuration(session: AsyncSession) -> None:
     """Insert default configuration rows if they don't exist."""
-    for key, value, desc in _OS_DEFAULTS:
-        existing = await session.execute(
-            select(CatalogConfiguration).where(CatalogConfiguration.config_key == key)
-        )
-        if not existing.scalars().first():
-            session.add(CatalogConfiguration(
-                category="object_storage",
-                config_key=key,
-                config_value=value,
-                description=desc,
-            ))
-            logger.info("Seeded configuration: %s = %s", key, value if "secret" not in key else "****")
+    all_defaults = [
+        ("object_storage", _OS_DEFAULTS),
+        ("embedding", _EMBEDDING_DEFAULTS),
+    ]
+    for category, defaults in all_defaults:
+        for key, value, desc in defaults:
+            existing = await session.execute(
+                select(CatalogConfiguration).where(CatalogConfiguration.config_key == key)
+            )
+            if not existing.scalars().first():
+                session.add(CatalogConfiguration(
+                    category=category,
+                    config_key=key,
+                    config_value=value,
+                    description=desc,
+                ))
+                logger.info("Seeded configuration: %s = %s", key, value if "secret" not in key else "****")
     await session.commit()
 
 
@@ -81,4 +96,21 @@ async def load_os_settings(session: AsyncSession) -> dict[str, str]:
 
     logger.info("Object Storage settings loaded from DB: endpoint=%s, bucket=%s",
                 settings.os_endpoint, settings.os_bucket)
+    return cfg
+
+
+async def load_embedding_settings(session: AsyncSession) -> dict[str, str]:
+    """Load embedding settings from DB and initialize the provider if enabled."""
+    cfg = await get_config_by_category(session, "embedding")
+    enabled = cfg.get("embedding_enabled", "false").lower() in ("true", "1", "yes")
+
+    if enabled:
+        from app.embedding.registry import initialize_provider
+        try:
+            await initialize_provider(cfg)
+        except Exception as e:
+            logger.warning("Embedding provider initialization failed: %s", e)
+    else:
+        logger.info("Embedding is disabled")
+
     return cfg

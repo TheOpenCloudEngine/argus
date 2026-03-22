@@ -1,6 +1,8 @@
 -- Argus Catalog Server - PostgreSQL Schema
 -- Database: argus_catalog
 
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- ---------------------------------------------------------------------------
 -- Configuration
 -- ---------------------------------------------------------------------------
@@ -626,3 +628,24 @@ CREATE INDEX IF NOT EXISTS idx_oci_model_download_log_name_at
 
 CREATE INDEX IF NOT EXISTS idx_oci_model_download_log_at
     ON catalog_oci_model_download_log (downloaded_at);
+
+-- ---------------------------------------------------------------------------
+-- Semantic Search - Dataset Embeddings (pgvector)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_dataset_embeddings (
+    id SERIAL PRIMARY KEY,
+    dataset_id INT NOT NULL UNIQUE REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    embedding vector(384) NOT NULL,
+    source_text TEXT NOT NULL,
+    model_name VARCHAR(200) NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    dimension INT NOT NULL DEFAULT 384,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dataset_embeddings_ivfflat
+    ON catalog_dataset_embeddings
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);

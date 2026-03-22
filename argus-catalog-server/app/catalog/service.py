@@ -477,6 +477,11 @@ async def create_dataset(session: AsyncSession, req: DatasetCreate) -> DatasetRe
     await session.commit()
     await session.refresh(dataset)
     logger.info("Dataset created: %s (id=%d, urn=%s)", dataset.name, dataset.id, dataset.urn)
+
+    # Trigger background embedding for semantic search
+    from app.embedding.service import embed_dataset_background
+    await embed_dataset_background(dataset.id)
+
     return await _build_dataset_response(session, dataset)
 
 
@@ -536,6 +541,11 @@ async def update_dataset(
     await session.commit()
     await session.refresh(dataset)
     logger.info("Dataset updated: %s (id=%d)", dataset.name, dataset.id)
+
+    # Re-embed for semantic search
+    from app.embedding.service import embed_dataset_background
+    await embed_dataset_background(dataset.id)
+
     return await _build_dataset_response(session, dataset)
 
 

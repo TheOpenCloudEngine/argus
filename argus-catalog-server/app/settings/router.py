@@ -1,7 +1,7 @@
 """Settings API for Catalog Server.
 
-Provides endpoints to read/update Object Storage (MinIO) configuration
-and test connectivity. Settings are stored in the catalog_configuration table.
+Provides endpoints to read/update Object Storage (MinIO) and Embedding
+configuration. Settings are stored in the catalog_configuration table.
 """
 
 import logging
@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.settings.service import get_config_by_category, load_os_settings, update_config
+from app.settings.service import (
+    get_config_by_category, load_embedding_settings, load_os_settings, update_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,4 +128,79 @@ async def test_object_storage(body: ObjectStorageTestRequest):
         else:
             msg = f"Error: {error_msg}"
         logger.warning("Object Storage test failed: %s", msg)
+        return TestResponse(success=False, message=msg)
+
+
+# ---------------------------------------------------------------------------
+# Embedding configuration
+# ---------------------------------------------------------------------------
+
+class EmbeddingConfig(BaseModel):
+    enabled: bool = False
+    provider: str = "local"
+    model: str = "all-MiniLM-L6-v2"
+    api_key: str = ""
+    api_url: str = ""
+    dimension: int = 384
+
+
+@router.get("/embedding", response_model=EmbeddingConfig)
+async def get_embedding_config(session: AsyncSession = Depends(get_session)):
+    """Return current embedding configuration."""
+    cfg = await get_config_by_category(session, "embedding")
+    return EmbeddingConfig(
+        enabled=cfg.get("embedding_enabled", "false").lower() in ("true", "1", "yes"),
+        provider=cfg.get("embedding_provider", "local"),
+        model=cfg.get("embedding_model", "all-MiniLM-L6-v2"),
+        api_key=cfg.get("embedding_api_key", ""),
+        api_url=cfg.get("embedding_api_url", ""),
+        dimension=int(cfg.get("embedding_dimension", "384")),
+    )
+
+
+@router.put("/embedding")
+async def update_embedding_config(
+    body: EmbeddingConfig,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update embedding configuration and re-initialize provider."""
+    items = {
+        "embedding_enabled": str(body.enabled).lower(),
+        "embedding_provider": body.provider,
+        "embedding_model": body.model,
+        "embedding_api_key": body.api_key,
+        "embedding_api_url": body.api_url,
+        "embedding_dimension": str(body.dimension),
+    }
+    await update_config(session, "embedding", items)
+
+    # Re-initialize embedding provider
+    await load_embedding_settings(session)
+
+    logger.info("Embedding config saved: provider=%s, model=%s, enabled=%s",
+                body.provider, body.model, body.enabled)
+    return {"status": "ok", "message": "Embedding configuration saved"}
+
+
+@router.post("/embedding/test", response_model=TestResponse)
+async def test_embedding(body: EmbeddingConfig):
+    """Test embedding provider by embedding a sample sentence."""
+    logger.info("Embedding test: provider=%s, model=%s", body.provider, body.model)
+    try:
+        config = {
+            "embedding_provider": body.provider,
+            "embedding_model": body.model,
+            "embedding_api_key": body.api_key,
+            "embedding_api_url": body.api_url,
+        }
+        from app.embedding.registry import initialize_provider
+        provider = await initialize_provider(config)
+        result = await provider.embed(["test embedding connection"])
+        dim = len(result[0])
+        msg = f"Success: {body.provider}/{body.model} returned {dim}-dim vector"
+        logger.info("Embedding test succeeded: %s", msg)
+        return TestResponse(success=True, message=msg)
+    except Exception as e:
+        msg = f"Failed: {e}"
+        logger.warning("Embedding test failed: %s", msg)
         return TestResponse(success=False, message=msg)
