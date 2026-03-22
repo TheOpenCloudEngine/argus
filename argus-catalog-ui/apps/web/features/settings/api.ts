@@ -121,3 +121,70 @@ export async function clearEmbeddings(): Promise<{ deleted: number }> {
   return res.json()
 }
 
+
+// ---------------------------------------------------------------------------
+// Authentication (Keycloak) configuration
+// ---------------------------------------------------------------------------
+
+export type AuthConfig = {
+  type: string
+  server_url: string
+  realm: string
+  client_id: string
+  client_secret: string
+  admin_role: string
+  superuser_role: string
+  user_role: string
+}
+
+export async function fetchAuthConfig(): Promise<AuthConfig> {
+  const res = await authFetch(`${BASE}/auth`)
+  if (!res.ok) throw new Error(`Failed to fetch auth config: ${res.status}`)
+  return res.json()
+}
+
+export async function updateAuthConfig(config: AuthConfig): Promise<void> {
+  const res = await authFetch(`${BASE}/auth`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Failed to update auth config: ${res.status}`)
+}
+
+export async function testAuthConnection(
+  config: AuthConfig,
+): Promise<{ success: boolean; message: string }> {
+  const res = await authFetch(`${BASE}/auth/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Test failed: ${res.status}`)
+  return res.json()
+}
+
+
+// ---------------------------------------------------------------------------
+// CORS configuration
+// ---------------------------------------------------------------------------
+
+export type CorsConfig = {
+  origins: string
+}
+
+export async function fetchCorsConfig(): Promise<CorsConfig> {
+  const res = await authFetch(`${BASE}/cors`)
+  if (!res.ok) throw new Error(`Failed to fetch CORS config: ${res.status}`)
+  return res.json()
+}
+
+export async function updateCorsConfig(config: CorsConfig): Promise<void> {
+  const res = await authFetch(`${BASE}/cors`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Failed to update CORS config: ${res.status}`)
+}
+

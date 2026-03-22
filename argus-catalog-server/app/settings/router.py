@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_session
 from app.settings.service import (
-    get_config_by_category, load_embedding_settings, load_os_settings, update_config,
+    get_config_by_category, load_auth_settings, load_cors_settings,
+    load_embedding_settings, load_os_settings, update_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,3 +205,112 @@ async def test_embedding(body: EmbeddingConfig):
         msg = f"Failed: {e}"
         logger.warning("Embedding test failed: %s", msg)
         return TestResponse(success=False, message=msg)
+
+
+# ---------------------------------------------------------------------------
+# Authentication (Keycloak) configuration
+# ---------------------------------------------------------------------------
+
+_SECRET_MASK = "••••••••"
+
+
+class AuthConfig(BaseModel):
+    type: str = "keycloak"
+    server_url: str = ""
+    realm: str = ""
+    client_id: str = ""
+    client_secret: str = ""
+    admin_role: str = ""
+    superuser_role: str = ""
+    user_role: str = ""
+
+
+@router.get("/auth", response_model=AuthConfig)
+async def get_auth_config(session: AsyncSession = Depends(get_session)):
+    """Return current authentication configuration (client_secret masked)."""
+    cfg = await get_config_by_category(session, "auth")
+    return AuthConfig(
+        type=cfg.get("auth_type", "keycloak"),
+        server_url=cfg.get("auth_keycloak_server_url", ""),
+        realm=cfg.get("auth_keycloak_realm", ""),
+        client_id=cfg.get("auth_keycloak_client_id", ""),
+        client_secret=_SECRET_MASK if cfg.get("auth_keycloak_client_secret") else "",
+        admin_role=cfg.get("auth_keycloak_admin_role", ""),
+        superuser_role=cfg.get("auth_keycloak_superuser_role", ""),
+        user_role=cfg.get("auth_keycloak_user_role", ""),
+    )
+
+
+@router.put("/auth")
+async def update_auth_config(
+    body: AuthConfig,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update authentication configuration and reload into memory."""
+    items = {
+        "auth_type": body.type,
+        "auth_keycloak_server_url": body.server_url,
+        "auth_keycloak_realm": body.realm,
+        "auth_keycloak_client_id": body.client_id,
+        "auth_keycloak_admin_role": body.admin_role,
+        "auth_keycloak_superuser_role": body.superuser_role,
+        "auth_keycloak_user_role": body.user_role,
+    }
+    # Only update client_secret if the user actually changed it (not the mask)
+    if body.client_secret and body.client_secret != _SECRET_MASK:
+        items["auth_keycloak_client_secret"] = body.client_secret
+
+    await update_config(session, "auth", items)
+    await load_auth_settings(session)
+
+    logger.info("Auth config saved: server_url=%s, realm=%s", body.server_url, body.realm)
+    return {"status": "ok", "message": "Authentication configuration saved"}
+
+
+@router.post("/auth/test", response_model=TestResponse)
+async def test_auth_connection(body: AuthConfig):
+    """Test Keycloak connectivity by fetching the OpenID Configuration."""
+    import httpx
+    url = f"{body.server_url}/realms/{body.realm}/.well-known/openid-configuration"
+    logger.info("Auth test: %s", url)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+            issuer = data.get("issuer", "")
+            msg = f"Success: connected to {issuer}"
+            logger.info("Auth test succeeded: %s", msg)
+            return TestResponse(success=True, message=msg)
+    except Exception as e:
+        msg = f"Failed to reach {url}: {e}"
+        logger.warning("Auth test failed: %s", msg)
+        return TestResponse(success=False, message=msg)
+
+
+# ---------------------------------------------------------------------------
+# CORS configuration
+# ---------------------------------------------------------------------------
+
+class CorsConfig(BaseModel):
+    origins: str = "*"
+
+
+@router.get("/cors", response_model=CorsConfig)
+async def get_cors_config(session: AsyncSession = Depends(get_session)):
+    """Return current CORS configuration."""
+    cfg = await get_config_by_category(session, "cors")
+    return CorsConfig(origins=cfg.get("cors_origins", "*"))
+
+
+@router.put("/cors")
+async def update_cors_config(
+    body: CorsConfig,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update CORS configuration. Takes effect on next request."""
+    await update_config(session, "cors", {"cors_origins": body.origins})
+    await load_cors_settings(session)
+
+    logger.info("CORS config saved: origins=%s", body.origins)
+    return {"status": "ok", "message": "CORS configuration saved"}
