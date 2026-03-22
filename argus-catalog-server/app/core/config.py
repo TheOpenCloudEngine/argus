@@ -71,6 +71,15 @@ class Settings:
         self.db_pool_recycle: int = int(_get_nested("database", "pool", "recycle", 3600))
         self.db_echo: bool = _to_bool(_get("database", "echo", False))
 
+        # Object Storage (MinIO / S3) — defaults, overwritten from DB at startup
+        self.os_endpoint: str = "http://localhost:9000"
+        self.os_access_key: str = "minioadmin"
+        self.os_secret_key: str = "minioadmin"
+        self.os_region: str = "us-east-1"
+        self.os_use_ssl: bool = False
+        self.os_bucket: str = "model-artifacts"
+        self.os_presigned_url_expiry: int = 3600
+
 
 def init_settings(
     yaml_path: str | None = None,

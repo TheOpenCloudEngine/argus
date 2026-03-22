@@ -25,6 +25,30 @@
       ]
     },
     {
+      "id": "model-catalog",
+      "label": "Model Catalog",
+      "items": [
+        {
+          "id": "models",
+          "title": "MLflow Models",
+          "url": "/dashboard/models",
+          "icon": "Box"
+        },
+        {
+          "id": "mlflow-files",
+          "title": "MLflow Model Files",
+          "url": "/dashboard/mlflow-files",
+          "icon": "FolderOpen"
+        },
+        {
+          "id": "oci-files",
+          "title": "OCI Model Files",
+          "url": "/dashboard/oci-files",
+          "icon": "FolderOpen"
+        }
+      ]
+    },
+    {
       "id": "governance",
       "label": "Governance",
       "items": [
@@ -51,6 +75,12 @@
           "title": "User Management",
           "url": "/dashboard/users",
           "icon": "Users"
+        },
+        {
+          "id": "settings",
+          "title": "Settings",
+          "url": "/dashboard/settings",
+          "icon": "Settings"
         }
       ]
     }

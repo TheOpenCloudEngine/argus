@@ -64,6 +64,75 @@ class PaginatedRegisteredModels(BaseModel):
     page_size: int
 
 
+class ModelSummary(BaseModel):
+    """Joined summary for model list view (registered_models + latest version + catalog_models)."""
+
+    id: int
+    name: str
+    description: str | None = None
+    owner: str | None = None
+    max_version_number: int
+    status: str
+    # Latest version info
+    latest_version_status: str | None = None
+    # From catalog_models (latest version)
+    sklearn_version: str | None = None
+    python_version: str | None = None
+    model_size_bytes: int | None = None
+    access_count: int = 0
+    updated_at: datetime
+
+
+class PaginatedModelSummaries(BaseModel):
+    items: list[ModelSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class ModelVersionStatusCount(BaseModel):
+    status: str
+    count: int
+
+
+class ModelSizeInfo(BaseModel):
+    model_name: str
+    model_size_bytes: int
+
+
+class ModelVersionCount(BaseModel):
+    model_name: str
+    version_count: int
+
+
+class AccessDataPoint(BaseModel):
+    date: str
+    count: int
+
+
+class ModelStats(BaseModel):
+    """Dashboard statistics for MLFlow Models page."""
+
+    total_models: int
+    total_versions: int
+    ready_models: int
+    ready_versions: int
+    pending_count: int
+    failed_count: int
+    total_access: int
+    status_distribution: list[ModelVersionStatusCount]
+    model_sizes: list[ModelSizeInfo]
+    versions_per_model: list[ModelVersionCount]
+    daily_access_1d: list[AccessDataPoint]
+    daily_access_7d: list[AccessDataPoint]
+    daily_access_30d: list[AccessDataPoint]
+    access_by_model: dict[str, int]
+    total_publish: int
+    daily_publish_1d: list[AccessDataPoint]
+    daily_publish_7d: list[AccessDataPoint]
+    daily_publish_30d: list[AccessDataPoint]
+
+
 # ---------------------------------------------------------------------------
 # ModelVersion schemas
 # ---------------------------------------------------------------------------
