@@ -28,8 +28,10 @@ import {
   type TagUsage,
 } from "@/features/tags/api"
 import type { Tag } from "@/features/datasets/data/schema"
+import { useAuth } from "@/features/auth" // Added for SSO AUTH
 
 export default function TagsPage() {
+  const { user } = useAuth()
   const [tags, setTags] = useState<Tag[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -121,10 +123,12 @@ export default function TagsPage() {
           <p className="text-sm text-muted-foreground">
             Manage tags for categorizing datasets
           </p>
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Add Tag
-          </Button>
+          {user?.is_admin && (
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              Add Tag
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -148,14 +152,16 @@ export default function TagsPage() {
                         {tag.name}
                       </Badge>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleDeleteClick(tag.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {user?.is_admin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleDeleteClick(tag.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>

@@ -50,6 +50,7 @@ import {
   fetchGlossaryTerms,
 } from "@/features/glossary/api"
 import type { GlossaryTerm } from "@/features/datasets/data/schema"
+import { useAuth } from "@/features/auth"
 
 // ---------------------------------------------------------------------------
 // Tree node type
@@ -97,6 +98,7 @@ function flattenTree(nodes: TreeNode[]): TreeNode[] {
 // Main page
 // ---------------------------------------------------------------------------
 export default function GlossaryPage() {
+  const { user } = useAuth()
   const [terms, setTerms] = useState<GlossaryTerm[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -355,21 +357,25 @@ export default function GlossaryPage() {
                 <List className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {/* Add */}
-            <Button size="sm" onClick={() => setDialogOpen(true)}>
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Add Term
-            </Button>
-            {/* Bulk delete */}
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={selectedIds.size === 0}
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Delete Terms{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-            </Button>
+            {user?.is_admin && (
+              <>
+                {/* Add */}
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Term
+                </Button>
+                {/* Bulk delete */}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedIds.size === 0}
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Delete Terms{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

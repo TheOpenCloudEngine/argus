@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
 } from "@workspace/ui/components/sidebar"
 import { getIcon } from "@/lib/icon-map"
+import { useAuth } from "@/features/auth"
 import type { MenuGroup } from "@/types/menu"
 
 interface AppSidebarNavProps {
@@ -19,10 +20,15 @@ interface AppSidebarNavProps {
 
 export function AppSidebarNav({ groups }: AppSidebarNavProps) {
   const pathname = usePathname()
+  const { user } = useAuth()
 
   return (
     <>
-      {groups.map((group) => (
+      {groups.map((group) => {
+        // Administration group is only visible to admins
+        if (group.id === "admin" && !user?.is_admin) return null
+
+        return (
         <SidebarGroup key={group.id}>
           <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
           <SidebarMenu>
@@ -46,7 +52,8 @@ export function AppSidebarNav({ groups }: AppSidebarNavProps) {
             })}
           </SidebarMenu>
         </SidebarGroup>
-      ))}
+        )
+      })}
     </>
   )
 }
