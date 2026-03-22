@@ -398,12 +398,9 @@ export function PlatformSpecificCard({ platformType, properties, datasetProperti
     ? hiveImpalaTableProps(mergedTable)
     : isMySQL ? mysqlTableProps(table) : pgTableProps(table)
 
-  const hasContent =
-    tableProps.length > 0 ||
-    Object.keys(columns).length > 0 ||
-    indexes.length > 0 ||
-    Object.keys(tblProperties).length > 0 ||
-    !!ddl
+  const hasContent = isHiveImpala
+    ? Object.keys(tblProperties).length > 0
+    : (tableProps.length > 0 || Object.keys(columns).length > 0 || indexes.length > 0 || !!ddl)
 
   if (!hasContent) {
     return null
@@ -418,8 +415,8 @@ export function PlatformSpecificCard({ platformType, properties, datasetProperti
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* Table-level properties */}
-        {tableProps.length > 0 && (
+        {/* Table-level properties — MySQL/PostgreSQL only */}
+        {!isHiveImpala && tableProps.length > 0 && (
           <div className="grid gap-x-6 gap-y-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 text-sm">
             {tableProps.map((p) => (
               <div key={p.label}>
@@ -436,7 +433,7 @@ export function PlatformSpecificCard({ platformType, properties, datasetProperti
         {/* INDEXES (AG Grid, collapsed) — PostgreSQL only */}
         {!isMySQL && !isHiveImpala && <IndexesGrid indexes={indexes} />}
 
-        {/* TABLE PROPERTIES (AG Grid, collapsed) — Hive/Impala */}
+        {/* TABLE PROPERTIES (AG Grid) — Hive/Impala */}
         {isHiveImpala && <TblPropertiesGrid tblProperties={tblProperties} />}
 
         {/* CREATE TABLE DDL (Monaco Editor, collapsed) */}
