@@ -373,7 +373,7 @@ function WordsTab({ dictId }: { dictId: number }) {
         </Button>
       </div>
       <div
-        className="border rounded ag-theme-alpine"
+        className="ag-theme-alpine"
         style={{
           height: Math.min(words.length * 32 + 44, 600),
           "--ag-font-size": "13px",
