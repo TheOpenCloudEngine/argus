@@ -309,21 +309,30 @@ flowchart LR
 flowchart TB
     subgraph DC["🗂 Data Catalog"]
         direction TB
-        S1["1. 데이터 가시화"] --> S2["2. 데이터 이해"] --> S3["3. 데이터 연결"]
+        S1["1. 데이터 가시화"] --> S2["2. 데이터 이해"]
     end
+
+    S2 --> S3["3. 데이터 연결"]
 
     subgraph BD["📊 Big Data"]
         direction TB
-        S4["4. 데이터 통합"] --> S5["5. 분석 고도화"]
+        S4["4. 데이터 통합"]
     end
+
+    S3 --> S4
+    S4 --> S5["5. 분석 고도화"]
 
     subgraph AI["🤖 AI"]
         direction TB
         S6["6. AI 모델 개발"] --> S7["7. AI 서빙/운영"]
     end
 
-    S3 --> S4
     S5 --> S6
+
+    S3 -.- DC
+    S3 -.- BD
+    S5 -.- BD
+    S5 -.- AI
 
     style DC fill:#e0f2fe,stroke:#0284c7
     style BD fill:#f3e8ff,stroke:#9333ea
@@ -331,9 +340,9 @@ flowchart TB
 
     style S1 fill:#fff,stroke:#0284c7
     style S2 fill:#fff,stroke:#3b82f6
-    style S3 fill:#fff,stroke:#6366f1
+    style S3 fill:#e8e0ff,stroke:#6366f1,stroke-width:3px
     style S4 fill:#fff,stroke:#7c3aed
-    style S5 fill:#fff,stroke:#9333ea
+    style S5 fill:#f5e0f0,stroke:#9333ea,stroke-width:3px
     style S6 fill:#fff,stroke:#c026d3
     style S7 fill:#fff,stroke:#db2777
 ```
