@@ -347,6 +347,7 @@ async def update_glossary_term(
             setattr(term, k, v)
     await session.commit()
     await session.refresh(term)
+    logger.info("Glossary term updated: id=%d, name=%s", term.id, term.name)
     return GlossaryTermResponse.model_validate(term)
 
 
@@ -1353,6 +1354,7 @@ async def create_pipeline(session: AsyncSession, data: PipelineCreate) -> Pipeli
     session.add(pipeline)
     await session.flush()
     await session.refresh(pipeline)
+    logger.info("Pipeline created: id=%d, name=%s, type=%s", pipeline.id, pipeline.pipeline_name, pipeline.pipeline_type)
     return PipelineResponse.model_validate(pipeline)
 
 
@@ -1428,6 +1430,9 @@ async def create_dataset_lineage(
         session.add(mapping)
     await session.flush()
 
+    logger.info("Dataset lineage created: id=%d, source=%d, target=%d, type=%s, mappings=%d",
+                lineage.id, data.source_dataset_id, data.target_dataset_id,
+                data.relation_type.value, len(data.column_mappings))
     return await _build_lineage_response(session, lineage.id)
 
 
