@@ -376,6 +376,7 @@ function WordsTab({ dictId }: { dictId: number }) {
         className="ag-theme-alpine"
         style={{
           height: Math.min(words.length * 32 + 44, 600),
+          "--ag-font-family": "var(--font-d2coding), 'D2Coding', Consolas, monospace",
           "--ag-font-size": "13px",
         } as React.CSSProperties}
       >
