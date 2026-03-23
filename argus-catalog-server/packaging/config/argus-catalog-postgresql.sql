@@ -908,6 +908,74 @@ CREATE TABLE IF NOT EXISTS catalog_standard_change_log (
 CREATE INDEX IF NOT EXISTS idx_std_change_log_entity ON catalog_standard_change_log (entity_type, entity_id);
 
 -- ---------------------------------------------------------------------------
+-- Data Quality - Profile (column-level statistics)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_data_profile (
+    id SERIAL PRIMARY KEY,
+    dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    row_count BIGINT NOT NULL DEFAULT 0,
+    profile_json TEXT NOT NULL DEFAULT '[]',
+    profiled_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_profile_dataset ON catalog_data_profile (dataset_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Quality - Rule (quality check definitions)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_quality_rule (
+    id SERIAL PRIMARY KEY,
+    dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    rule_name VARCHAR(255) NOT NULL,
+    check_type VARCHAR(50) NOT NULL,
+    column_name VARCHAR(256),
+    expected_value TEXT,
+    threshold DECIMAL(5,2) DEFAULT 100.00,
+    severity VARCHAR(16) NOT NULL DEFAULT 'WARNING',
+    is_active VARCHAR(5) NOT NULL DEFAULT 'true',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_rule_dataset ON catalog_quality_rule (dataset_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Quality - Result (check execution results)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_quality_result (
+    id SERIAL PRIMARY KEY,
+    rule_id INT NOT NULL REFERENCES catalog_quality_rule(id) ON DELETE CASCADE,
+    dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    passed VARCHAR(5) NOT NULL,
+    actual_value TEXT,
+    detail TEXT,
+    checked_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_result_rule ON catalog_quality_result (rule_id);
+CREATE INDEX IF NOT EXISTS idx_quality_result_dataset ON catalog_quality_result (dataset_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Quality - Score (aggregated quality score history)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_quality_score (
+    id SERIAL PRIMARY KEY,
+    dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    total_rules INT NOT NULL DEFAULT 0,
+    passed_rules INT NOT NULL DEFAULT 0,
+    warning_rules INT NOT NULL DEFAULT 0,
+    failed_rules INT NOT NULL DEFAULT 0,
+    scored_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_score_dataset ON catalog_quality_score (dataset_id);
+
+-- ---------------------------------------------------------------------------
 -- Dataset Embeddings (semantic search)
 -- ---------------------------------------------------------------------------
 
