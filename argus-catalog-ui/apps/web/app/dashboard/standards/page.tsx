@@ -921,7 +921,7 @@ function ComplianceTab({ dictId }: { dictId: number }) {
           <div className="w-full bg-muted rounded-full h-4 mb-4">
             <div className="bg-green-500 h-4 rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
-          <div className="grid grid-cols-5 gap-4 text-center text-xs">
+          <div className="grid grid-cols-5 gap-4 text-center text-sm">
             <div><p className="text-lg font-semibold">{stats.total_columns}</p><p className="text-muted-foreground">Total</p></div>
             <div><p className="text-lg font-semibold text-green-600">{stats.matched}</p><p className="text-muted-foreground">Matched</p></div>
             <div><p className="text-lg font-semibold text-amber-600">{stats.similar}</p><p className="text-muted-foreground">Similar</p></div>
