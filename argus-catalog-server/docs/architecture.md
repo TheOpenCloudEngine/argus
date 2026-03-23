@@ -307,15 +307,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    S1["Stage 1<br/>데이터 가시화<br/>━━━━━━━━<br/>카탈로그<br/>메타데이터 수집"]
-    S2["Stage 2<br/>데이터 이해<br/>━━━━━━━━<br/>표준/용어집<br/>준수율 측정"]
-    S3["Stage 3<br/>데이터 연결<br/>━━━━━━━━<br/>리니지/알림<br/>영향 분석"]
-    S4["Stage 4<br/>데이터 통합<br/>━━━━━━━━<br/>파이프라인<br/>분산 질의"]
-    S5["Stage 5<br/>분석 고도화<br/>━━━━━━━━<br/>Workspace<br/>셀프서비스"]
-    S6["Stage 6<br/>AI 모델 개발<br/>━━━━━━━━<br/>MLflow<br/>학습/등록"]
-    S7["Stage 7<br/>AI 서빙/운영<br/>━━━━━━━━<br/>KServe/RAG<br/>모니터링"]
-
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+    S1["1. 데이터 가시화"] --> S2["2. 데이터 이해"] --> S3["3. 데이터 연결"] --> S4["4. 데이터 통합"] --> S5["5. 분석 고도화"] --> S6["6. AI 모델 개발"] --> S7["7. AI 서빙/운영"]
 
     style S1 fill:#e0f2fe,stroke:#0284c7
     style S2 fill:#dbeafe,stroke:#3b82f6
