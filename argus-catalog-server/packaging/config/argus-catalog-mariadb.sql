@@ -767,4 +767,179 @@ CREATE TABLE IF NOT EXISTS argus_alert_notification (
 CREATE INDEX IF NOT EXISTS idx_alert_notification_alert ON argus_alert_notification (alert_id);
 
 -- ---------------------------------------------------------------------------
+-- Data Standard - Dictionary (표준 사전)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_dictionary (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dict_name VARCHAR(200) NOT NULL UNIQUE,
+    description TEXT,
+    version VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_date DATE,
+    expiry_date DATE,
+    created_by VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Word (표준 단어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_word (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dictionary_id INT NOT NULL,
+    word_name VARCHAR(100) NOT NULL,
+    word_english VARCHAR(100) NOT NULL,
+    word_abbr VARCHAR(50) NOT NULL,
+    description TEXT,
+    word_type VARCHAR(20) NOT NULL DEFAULT 'GENERAL',
+    is_forbidden VARCHAR(5) DEFAULT 'false',
+    synonym_group_id INT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_std_word (dictionary_id, word_name),
+    INDEX idx_std_word_dict (dictionary_id),
+    INDEX idx_std_word_type (word_type),
+    FOREIGN KEY (dictionary_id) REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Code Group (코드 그룹)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_code_group (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dictionary_id INT NOT NULL,
+    group_name VARCHAR(200) NOT NULL,
+    group_english VARCHAR(200),
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_code_group (dictionary_id, group_name),
+    FOREIGN KEY (dictionary_id) REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Code Value (코드 값)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_code_value (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code_group_id INT NOT NULL,
+    code_value VARCHAR(100) NOT NULL,
+    code_name VARCHAR(200) NOT NULL,
+    code_english VARCHAR(200),
+    description TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active VARCHAR(5) DEFAULT 'true',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_code_value (code_group_id, code_value),
+    INDEX idx_code_value_group (code_group_id),
+    FOREIGN KEY (code_group_id) REFERENCES catalog_code_group(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Domain (표준 도메인)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_domain (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dictionary_id INT NOT NULL,
+    domain_name VARCHAR(100) NOT NULL,
+    domain_group VARCHAR(100),
+    data_type VARCHAR(50) NOT NULL,
+    data_length INT,
+    data_precision INT,
+    data_scale INT,
+    description TEXT,
+    code_group_id INT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_std_domain (dictionary_id, domain_name),
+    INDEX idx_std_domain_dict (dictionary_id),
+    FOREIGN KEY (dictionary_id) REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    FOREIGN KEY (code_group_id) REFERENCES catalog_code_group(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term (표준 용어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_term (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dictionary_id INT NOT NULL,
+    term_name VARCHAR(200) NOT NULL,
+    term_english VARCHAR(200) NOT NULL,
+    term_abbr VARCHAR(100) NOT NULL,
+    physical_name VARCHAR(100) NOT NULL,
+    domain_id INT,
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_std_term (dictionary_id, term_name),
+    INDEX idx_std_term_dict (dictionary_id),
+    INDEX idx_std_term_physical (physical_name),
+    FOREIGN KEY (dictionary_id) REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    FOREIGN KEY (domain_id) REFERENCES catalog_standard_domain(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term Words (용어 구성 단어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_term_words (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    term_id INT NOT NULL,
+    word_id INT NOT NULL,
+    ordinal INT NOT NULL,
+    UNIQUE KEY uq_term_words (term_id, word_id, ordinal),
+    INDEX idx_std_term_words_term (term_id),
+    FOREIGN KEY (term_id) REFERENCES catalog_standard_term(id) ON DELETE CASCADE,
+    FOREIGN KEY (word_id) REFERENCES catalog_standard_word(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term-Column Mapping (표준 용어 ↔ 실제 컬럼 매핑)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_term_column_mapping (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    term_id INT NOT NULL,
+    dataset_id INT NOT NULL,
+    schema_id INT NOT NULL,
+    mapping_type VARCHAR(20) NOT NULL DEFAULT 'MATCHED',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_term_col (term_id, schema_id),
+    INDEX idx_term_col_mapping_term (term_id),
+    INDEX idx_term_col_mapping_dataset (dataset_id),
+    FOREIGN KEY (term_id) REFERENCES catalog_standard_term(id) ON DELETE CASCADE,
+    FOREIGN KEY (dataset_id) REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    FOREIGN KEY (schema_id) REFERENCES catalog_dataset_schemas(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Change Log (변경 이력)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_change_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type VARCHAR(20) NOT NULL,
+    entity_id INT NOT NULL,
+    change_type VARCHAR(20) NOT NULL,
+    field_name VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    changed_by VARCHAR(200),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_std_change_log_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
 

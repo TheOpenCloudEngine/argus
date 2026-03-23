@@ -1,0 +1,627 @@
+"use client"
+
+import { useCallback, useEffect, useState } from "react"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import { Textarea } from "@workspace/ui/components/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@workspace/ui/components/dialog"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@workspace/ui/components/select"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@workspace/ui/components/table"
+import { Plus, Trash2, Search, BookOpen, Type, Grid3X3, FileCode, Hash, ArrowRight } from "lucide-react"
+import { authFetch } from "@/features/auth/auth-fetch"
+
+const BASE = "/api/v1/standards"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type Dictionary = {
+  id: number; dict_name: string; description: string | null; version: string | null
+  status: string; word_count: number; domain_count: number; term_count: number; code_group_count: number
+}
+
+type Word = {
+  id: number; dictionary_id: number; word_name: string; word_english: string; word_abbr: string
+  description: string | null; word_type: string; is_forbidden: string; status: string
+}
+
+type Domain = {
+  id: number; dictionary_id: number; domain_name: string; domain_group: string | null
+  data_type: string; data_length: number | null; data_precision: number | null; data_scale: number | null
+  description: string | null; code_group_name: string | null; status: string
+}
+
+type TermWord = { word_id: number; word_name: string; word_abbr: string; word_type: string; ordinal: number }
+
+type Term = {
+  id: number; dictionary_id: number; term_name: string; term_english: string; term_abbr: string
+  physical_name: string; domain_name: string | null; domain_data_type: string | null
+  description: string | null; status: string; words: TermWord[]; mapping_count: number
+}
+
+type CodeGroup = {
+  id: number; group_name: string; group_english: string | null; status: string
+  values: { id: number; code_value: string; code_name: string; code_english: string | null }[]
+}
+
+type MorphemeResult = {
+  words: TermWord[]; term_english: string; term_abbr: string; physical_name: string
+  recommended_domain: Domain | null; unmatched_parts: string[]
+}
+
+type ComplianceStats = {
+  total_columns: number; matched: number; similar: number; violation: number
+  unmapped: number; compliance_rate: number
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function StandardsPage() {
+  const [dictionaries, setDictionaries] = useState<Dictionary[]>([])
+  const [selectedDictId, setSelectedDictId] = useState<number | null>(null)
+  const [tab, setTab] = useState("words")
+  const [dictDialogOpen, setDictDialogOpen] = useState(false)
+
+  const fetchDicts = useCallback(async () => {
+    const resp = await authFetch(`${BASE}/dictionaries`)
+    if (resp.ok) {
+      const data = await resp.json()
+      setDictionaries(data)
+      if (data.length > 0 && !selectedDictId) setSelectedDictId(data[0].id)
+    }
+  }, [selectedDictId])
+
+  useEffect(() => { fetchDicts() }, [fetchDicts])
+
+  const selectedDict = dictionaries.find(d => d.id === selectedDictId)
+
+  return (
+    <>
+      <DashboardHeader title="Data Standards" />
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        {/* Dictionary selector */}
+        <div className="flex items-center gap-3">
+          <Label className="text-sm font-medium">Dictionary:</Label>
+          <Select
+            value={selectedDictId ? String(selectedDictId) : ""}
+            onValueChange={v => setSelectedDictId(Number(v))}
+          >
+            <SelectTrigger className="w-72 h-9">
+              <SelectValue placeholder="Select dictionary..." />
+            </SelectTrigger>
+            <SelectContent>
+              {dictionaries.map(d => (
+                <SelectItem key={d.id} value={String(d.id)}>
+                  {d.dict_name}
+                  {d.version && <span className="text-muted-foreground ml-1">({d.version})</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setDictDialogOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> New Dictionary
+          </Button>
+
+          {selectedDict && (
+            <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+              <span>Words: <span className="text-foreground font-medium">{selectedDict.word_count}</span></span>
+              <span>Domains: <span className="text-foreground font-medium">{selectedDict.domain_count}</span></span>
+              <span>Terms: <span className="text-foreground font-medium">{selectedDict.term_count}</span></span>
+              <span>Codes: <span className="text-foreground font-medium">{selectedDict.code_group_count}</span></span>
+            </div>
+          )}
+        </div>
+
+        {selectedDictId && (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value="words"><Type className="h-3.5 w-3.5 mr-1" />Words</TabsTrigger>
+              <TabsTrigger value="domains"><Grid3X3 className="h-3.5 w-3.5 mr-1" />Domains</TabsTrigger>
+              <TabsTrigger value="terms"><FileCode className="h-3.5 w-3.5 mr-1" />Terms</TabsTrigger>
+              <TabsTrigger value="codes"><Hash className="h-3.5 w-3.5 mr-1" />Codes</TabsTrigger>
+              <TabsTrigger value="compliance"><BookOpen className="h-3.5 w-3.5 mr-1" />Compliance</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="words" className="mt-4">
+              <WordsTab dictId={selectedDictId} />
+            </TabsContent>
+            <TabsContent value="domains" className="mt-4">
+              <DomainsTab dictId={selectedDictId} />
+            </TabsContent>
+            <TabsContent value="terms" className="mt-4">
+              <TermsTab dictId={selectedDictId} />
+            </TabsContent>
+            <TabsContent value="codes" className="mt-4">
+              <CodesTab dictId={selectedDictId} />
+            </TabsContent>
+            <TabsContent value="compliance" className="mt-4">
+              <ComplianceTab dictId={selectedDictId} />
+            </TabsContent>
+          </Tabs>
+        )}
+      </div>
+
+      {/* New Dictionary Dialog */}
+      <DictionaryDialog open={dictDialogOpen} onOpenChange={setDictDialogOpen} onCreated={fetchDicts} />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Dictionary Dialog
+// ---------------------------------------------------------------------------
+
+function DictionaryDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void }) {
+  const [name, setName] = useState("")
+  const [version, setVersion] = useState("")
+  const [desc, setDesc] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { if (open) { setName(""); setVersion(""); setDesc("") } }, [open])
+
+  const save = async () => {
+    setSaving(true)
+    await authFetch(`${BASE}/dictionaries`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dict_name: name, version: version || null, description: desc || null }),
+    })
+    setSaving(false)
+    onCreated()
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>New Dictionary</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} className="h-9" /></div>
+          <div><Label className="text-xs">Version</Label><Input value={version} onChange={e => setVersion(e.target.value)} placeholder="v1.0" className="h-9" /></div>
+          <div><Label className="text-xs">Description</Label><Textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2} /></div>
+          <div className="flex justify-end"><Button onClick={save} disabled={saving || !name.trim()}>{saving ? "Saving..." : "Create"}</Button></div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Words Tab
+// ---------------------------------------------------------------------------
+
+function WordsTab({ dictId }: { dictId: number }) {
+  const [words, setWords] = useState<Word[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [wn, setWn] = useState(""); const [we, setWe] = useState(""); const [wa, setWa] = useState("")
+  const [wt, setWt] = useState("GENERAL"); const [wd, setWd] = useState("")
+
+  const fetch = useCallback(async () => {
+    const r = await authFetch(`${BASE}/words?dictionary_id=${dictId}`)
+    if (r.ok) setWords(await r.json())
+  }, [dictId])
+  useEffect(() => { fetch() }, [fetch])
+
+  const save = async () => {
+    await authFetch(`${BASE}/words`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dictionary_id: dictId, word_name: wn, word_english: we, word_abbr: wa, word_type: wt, description: wd || null }),
+    })
+    setAddOpen(false); setWn(""); setWe(""); setWa(""); setWd(""); fetch()
+  }
+
+  const del = async (id: number) => { await authFetch(`${BASE}/words/${id}`, { method: "DELETE" }); fetch() }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-muted-foreground">{words.length} words</p>
+        <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />Add Word</Button>
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Name</TableHead><TableHead>English</TableHead><TableHead>Abbr</TableHead>
+            <TableHead className="w-24">Type</TableHead><TableHead className="w-20">Forbidden</TableHead><TableHead className="w-16" />
+          </TableRow></TableHeader>
+          <TableBody>
+            {words.map(w => (
+              <TableRow key={w.id}>
+                <TableCell className="font-medium">{w.word_name}</TableCell>
+                <TableCell>{w.word_english}</TableCell>
+                <TableCell><code className="text-xs">{w.word_abbr}</code></TableCell>
+                <TableCell><WordTypeBadge type={w.word_type} /></TableCell>
+                <TableCell>{w.is_forbidden === "true" && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Forbidden</Badge>}</TableCell>
+                <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => del(w.id)}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Word</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Korean Name</Label><Input value={wn} onChange={e => setWn(e.target.value)} placeholder="고객" className="h-9" /></div>
+            <div><Label className="text-xs">English</Label><Input value={we} onChange={e => setWe(e.target.value)} placeholder="Customer" className="h-9" /></div>
+            <div><Label className="text-xs">Abbreviation</Label><Input value={wa} onChange={e => setWa(e.target.value)} placeholder="CUST" className="h-9" /></div>
+            <div><Label className="text-xs">Type</Label>
+              <Select value={wt} onValueChange={setWt}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="GENERAL">General</SelectItem><SelectItem value="SUFFIX">Suffix (분류어)</SelectItem><SelectItem value="PREFIX">Prefix</SelectItem></SelectContent>
+              </Select></div>
+            <div><Label className="text-xs">Description</Label><Textarea value={wd} onChange={e => setWd(e.target.value)} rows={2} /></div>
+            <div className="flex justify-end"><Button onClick={save} disabled={!wn || !we || !wa}>Add</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Domains Tab
+// ---------------------------------------------------------------------------
+
+function DomainsTab({ dictId }: { dictId: number }) {
+  const [domains, setDomains] = useState<Domain[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [dn, setDn] = useState(""); const [dg, setDg] = useState(""); const [dt, setDt] = useState("VARCHAR"); const [dl, setDl] = useState("")
+
+  const fetch = useCallback(async () => {
+    const r = await authFetch(`${BASE}/domains?dictionary_id=${dictId}`)
+    if (r.ok) setDomains(await r.json())
+  }, [dictId])
+  useEffect(() => { fetch() }, [fetch])
+
+  const save = async () => {
+    await authFetch(`${BASE}/domains`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dictionary_id: dictId, domain_name: dn, domain_group: dg || null, data_type: dt, data_length: dl ? Number(dl) : null }),
+    })
+    setAddOpen(false); setDn(""); setDg(""); setDt("VARCHAR"); setDl(""); fetch()
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-muted-foreground">{domains.length} domains</p>
+        <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />Add Domain</Button>
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Data Type</TableHead>
+            <TableHead>Length</TableHead><TableHead>Code Group</TableHead><TableHead className="w-16" />
+          </TableRow></TableHeader>
+          <TableBody>
+            {domains.map(d => (
+              <TableRow key={d.id}>
+                <TableCell className="font-medium">{d.domain_name}</TableCell>
+                <TableCell className="text-muted-foreground">{d.domain_group}</TableCell>
+                <TableCell><code className="text-xs">{d.data_type}</code></TableCell>
+                <TableCell>{d.data_length ?? "-"}</TableCell>
+                <TableCell>{d.code_group_name || "-"}</TableCell>
+                <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => { await authFetch(`${BASE}/domains/${d.id}`, { method: "DELETE" }); fetch() }}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Domain</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Domain Name</Label><Input value={dn} onChange={e => setDn(e.target.value)} placeholder="번호" className="h-9" /></div>
+            <div><Label className="text-xs">Group</Label><Input value={dg} onChange={e => setDg(e.target.value)} placeholder="문자형" className="h-9" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Data Type</Label><Input value={dt} onChange={e => setDt(e.target.value)} placeholder="VARCHAR" className="h-9" /></div>
+              <div><Label className="text-xs">Length</Label><Input type="number" value={dl} onChange={e => setDl(e.target.value)} placeholder="20" className="h-9" /></div>
+            </div>
+            <div className="flex justify-end"><Button onClick={save} disabled={!dn || !dt}>Add</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Terms Tab (with morpheme analysis)
+// ---------------------------------------------------------------------------
+
+function TermsTab({ dictId }: { dictId: number }) {
+  const [terms, setTerms] = useState<Term[]>([])
+  const [search, setSearch] = useState("")
+  const [addOpen, setAddOpen] = useState(false)
+  const [termName, setTermName] = useState("")
+  const [analysis, setAnalysis] = useState<MorphemeResult | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+
+  const fetch = useCallback(async () => {
+    const params = new URLSearchParams({ dictionary_id: String(dictId) })
+    if (search) params.set("search", search)
+    const r = await authFetch(`${BASE}/terms?${params}`)
+    if (r.ok) setTerms(await r.json())
+  }, [dictId, search])
+  useEffect(() => { fetch() }, [fetch])
+
+  const analyze = async () => {
+    if (!termName.trim()) return
+    setAnalyzing(true)
+    const r = await authFetch(`${BASE}/terms/analyze?dictionary_id=${dictId}&term_name=${encodeURIComponent(termName)}`)
+    if (r.ok) setAnalysis(await r.json())
+    setAnalyzing(false)
+  }
+
+  const save = async () => {
+    await authFetch(`${BASE}/terms`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dictionary_id: dictId, term_name: termName,
+        term_english: analysis?.term_english, term_abbr: analysis?.term_abbr,
+        physical_name: analysis?.physical_name,
+        domain_id: analysis?.recommended_domain?.id || null,
+      }),
+    })
+    setAddOpen(false); setTermName(""); setAnalysis(null); fetch()
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search terms..." className="h-8 pl-8 text-xs" />
+        </div>
+        <p className="text-sm text-muted-foreground">{terms.length} terms</p>
+        <Button size="sm" onClick={() => { setAddOpen(true); setTermName(""); setAnalysis(null) }}><Plus className="h-3.5 w-3.5 mr-1" />Add Term</Button>
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Term Name</TableHead><TableHead>Abbreviation</TableHead><TableHead>Physical Name</TableHead>
+            <TableHead>Domain</TableHead><TableHead>Words</TableHead><TableHead className="w-20">Mappings</TableHead><TableHead className="w-16" />
+          </TableRow></TableHeader>
+          <TableBody>
+            {terms.map(t => (
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.term_name}</TableCell>
+                <TableCell><code className="text-xs">{t.term_abbr}</code></TableCell>
+                <TableCell><code className="text-xs">{t.physical_name}</code></TableCell>
+                <TableCell>
+                  {t.domain_name && (
+                    <span className="text-xs">{t.domain_name} <span className="text-muted-foreground">({t.domain_data_type})</span></span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-0.5">
+                    {t.words.map((w, i) => (
+                      <span key={i}>
+                        {i > 0 && <span className="text-muted-foreground mx-0.5">+</span>}
+                        <Badge variant={w.word_type === "SUFFIX" ? "secondary" : "outline"} className="text-[10px] px-1 py-0">{w.word_name}</Badge>
+                      </span>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">{t.mapping_count}</TableCell>
+                <TableCell><Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => { await authFetch(`${BASE}/terms/${t.id}`, { method: "DELETE" }); fetch() }}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
+
+      {/* Add Term Dialog with Morpheme Analysis */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Add Term (형태소 분석)</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label className="text-xs">Term Name (한글)</Label>
+                <Input value={termName} onChange={e => setTermName(e.target.value)} placeholder="고객전화번호" className="h-9" />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={analyze} disabled={analyzing || !termName.trim()} variant="outline" size="sm">
+                  {analyzing ? "Analyzing..." : "Analyze"}
+                </Button>
+              </div>
+            </div>
+
+            {analysis && (
+              <Card className="bg-muted/30">
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <span className="text-xs text-muted-foreground">Word Decomposition</span>
+                    <div className="flex items-center gap-1 mt-1">
+                      {analysis.words.map((w, i) => (
+                        <span key={i} className="flex items-center gap-1">
+                          {i > 0 && <span className="text-muted-foreground">+</span>}
+                          <Badge variant={w.word_type === "SUFFIX" ? "secondary" : "outline"} className="text-xs px-2 py-0.5">
+                            {w.word_name} ({w.word_abbr})
+                          </Badge>
+                        </span>
+                      ))}
+                      {analysis.unmatched_parts.length > 0 && (
+                        <Badge variant="destructive" className="text-xs px-2 py-0.5">
+                          Unmatched: {analysis.unmatched_parts.join("")}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div><span className="text-muted-foreground">English</span><p className="font-medium">{analysis.term_english}</p></div>
+                    <div><span className="text-muted-foreground">Abbreviation</span><p className="font-mono font-medium">{analysis.term_abbr}</p></div>
+                    <div><span className="text-muted-foreground">Physical Name</span><p className="font-mono font-medium">{analysis.physical_name}</p></div>
+                  </div>
+                  {analysis.recommended_domain && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Recommended Domain</span>
+                      <p className="font-medium">
+                        {analysis.recommended_domain.domain_name}
+                        <span className="text-muted-foreground ml-1">
+                          ({analysis.recommended_domain.data_type}{analysis.recommended_domain.data_length ? `(${analysis.recommended_domain.data_length})` : ""})
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+              <Button onClick={save} disabled={!analysis}>Save Term</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Codes Tab
+// ---------------------------------------------------------------------------
+
+function CodesTab({ dictId }: { dictId: number }) {
+  const [groups, setGroups] = useState<CodeGroup[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [gn, setGn] = useState(""); const [ge, setGe] = useState("")
+
+  const fetch = useCallback(async () => {
+    const r = await authFetch(`${BASE}/code-groups?dictionary_id=${dictId}`)
+    if (r.ok) setGroups(await r.json())
+  }, [dictId])
+  useEffect(() => { fetch() }, [fetch])
+
+  const saveGroup = async () => {
+    await authFetch(`${BASE}/code-groups`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dictionary_id: dictId, group_name: gn, group_english: ge || null }),
+    })
+    setAddOpen(false); setGn(""); setGe(""); fetch()
+  }
+
+  const addValue = async (groupId: number) => {
+    const val = prompt("Code value (e.g., M)")
+    if (!val) return
+    const name = prompt("Code name (e.g., 남성)")
+    if (!name) return
+    await authFetch(`${BASE}/code-groups/${groupId}/values`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code_value: val, code_name: name }),
+    })
+    fetch()
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-muted-foreground">{groups.length} code groups</p>
+        <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />Add Code Group</Button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {groups.map(g => (
+          <Card key={g.id}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                {g.group_name}
+                <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => addValue(g.id)}><Plus className="h-3 w-3 mr-1" />Add Value</Button>
+              </CardTitle>
+              {g.group_english && <p className="text-xs text-muted-foreground">{g.group_english}</p>}
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-1">
+                {g.values.map(v => (
+                  <div key={v.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5">
+                    <code className="font-mono font-medium min-w-[40px]">{v.code_value}</code>
+                    <span className="text-muted-foreground">→</span>
+                    <span>{v.code_name}</span>
+                    {v.code_english && <span className="text-muted-foreground ml-auto">{v.code_english}</span>}
+                  </div>
+                ))}
+                {g.values.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">No values</p>}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Code Group</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Group Name</Label><Input value={gn} onChange={e => setGn(e.target.value)} placeholder="성별코드" className="h-9" /></div>
+            <div><Label className="text-xs">English</Label><Input value={ge} onChange={e => setGe(e.target.value)} placeholder="Gender Code" className="h-9" /></div>
+            <div className="flex justify-end"><Button onClick={saveGroup} disabled={!gn.trim()}>Add</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Compliance Tab
+// ---------------------------------------------------------------------------
+
+function ComplianceTab({ dictId }: { dictId: number }) {
+  const [stats, setStats] = useState<ComplianceStats | null>(null)
+
+  useEffect(() => {
+    authFetch(`${BASE}/compliance?dictionary_id=${dictId}`)
+      .then(r => r.json()).then(setStats).catch(() => {})
+  }, [dictId])
+
+  if (!stats) return <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
+  if (stats.total_columns === 0) return <p className="text-sm text-muted-foreground text-center py-8">No columns mapped yet.</p>
+
+  const pct = stats.compliance_rate
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center mb-4">
+            <p className="text-4xl font-bold">{pct}%</p>
+            <p className="text-sm text-muted-foreground">Standard Compliance Rate</p>
+          </div>
+          <div className="w-full bg-muted rounded-full h-4 mb-4">
+            <div className="bg-green-500 h-4 rounded-full transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="grid grid-cols-5 gap-4 text-center text-xs">
+            <div><p className="text-lg font-semibold">{stats.total_columns}</p><p className="text-muted-foreground">Total</p></div>
+            <div><p className="text-lg font-semibold text-green-600">{stats.matched}</p><p className="text-muted-foreground">Matched</p></div>
+            <div><p className="text-lg font-semibold text-amber-600">{stats.similar}</p><p className="text-muted-foreground">Similar</p></div>
+            <div><p className="text-lg font-semibold text-red-600">{stats.violation}</p><p className="text-muted-foreground">Violation</p></div>
+            <div><p className="text-lg font-semibold text-gray-400">{stats.unmapped}</p><p className="text-muted-foreground">Unmapped</p></div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function WordTypeBadge({ type }: { type: string }) {
+  if (type === "SUFFIX") return <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 text-[10px] px-1.5 py-0 border-0">Suffix</Badge>
+  if (type === "PREFIX") return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-[10px] px-1.5 py-0 border-0">Prefix</Badge>
+  return <Badge variant="outline" className="text-[10px] px-1.5 py-0">General</Badge>
+}

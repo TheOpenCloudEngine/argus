@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Globe,
   HelpCircle,
+  Shield,
   LayoutDashboard,
   Server,
   Settings,
@@ -24,6 +25,7 @@ const iconMap: Record<string, LucideIcon> = {
   LayoutDashboard,
   Server,
   Settings,
+  Shield,
   Tags,
   Users,
 }
