@@ -422,7 +422,7 @@ function ManualMapPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 text-xs gap-1 font-normal">
+        <Button variant="outline" size="sm" className="h-7 text-sm gap-1 font-normal">
           <ChevronsUpDown className="h-3 w-3" />
           Map to term...
         </Button>
