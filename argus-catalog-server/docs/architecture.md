@@ -317,16 +317,6 @@ flowchart LR
 
     S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 
-    CAT["Argus Catalog"] -.-> S1
-    CAT -.-> S2
-    CAT -.-> S3
-    CAT -.-> S6
-
-    INS["Argus Insight"] -.-> S4
-    INS -.-> S5
-    INS -.-> S6
-    INS -.-> S7
-
     style S1 fill:#e0f2fe,stroke:#0284c7
     style S2 fill:#dbeafe,stroke:#3b82f6
     style S3 fill:#c7d2fe,stroke:#6366f1
@@ -334,6 +324,4 @@ flowchart LR
     style S5 fill:#f5d0fe,stroke:#c026d3
     style S6 fill:#fce7f3,stroke:#db2777
     style S7 fill:#fecaca,stroke:#dc2626
-    style CAT fill:#f0fdf4,stroke:#16a34a
-    style INS fill:#fef3c7,stroke:#d97706
 ```
