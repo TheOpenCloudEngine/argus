@@ -1734,10 +1734,12 @@ function GlossaryTermPicker({
   const filteredTerms = useMemo(() => {
     let list = availableTerms
     if (selectedFolderId) {
+      // Collect all CATEGORY ids under selected folder (including itself)
       const node = catMap.get(selectedFolderId)
       if (node) {
-        const allIds = new Set(collectGlossaryIds(node))
-        list = list.filter(t => allIds.has(t.id))
+        const folderIds = new Set(collectGlossaryIds(node))
+        // Filter terms whose parent_id is one of these folders
+        list = list.filter(t => t.parent_id != null && folderIds.has(t.parent_id))
       }
     }
     if (search.trim()) {
