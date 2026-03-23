@@ -229,6 +229,37 @@ async def add_code_value(session: AsyncSession, group_id: int, data: CodeValueCr
     return CodeValueResponse.model_validate(cv)
 
 
+async def update_code_group(session: AsyncSession, group_id: int, data) -> CodeGroupResponse | None:
+    cg = await get_code_group(session, group_id)
+    if not cg:
+        return None
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(cg, k, v)
+    await session.flush()
+    await session.refresh(cg)
+    return await _build_code_group_response(session, cg)
+
+
+async def delete_code_group(session: AsyncSession, group_id: int) -> bool:
+    cg = await get_code_group(session, group_id)
+    if not cg:
+        return False
+    await session.delete(cg)
+    await session.flush()
+    return True
+
+
+async def update_code_value(session: AsyncSession, value_id: int, data) -> CodeValueResponse | None:
+    cv = (await session.execute(select(CodeValue).where(CodeValue.id == value_id))).scalar_one_or_none()
+    if not cv:
+        return None
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(cv, k, v)
+    await session.flush()
+    await session.refresh(cv)
+    return CodeValueResponse.model_validate(cv)
+
+
 async def delete_code_value(session: AsyncSession, value_id: int) -> bool:
     cv = (await session.execute(select(CodeValue).where(CodeValue.id == value_id))).scalar_one_or_none()
     if not cv:

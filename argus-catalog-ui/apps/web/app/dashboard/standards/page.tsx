@@ -147,7 +147,7 @@ export default function StandardsPage() {
             <TabsContent value="terms" className="mt-4 flex-1 flex flex-col min-h-0 h-0">
               <TermsTab dictId={selectedDictId} />
             </TabsContent>
-            <TabsContent value="codes" className="mt-4">
+            <TabsContent value="codes" className="mt-4 flex-1 flex flex-col min-h-0 h-0">
               <CodesTab dictId={selectedDictId} />
             </TabsContent>
             <TabsContent value="compliance" className="mt-4">
@@ -687,81 +687,213 @@ function TermsTab({ dictId }: { dictId: number }) {
 // Codes Tab
 // ---------------------------------------------------------------------------
 
+// Delete renderers for code grids
+const CodeGroupDeleteCtx = createContext<(id: number) => void>(() => {})
+function CodeGroupDeleteRenderer(props: { value: number }) {
+  const onDelete = useContext(CodeGroupDeleteCtx)
+  return (
+    <button type="button" onClick={() => onDelete(props.value)}
+      className="flex items-center justify-center w-full h-full text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
+const CodeValueDeleteCtx = createContext<(id: number) => void>(() => {})
+function CodeValueDeleteRenderer(props: { value: number }) {
+  const onDelete = useContext(CodeValueDeleteCtx)
+  return (
+    <button type="button" onClick={() => onDelete(props.value)}
+      className="flex items-center justify-center w-full h-full text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
 function CodesTab({ dictId }: { dictId: number }) {
   const [groups, setGroups] = useState<CodeGroup[]>([])
-  const [addOpen, setAddOpen] = useState(false)
-  const [gn, setGn] = useState(""); const [ge, setGe] = useState("")
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const [values, setValues] = useState<CodeGroup["values"]>([])
 
-  const fetch = useCallback(async () => {
+  // Fetch groups
+  const fetchGroups = useCallback(async () => {
     const r = await authFetch(`${BASE}/code-groups?dictionary_id=${dictId}`)
-    if (r.ok) setGroups(await r.json())
-  }, [dictId])
-  useEffect(() => { fetch() }, [fetch])
+    if (r.ok) {
+      const data = await r.json()
+      setGroups(data)
+      // Auto-select first group if none selected
+      if (data.length > 0 && !selectedGroupId) setSelectedGroupId(data[0].id)
+    }
+  }, [dictId, selectedGroupId])
+  useEffect(() => { fetchGroups() }, [fetchGroups])
 
-  const saveGroup = async () => {
+  // Fetch values when group changes
+  const fetchValues = useCallback(async () => {
+    if (!selectedGroupId) { setValues([]); return }
+    const r = await authFetch(`${BASE}/code-groups/${selectedGroupId}`)
+    if (r.ok) {
+      const data = await r.json()
+      setValues(data.values || [])
+    }
+  }, [selectedGroupId])
+  useEffect(() => { fetchValues() }, [fetchValues])
+
+  // Group CRUD
+  const addGroup = useCallback(async () => {
     await authFetch(`${BASE}/code-groups`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dictionary_id: dictId, group_name: gn, group_english: ge || null }),
+      body: JSON.stringify({ dictionary_id: dictId, group_name: "(new)" }),
     })
-    setAddOpen(false); setGn(""); setGe(""); fetch()
-  }
+    await fetchGroups()
+  }, [dictId, fetchGroups])
 
-  const addValue = async (groupId: number) => {
-    const val = prompt("Code value (e.g., M)")
-    if (!val) return
-    const name = prompt("Code name (e.g., 남성)")
-    if (!name) return
-    await authFetch(`${BASE}/code-groups/${groupId}/values`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code_value: val, code_name: name }),
+  const deleteGroup = useCallback(async (id: number) => {
+    await authFetch(`${BASE}/code-groups/${id}`, { method: "DELETE" })
+    if (selectedGroupId === id) setSelectedGroupId(null)
+    fetchGroups()
+  }, [selectedGroupId, fetchGroups])
+
+  const onGroupCellChanged = useCallback(async (event: CellValueChangedEvent) => {
+    const { data, colDef, newValue, oldValue } = event
+    if (newValue === oldValue) return
+    const field = colDef.field
+    if (!field || !data.id) return
+    await authFetch(`${BASE}/code-groups/${data.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: newValue }),
     })
-    fetch()
-  }
+  }, [])
+
+  // Value CRUD
+  const addValue = useCallback(async () => {
+    if (!selectedGroupId) return
+    await authFetch(`${BASE}/code-groups/${selectedGroupId}/values`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code_value: "(new)", code_name: "(new)" }),
+    })
+    fetchValues()
+  }, [selectedGroupId, fetchValues])
+
+  const deleteValue = useCallback(async (id: number) => {
+    await authFetch(`${BASE}/code-values/${id}`, { method: "DELETE" })
+    fetchValues()
+  }, [fetchValues])
+
+  const onValueCellChanged = useCallback(async (event: CellValueChangedEvent) => {
+    const { data, colDef, newValue, oldValue } = event
+    if (newValue === oldValue) return
+    const field = colDef.field
+    if (!field || !data.id) return
+    await authFetch(`${BASE}/code-values/${data.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: newValue }),
+    })
+  }, [])
+
+  // Group row click → select
+  const onGroupRowClicked = useCallback((event: { data: { id: number } }) => {
+    if (event.data?.id) setSelectedGroupId(event.data.id)
+  }, [])
+
+  const selectedGroup = groups.find(g => g.id === selectedGroupId)
+
+  // Column defs
+  const groupColDefs = useMemo<ColDef[]>(() => [
+    { headerName: "#", valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1, width: 45, maxWidth: 45, editable: false, sortable: false, cellStyle: { color: "#9ca3af", textAlign: "right" } },
+    { headerName: "Group Name", field: "group_name", flex: 1, minWidth: 120, editable: true, cellStyle: { fontWeight: 500 } },
+    { headerName: "English", field: "group_english", flex: 1, minWidth: 100, editable: true },
+    { headerName: "Status", field: "status", width: 85, editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["ACTIVE", "INACTIVE"] } },
+    { headerName: "", field: "id", width: 40, maxWidth: 40, editable: false, sortable: false, cellRenderer: "deleteRenderer" },
+  ], [])
+
+  const valueColDefs = useMemo<ColDef[]>(() => [
+    { headerName: "#", valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1, width: 45, maxWidth: 45, editable: false, sortable: false, cellStyle: { color: "#9ca3af", textAlign: "right" } },
+    { headerName: "Code", field: "code_value", width: 100, editable: true, cellStyle: { fontFamily: "monospace", fontWeight: 500 } },
+    { headerName: "Name (한글)", field: "code_name", flex: 1, minWidth: 120, editable: true },
+    { headerName: "English", field: "code_english", flex: 1, minWidth: 100, editable: true },
+    { headerName: "Order", field: "sort_order", width: 70, editable: true, cellStyle: { textAlign: "right" } },
+    { headerName: "", field: "id", width: 40, maxWidth: 40, editable: false, sortable: false, cellRenderer: "deleteRenderer" },
+  ], [])
+
+  const groupComponents = useMemo(() => ({ deleteRenderer: CodeGroupDeleteRenderer }), [])
+  const valueComponents = useMemo(() => ({ deleteRenderer: CodeValueDeleteRenderer }), [])
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-3">
+    <CodeGroupDeleteCtx.Provider value={deleteGroup}>
+    <CodeValueDeleteCtx.Provider value={deleteValue}>
+    <div className="flex flex-col flex-1 min-h-0 h-full">
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <p className="text-sm text-muted-foreground">{groups.length} code groups</p>
-        <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />Add Code Group</Button>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        {groups.map(g => (
-          <Card key={g.id}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center justify-between">
-                {g.group_name}
-                <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => addValue(g.id)}><Plus className="h-3 w-3 mr-1" />Add Value</Button>
-              </CardTitle>
-              {g.group_english && <p className="text-xs text-muted-foreground">{g.group_english}</p>}
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-1">
-                {g.values.map(v => (
-                  <div key={v.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5">
-                    <code className="font-mono font-medium min-w-[40px]">{v.code_value}</code>
-                    <span className="text-muted-foreground">→</span>
-                    <span>{v.code_name}</span>
-                    {v.code_english && <span className="text-muted-foreground ml-auto">{v.code_english}</span>}
-                  </div>
-                ))}
-                {g.values.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">No values</p>}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Add Code Group</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label className="text-xs">Group Name</Label><Input value={gn} onChange={e => setGn(e.target.value)} placeholder="성별코드" className="h-9" /></div>
-            <div><Label className="text-xs">English</Label><Input value={ge} onChange={e => setGe(e.target.value)} placeholder="Gender Code" className="h-9" /></div>
-            <div className="flex justify-end"><Button onClick={saveGroup} disabled={!gn.trim()}>Add</Button></div>
+      <div className="flex flex-1 gap-4 min-h-0">
+        {/* Left: Code Groups */}
+        <div className="flex flex-col w-2/5 min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <span className="text-xs font-medium text-muted-foreground">Code Groups</span>
+            <Button variant="outline" size="sm" className="h-6 text-xs" onClick={addGroup}>
+              <Plus className="h-3 w-3 mr-1" />Add
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          <div className="ag-theme-alpine flex-1 min-h-0" style={{
+            "--ag-font-family": "var(--font-d2coding), 'D2Coding', Consolas, monospace",
+            "--ag-font-size": "13px",
+            "--ag-selected-row-background-color": "rgba(59, 130, 246, 0.1)",
+          } as React.CSSProperties}>
+            <AgGridReact
+              columnDefs={groupColDefs}
+              rowData={groups}
+              defaultColDef={{ resizable: true, sortable: false, filter: false, minWidth: 40 }}
+              headerHeight={32} rowHeight={30}
+              singleClickEdit stopEditingWhenCellsLoseFocus
+              onCellValueChanged={onGroupCellChanged}
+              onRowClicked={onGroupRowClicked}
+              rowSelection="single"
+              animateRows={false}
+              getRowId={(params) => String(params.data.id)}
+              components={groupComponents}
+            />
+          </div>
+        </div>
+
+        {/* Right: Code Values */}
+        <div className="flex flex-col w-3/5 min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <span className="text-xs font-medium text-muted-foreground">
+              {selectedGroup ? `${selectedGroup.group_name} — Values` : "Select a group"}
+            </span>
+            {selectedGroupId && (
+              <Button variant="outline" size="sm" className="h-6 text-xs" onClick={addValue}>
+                <Plus className="h-3 w-3 mr-1" />Add Value
+              </Button>
+            )}
+          </div>
+          <div className="ag-theme-alpine flex-1 min-h-0" style={{
+            "--ag-font-family": "var(--font-d2coding), 'D2Coding', Consolas, monospace",
+            "--ag-font-size": "13px",
+          } as React.CSSProperties}>
+            {selectedGroupId ? (
+              <AgGridReact
+                columnDefs={valueColDefs}
+                rowData={values}
+                defaultColDef={{ resizable: true, sortable: false, filter: false, minWidth: 40 }}
+                headerHeight={32} rowHeight={30}
+                singleClickEdit stopEditingWhenCellsLoseFocus
+                onCellValueChanged={onValueCellChanged}
+                animateRows={false}
+                getRowId={(params) => String(params.data.id)}
+                components={valueComponents}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                Select a code group to view values
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+    </CodeValueDeleteCtx.Provider>
+    </CodeGroupDeleteCtx.Provider>
   )
 }
 
