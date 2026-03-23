@@ -275,7 +275,8 @@ async def delete_model_version(
 
 
 # ---------------------------------------------------------------------------
-# Stage Management
+# Stage Management — version deployment lifecycle
+# NONE → STAGING → PRODUCTION → ARCHIVED
 # ---------------------------------------------------------------------------
 
 @router.put("/{model_name}/versions/{version}/stage")
@@ -316,7 +317,7 @@ async def update_version_stage(
 
 
 # ---------------------------------------------------------------------------
-# Model-Dataset Lineage
+# Model-Dataset Lineage — track training/evaluation data sources
 # ---------------------------------------------------------------------------
 
 @router.post("/{model_name}/lineage")
@@ -404,7 +405,7 @@ async def delete_model_dataset_lineage(
 
 
 # ---------------------------------------------------------------------------
-# Model Metrics
+# Model Metrics — per-version performance tracking and comparison
 # ---------------------------------------------------------------------------
 
 @router.post("/{model_name}/versions/{version}/metrics")
@@ -472,7 +473,7 @@ async def get_model_metrics(model_name: str, session: AsyncSession = Depends(get
 
 
 # ---------------------------------------------------------------------------
-# Model Card
+# Model Card — structured governance documentation
 # ---------------------------------------------------------------------------
 
 @router.get("/{model_name}/card")

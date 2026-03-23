@@ -1,4 +1,7 @@
-"""Data quality Pydantic schemas."""
+"""Data quality Pydantic schemas.
+
+Request/response models for profiling, quality rules, check results, and scores.
+"""
 
 from datetime import datetime
 

@@ -1,4 +1,8 @@
-"""Data quality API endpoints."""
+"""Data quality API endpoints.
+
+Provides profiling, quality rules CRUD, check execution, and score tracking.
+Profile runs direct SQL against source DB (Method A) with schema fallback (Method B).
+"""
 
 import logging
 
@@ -24,7 +28,12 @@ router = APIRouter(prefix="/quality", tags=["quality"])
 
 @router.post("/datasets/{dataset_id}/profile", response_model=ProfileResponse)
 async def profile_dataset(dataset_id: int, session: AsyncSession = Depends(get_session)):
-    """Run data profiling on a dataset (direct SQL to source DB)."""
+    """Run data profiling on a dataset.
+
+    Connects to source DB via platform configuration and collects
+    per-column statistics: NULL count, unique count, min/max, mean.
+    Falls back to schema-only profile if source DB is unreachable.
+    """
     try:
         result = await service.profile_dataset(session, dataset_id)
         await session.commit()
@@ -84,7 +93,12 @@ async def delete_rule(rule_id: int, session: AsyncSession = Depends(get_session)
 
 @router.post("/datasets/{dataset_id}/check", response_model=RunCheckResponse)
 async def run_check(dataset_id: int, session: AsyncSession = Depends(get_session)):
-    """Run all active quality rules for a dataset."""
+    """Run all active quality rules for a dataset.
+
+    Auto-profiles if no existing profile found, then evaluates
+    each active rule against the profile data.
+    Returns per-rule pass/fail results and overall quality score.
+    """
     result = await service.run_quality_check(session, dataset_id)
     await session.commit()
     return result

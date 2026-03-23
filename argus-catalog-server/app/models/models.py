@@ -121,7 +121,11 @@ class ModelVersion(Base):
 
 
 class ModelDatasetLineage(Base):
-    """Link between a model and the dataset used for training/evaluation."""
+    """Link between a model and the dataset used for training/evaluation.
+
+    Enables tracking which datasets were used to train each model version,
+    so data changes can trigger model retraining alerts.
+    """
 
     __tablename__ = "catalog_model_dataset_lineage"
 
@@ -135,7 +139,11 @@ class ModelDatasetLineage(Base):
 
 
 class ModelMetric(Base):
-    """Per-version performance metric for a model."""
+    """Per-version performance metric for a model.
+
+    Stores key-value metrics (accuracy, f1, latency, etc.) per model version
+    to enable cross-version comparison in the Metrics tab.
+    """
 
     __tablename__ = "catalog_model_metrics"
     __table_args__ = (UniqueConstraint("model_id", "version", "metric_key"),)
@@ -149,7 +157,11 @@ class ModelMetric(Base):
 
 
 class ModelCard(Base):
-    """Structured model card with governance fields."""
+    """Structured model card with governance fields.
+
+    Follows the Model Card standard (Google/Microsoft) with fields for
+    purpose, performance, limitations, training data, framework, license.
+    """
 
     __tablename__ = "catalog_model_card"
 
