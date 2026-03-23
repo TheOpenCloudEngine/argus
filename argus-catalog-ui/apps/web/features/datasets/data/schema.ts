@@ -51,7 +51,6 @@ export const glossaryTermSchema = z.object({
   id: z.number(),
   name: z.string(),
   description: z.string().nullable().optional(),
-  source: z.string().nullable().optional(),
   parent_id: z.number().nullable().optional(),
   term_type: z.string().optional().default("TERM"),
   created_at: z.string(),

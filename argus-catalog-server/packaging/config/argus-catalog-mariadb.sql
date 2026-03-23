@@ -131,7 +131,6 @@ CREATE TABLE IF NOT EXISTS catalog_glossary_terms (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(200) NOT NULL UNIQUE,
     description TEXT,
-    source VARCHAR(100),
     parent_id INT REFERENCES catalog_glossary_terms(id),
     term_type VARCHAR(20) NOT NULL DEFAULT 'TERM',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

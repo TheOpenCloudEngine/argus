@@ -179,7 +179,6 @@ export default function GlossaryPage() {
   const [addMode, setAddMode] = useState<"category" | "term">("term")
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
-  const [newSource, setNewSource] = useState("")
 
   const load = useCallback(async () => {
     try {
@@ -212,10 +211,6 @@ export default function GlossaryPage() {
     return terms.filter(t => allIds.has(t.id) && (t.term_type ?? "TERM") === "TERM")
   }, [selectedNode, terms, nodeMap])
 
-  // Unique sources
-  const sources = useMemo(() =>
-    Array.from(new Set(terms.map(t => t.source).filter(Boolean) as string[])).sort(),
-  [terms])
 
   // Tree toggle
   const toggleExpand = (id: number) => {
@@ -271,7 +266,6 @@ export default function GlossaryPage() {
     await createGlossaryTerm({
       name: newName.trim(),
       description: newDesc.trim() || undefined,
-      source: newSource.trim() || undefined,
       parent_id: selectedNodeId ?? undefined,
       term_type: addMode === "category" ? "CATEGORY" : "TERM",
     })
@@ -595,12 +589,6 @@ export default function GlossaryPage() {
               <Label>Description</Label>
               <Textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={3} placeholder="Define this term..." />
             </div>
-            {addMode === "term" && (
-              <div className="grid gap-2">
-                <Label>Source</Label>
-                <Input value={newSource} onChange={e => setNewSource(e.target.value)} placeholder="e.g. 마케팅팀" />
-              </div>
-            )}
           </div>
           <DialogFooter>
             <DialogClose asChild>

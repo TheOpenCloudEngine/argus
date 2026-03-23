@@ -12,7 +12,6 @@ export async function fetchGlossaryTerms(): Promise<GlossaryTerm[]> {
 export async function createGlossaryTerm(payload: {
   name: string
   description?: string
-  source?: string
   parent_id?: number
   term_type?: string
 }): Promise<GlossaryTerm> {
@@ -30,7 +29,7 @@ export async function createGlossaryTerm(payload: {
 
 export async function updateGlossaryTerm(
   termId: number,
-  payload: { name?: string; description?: string; source?: string; parent_id?: number | null },
+  payload: { name?: string; description?: string; parent_id?: number | null; term_type?: string },
 ): Promise<GlossaryTerm> {
   const res = await authFetch(`${BASE}/glossary/${termId}`, {
     method: "PUT",

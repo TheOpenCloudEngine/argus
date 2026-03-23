@@ -323,7 +323,7 @@ async def create_glossary_term(
 ) -> GlossaryTermResponse:
     term = GlossaryTerm(
         name=req.name, description=req.description,
-        source=req.source, parent_id=req.parent_id,
+        parent_id=req.parent_id,
         term_type=req.term_type,
     )
     session.add(term)
