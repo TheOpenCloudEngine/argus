@@ -392,7 +392,6 @@ function WordsTab({ dictId }: { dictId: number }) {
           }}
           headerHeight={32}
           rowHeight={30}
-          singleClickEdit
           stopEditingWhenCellsLoseFocus
           onCellValueChanged={onCellValueChanged}
           animateRows={false}
@@ -488,7 +487,7 @@ function DomainsTab({ dictId }: { dictId: number }) {
       <div className="ag-theme-alpine flex-1 min-h-0" style={{ "--ag-font-family": "var(--font-d2coding), 'D2Coding', Consolas, monospace", "--ag-font-size": "13px" } as React.CSSProperties}>
         <AgGridReact ref={gridRef} columnDefs={columnDefs} rowData={domains}
           defaultColDef={{ resizable: true, sortable: true, filter: false, minWidth: 50 }}
-          headerHeight={32} rowHeight={30} singleClickEdit stopEditingWhenCellsLoseFocus
+          headerHeight={32} rowHeight={30} stopEditingWhenCellsLoseFocus
           onCellValueChanged={onCellValueChanged} animateRows={false}
           getRowId={(params) => String(params.data.id)} components={components} />
       </div>
@@ -608,7 +607,7 @@ function TermsTab({ dictId }: { dictId: number }) {
       <div className="ag-theme-alpine flex-1 min-h-0" style={{ "--ag-font-family": "var(--font-d2coding), 'D2Coding', Consolas, monospace", "--ag-font-size": "13px" } as React.CSSProperties}>
         <AgGridReact columnDefs={columnDefs} rowData={terms}
           defaultColDef={{ resizable: true, sortable: true, filter: false, minWidth: 50 }}
-          headerHeight={32} rowHeight={30} singleClickEdit stopEditingWhenCellsLoseFocus
+          headerHeight={32} rowHeight={30} stopEditingWhenCellsLoseFocus
           onCellValueChanged={onCellValueChanged} animateRows={false}
           getRowId={(params) => String(params.data.id)} components={components} />
       </div>
@@ -844,7 +843,7 @@ function CodesTab({ dictId }: { dictId: number }) {
               rowData={groups}
               defaultColDef={{ resizable: true, sortable: false, filter: false, minWidth: 40 }}
               headerHeight={32} rowHeight={30}
-              singleClickEdit stopEditingWhenCellsLoseFocus
+              stopEditingWhenCellsLoseFocus
               onCellValueChanged={onGroupCellChanged}
               onRowClicked={onGroupRowClicked}
               rowSelection="single"
@@ -877,7 +876,7 @@ function CodesTab({ dictId }: { dictId: number }) {
                 rowData={values}
                 defaultColDef={{ resizable: true, sortable: false, filter: false, minWidth: 40 }}
                 headerHeight={32} rowHeight={30}
-                singleClickEdit stopEditingWhenCellsLoseFocus
+                stopEditingWhenCellsLoseFocus
                 onCellValueChanged={onValueCellChanged}
                 animateRows={false}
                 getRowId={(params) => String(params.data.id)}
