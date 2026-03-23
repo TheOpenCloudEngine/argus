@@ -216,7 +216,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
         {step === 1 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-xs">Rule Name</Label>
+              <Label className="text-sm">Rule Name</Label>
               <Input
                 value={ruleName}
                 onChange={e => setRuleName(e.target.value)}
@@ -235,7 +235,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
                   key={t}
                   variant={scopeType === t ? "default" : "outline"}
                   size="sm"
-                  className="text-xs h-7"
+                  className="text-sm h-8"
                   onClick={() => { setScopeType(t); setScopeId(null) }}
                 >
                   {t === "DATASET" && "Dataset"}
@@ -276,7 +276,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
             {scopeType === "DATASET" && (
               <Popover open={scopePopoverOpen} onOpenChange={setScopePopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between h-9 font-normal text-xs">
+                  <Button variant="outline" className="w-full justify-between h-9 font-normal text-sm">
                     {scopeId ? scopeDisplayName() : "Search and select dataset..."}
                     <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
                   </Button>
@@ -303,10 +303,10 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
 
             {scopeType === "LINEAGE" && (
               <Select value={scopeId ? String(scopeId) : ""} onValueChange={v => setScopeId(Number(v))}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select lineage..." /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select lineage..." /></SelectTrigger>
                 <SelectContent>
                   {lineages.map(l => (
-                    <SelectItem key={l.id} value={String(l.id)} className="text-xs">
+                    <SelectItem key={l.id} value={String(l.id)} className="text-sm">
                       {l.source_platform_type}.{l.source_dataset_name} → {l.target_platform_type}.{l.target_dataset_name}
                     </SelectItem>
                   ))}
@@ -329,9 +329,9 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
 
             {(triggerType === "SCHEMA_CHANGE" || triggerType === "COLUMN_WATCH") && (
               <div className="flex items-center gap-4">
-                <Label className="text-xs text-muted-foreground">Change Types:</Label>
+                <Label className="text-sm text-muted-foreground">Change Types:</Label>
                 {["DROP", "MODIFY", "ADD"].map(ct => (
-                  <label key={ct} className="flex items-center gap-1.5 text-xs">
+                  <label key={ct} className="flex items-center gap-1.5 text-sm">
                     <Checkbox
                       checked={changeTypes.includes(ct)}
                       onCheckedChange={() => toggleChangeType(ct)}
@@ -344,18 +344,18 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
 
             {triggerType === "COLUMN_WATCH" && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Watch Columns (콤마 구분)</Label>
+                <Label className="text-sm">Watch Columns (콤마 구분)</Label>
                 <Input
                   value={watchColumns}
                   onChange={e => setWatchColumns(e.target.value)}
                   placeholder="amount, currency, status"
-                  className="h-9 text-xs"
+                  className="h-9 text-sm"
                 />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Severity</Label>
+              <Label className="text-sm">Severity</Label>
               <Select value={severityOverride} onValueChange={setSeverityOverride}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -381,7 +381,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
             {/* Summary */}
             <div className="rounded-lg border px-4 py-3 bg-muted/30 text-sm">
               <p className="font-medium">{ruleName}</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 Scope: {scopeType} {scopeId ? `(${scopeDisplayName()})` : ""} | Trigger: {triggerType}
               </p>
             </div>
@@ -389,7 +389,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
             <Label className="text-sm font-medium">Channels (알림 채널)</Label>
             <div className="flex items-center gap-4">
               {["IN_APP", "WEBHOOK", "EMAIL"].map(ch => (
-                <label key={ch} className="flex items-center gap-1.5 text-xs">
+                <label key={ch} className="flex items-center gap-1.5 text-sm">
                   <Checkbox
                     checked={channels.includes(ch)}
                     onCheckedChange={() => toggleChannel(ch)}
@@ -401,28 +401,28 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
 
             {channels.includes("WEBHOOK") && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Webhook URL</Label>
+                <Label className="text-sm">Webhook URL</Label>
                 <Input
                   value={webhookUrl}
                   onChange={e => setWebhookUrl(e.target.value)}
                   placeholder="https://hooks.slack.com/services/..."
-                  className="h-9 text-xs"
+                  className="h-9 text-sm"
                 />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Subscribers (콤마 구분)</Label>
+              <Label className="text-sm">Subscribers (콤마 구분)</Label>
               <Textarea
                 value={subscribers}
                 onChange={e => setSubscribers(e.target.value)}
                 placeholder="security-team@company.com, dpo@company.com"
                 rows={2}
-                className="text-xs"
+                className="text-sm"
               />
             </div>
 
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={notifyOwners}
                 onCheckedChange={(v) => setNotifyOwners(!!v)}
@@ -431,13 +431,13 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
             </label>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Description (선택)</Label>
+              <Label className="text-sm">Description (선택)</Label>
               <Textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 placeholder="이 규칙의 목적을 설명하세요..."
                 rows={2}
-                className="text-xs"
+                className="text-sm"
               />
             </div>
 
