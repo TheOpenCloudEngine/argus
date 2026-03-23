@@ -18,6 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
 import { Bell, Check, Eye, X, Plus, Pencil, Trash2, Database, Tag, GitBranch, Server, Globe } from "lucide-react"
+import { toast } from "sonner"
 import { authFetch } from "@/features/auth/auth-fetch"
 import { RuleCreateDialog } from "@/features/alerts/components/rule-create-dialog"
 
@@ -313,6 +314,8 @@ function AlertsTab() {
 function RulesTab({ onAddRule, onEditRule }: { onAddRule: () => void; onEditRule: (rule: AlertRule) => void }) {
   const [rules, setRules] = useState<AlertRule[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteTargetRule, setDeleteTargetRule] = useState<AlertRule | null>(null)
 
   const fetchRules = useCallback(async () => {
     setLoading(true)
@@ -334,8 +337,20 @@ function RulesTab({ onAddRule, onEditRule }: { onAddRule: () => void; onEditRule
     fetchRules()
   }
 
-  const deleteRule = async (ruleId: number) => {
-    await authFetch(`${BASE}/rules/${ruleId}`, { method: "DELETE" })
+  const handleDeleteClick = (rule: AlertRule) => {
+    if (rule.is_active === "true") {
+      toast.error("Cannot delete an active rule. Please deactivate it first.")
+      return
+    }
+    setDeleteTargetRule(rule)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTargetRule) return
+    await authFetch(`${BASE}/rules/${deleteTargetRule.id}`, { method: "DELETE" })
+    setDeleteConfirmOpen(false)
+    setDeleteTargetRule(null)
     fetchRules()
   }
 
@@ -406,7 +421,7 @@ function RulesTab({ onAddRule, onEditRule }: { onAddRule: () => void; onEditRule
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditRule(rule)}>
                   <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteRule(rule.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick(rule)}>
                   <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
               </div>
@@ -414,6 +429,22 @@ function RulesTab({ onAddRule, onEditRule }: { onAddRule: () => void; onEditRule
           </CardContent>
         </Card>
       ))}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rule</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the rule &quot;{deleteTargetRule?.rule_name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
