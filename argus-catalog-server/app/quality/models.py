@@ -6,7 +6,7 @@ from app.core.database import Base
 
 
 class DataProfile(Base):
-    """Column-level statistics snapshot for a dataset."""
+    """Column-level statistics snapshot from source DB profiling for a dataset."""
 
     __tablename__ = "catalog_data_profile"
 
@@ -18,7 +18,7 @@ class DataProfile(Base):
 
 
 class QualityRule(Base):
-    """Quality check rule definition for a dataset."""
+    """Quality check rule definition. Supports NOT_NULL, UNIQUE, MIN/MAX_VALUE, ROW_COUNT, FRESHNESS, ACCEPTED_VALUES, REGEX for a dataset."""
 
     __tablename__ = "catalog_quality_rule"
 
@@ -36,7 +36,7 @@ class QualityRule(Base):
 
 
 class QualityResult(Base):
-    """Execution result of a quality check."""
+    """Execution result of a single quality rule evaluation."""
 
     __tablename__ = "catalog_quality_result"
 
@@ -50,7 +50,7 @@ class QualityResult(Base):
 
 
 class QualityScore(Base):
-    """Aggregated quality score for a dataset at a point in time."""
+    """Aggregated quality score for a dataset. score = passed/total * 100 for a dataset at a point in time."""
 
     __tablename__ = "catalog_quality_score"
 

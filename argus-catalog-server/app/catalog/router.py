@@ -937,7 +937,7 @@ async def upload_sample_parquet(
 
 
 # ---------------------------------------------------------------------------
-# Data Pipeline CRUD
+# Data Pipeline CRUD — ETL/CDC/file-export pipeline registry
 # ---------------------------------------------------------------------------
 
 @router.post("/pipelines", response_model=PipelineResponse, status_code=201)
@@ -985,7 +985,7 @@ async def delete_pipeline(pipeline_id: int, session: AsyncSession = Depends(get_
 
 
 # ---------------------------------------------------------------------------
-# Cross-Platform Dataset Lineage
+# Cross-Platform Dataset Lineage — explicit inter-system data flow
 # ---------------------------------------------------------------------------
 
 @router.post("/lineage", response_model=DatasetLineageResponse, status_code=201)

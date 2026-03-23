@@ -63,6 +63,7 @@ async def profile_dataset(session: AsyncSession, dataset_id: int) -> ProfileResp
     except Exception as e:
         logger.warning("Source DB profiling failed for dataset_id=%d: %s. Using schema-only.", dataset_id, e)
         # Fallback: schema-only profile (no actual data stats)
+        logger.info("Using schema-only profile for dataset_id=%d", dataset_id)
         for f in fields:
             column_profiles.append(ColumnProfile(
                 column_name=f.field_path,
@@ -237,6 +238,7 @@ async def delete_rule(session: AsyncSession, rule_id: int) -> bool:
     rule = await get_rule(session, rule_id)
     if not rule:
         return False
+    logger.info("Quality rule deleted: id=%d, name=%s", rule.id, rule.rule_name)
     await session.delete(rule)
     await session.flush()
     return True
