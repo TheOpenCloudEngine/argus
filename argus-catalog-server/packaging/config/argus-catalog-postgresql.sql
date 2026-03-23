@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS catalog_glossary_terms (
     description TEXT,
     source VARCHAR(100),
     parent_id INT REFERENCES catalog_glossary_terms(id),
+    term_type VARCHAR(20) NOT NULL DEFAULT 'TERM',
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );

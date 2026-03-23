@@ -130,6 +130,7 @@ class GlossaryTermCreate(BaseModel):
     description: str | None = None
     source: str | None = None
     parent_id: int | None = None
+    term_type: str = "TERM"  # CATEGORY or TERM
 
 
 class GlossaryTermUpdate(BaseModel):
@@ -137,6 +138,7 @@ class GlossaryTermUpdate(BaseModel):
     description: str | None = None
     source: str | None = None
     parent_id: int | None = None
+    term_type: str | None = None
 
 
 class GlossaryTermResponse(BaseModel):
@@ -145,6 +147,7 @@ class GlossaryTermResponse(BaseModel):
     description: str | None = None
     source: str | None = None
     parent_id: int | None = None
+    term_type: str = "TERM"
     created_at: datetime
     updated_at: datetime
 

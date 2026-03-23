@@ -129,24 +129,14 @@ export default function GlossaryPage() {
 
   // Selected node
   const selectedNode = selectedNodeId ? nodeMap.get(selectedNodeId) ?? null : null
-  const isCategory = selectedNode ? selectedNode.children.length > 0 : false
 
-  // Terms to show in right panel: leaf terms under selected node (or all leaves if none selected)
+  // Terms to show in right panel: TERM type under selected node (or all TERMs if none selected)
   const rightTerms = useMemo(() => {
     if (!selectedNode) {
-      // Show all leaf terms (no children)
-      return terms.filter(t => {
-        const node = nodeMap.get(t.id)
-        return node ? node.children.length === 0 : true
-      })
+      return terms.filter(t => (t.term_type ?? "TERM") === "TERM")
     }
-    // Show leaf descendants of selected node
     const allIds = new Set(collectIds(selectedNode))
-    return terms.filter(t => {
-      if (!allIds.has(t.id)) return false
-      const node = nodeMap.get(t.id)
-      return node ? node.children.length === 0 : true
-    })
+    return terms.filter(t => allIds.has(t.id) && (t.term_type ?? "TERM") === "TERM")
   }, [selectedNode, terms, nodeMap])
 
   // Unique sources
@@ -210,6 +200,7 @@ export default function GlossaryPage() {
       description: newDesc.trim() || undefined,
       source: newSource.trim() || undefined,
       parent_id: selectedNodeId ?? undefined,
+      term_type: addMode === "category" ? "CATEGORY" : "TERM",
     })
     setAddDialogOpen(false)
     await load()
@@ -259,13 +250,14 @@ export default function GlossaryPage() {
 
   const components = useMemo(() => ({ deleteRenderer: TermDeleteRenderer }), [])
 
-  // Visible tree nodes
+  // Visible tree nodes (CATEGORY only — TERMs are shown in right grid)
   const visibleNodes = useMemo(() => {
     const result: TreeNode[] = []
     const walk = (nodes: TreeNode[]) => {
       for (const n of nodes) {
+        if ((n.term_type ?? "TERM") !== "CATEGORY") continue
         result.push(n)
-        if (n.children.length > 0 && expandedIds.has(n.id)) walk(n.children)
+        if (expandedIds.has(n.id)) walk(n.children)
       }
     }
     walk(tree)
@@ -321,10 +313,7 @@ export default function GlossaryPage() {
                               Root (최상위)
                             </CommandItem>
                             {terms
-                              .filter(t => {
-                                const n = nodeMap.get(t.id)
-                                return n && n.children.length > 0 && !checkedIds.has(t.id)
-                              })
+                              .filter(t => (t.term_type ?? "TERM") === "CATEGORY" && !checkedIds.has(t.id))
                               .map(t => (
                                 <CommandItem key={t.id} onSelect={() => moveTo(t.id)}>
                                   <FolderOpen className="h-3.5 w-3.5 mr-2 text-amber-500" />
@@ -358,19 +347,20 @@ export default function GlossaryPage() {
                 <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
                 All Terms
                 <span className="ml-auto text-xs text-muted-foreground">
-                  {terms.filter(t => { const n = nodeMap.get(t.id); return n ? n.children.length === 0 : true }).length}
+                  {terms.filter(t => (t.term_type ?? "TERM") === "TERM").length}
                 </span>
               </button>
 
               {/* Tree nodes */}
               {visibleNodes.map(node => {
+                const isNodeCategory = (node.term_type ?? "TERM") === "CATEGORY"
                 const hasChildren = node.children.length > 0
                 const isExpanded = expandedIds.has(node.id)
                 const isSelected = selectedNodeId === node.id
                 const isEditing = editingNodeId === node.id
                 const leafCount = collectIds(node).filter(id => {
                   const n = nodeMap.get(id)
-                  return n ? n.children.length === 0 : false
+                  return n ? (n.term_type ?? "TERM") === "TERM" : false
                 }).length
 
                 return (
@@ -384,7 +374,7 @@ export default function GlossaryPage() {
                     {/* Expand toggle */}
                     <button
                       type="button"
-                      className={`shrink-0 p-0.5 rounded hover:bg-muted ${hasChildren ? "cursor-pointer" : "invisible"}`}
+                      className={`shrink-0 p-0.5 rounded hover:bg-muted ${isNodeCategory && hasChildren ? "cursor-pointer" : "invisible"}`}
                       onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(node.id) }}
                     >
                       <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
@@ -401,7 +391,7 @@ export default function GlossaryPage() {
                     )}
 
                     {/* Icon */}
-                    {hasChildren
+                    {isNodeCategory
                       ? <FolderOpen className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                       : <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     }
@@ -434,7 +424,7 @@ export default function GlossaryPage() {
                     )}
 
                     {/* Count */}
-                    {!isEditing && hasChildren && (
+                    {!isEditing && isNodeCategory && (
                       <span className="text-xs text-muted-foreground shrink-0">{leafCount}</span>
                     )}
 

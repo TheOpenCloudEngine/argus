@@ -14,6 +14,7 @@ export async function createGlossaryTerm(payload: {
   description?: string
   source?: string
   parent_id?: number
+  term_type?: string
 }): Promise<GlossaryTerm> {
   const res = await authFetch(`${BASE}/glossary`, {
     method: "POST",

@@ -145,6 +145,7 @@ class GlossaryTerm(Base):
     description = Column(Text)
     source = Column(String(100))
     parent_id = Column(Integer, ForeignKey("catalog_glossary_terms.id"))
+    term_type = Column(String(20), nullable=False, default="TERM")  # CATEGORY or TERM
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
