@@ -61,6 +61,12 @@
       "label": "Governance",
       "items": [
         {
+          "id": "standards",
+          "title": "Data Standards",
+          "url": "/dashboard/standards",
+          "icon": "Shield"
+        },
+        {
           "id": "glossary",
           "title": "Glossary",
           "url": "/dashboard/glossary",

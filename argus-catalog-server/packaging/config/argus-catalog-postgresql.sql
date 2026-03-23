@@ -671,6 +671,36 @@ CREATE INDEX IF NOT EXISTS idx_dataset_column_mapping_lineage ON argus_dataset_c
 -- Alert - Lineage Alert (schema change impact events)
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- Alert - Alert Rule (what to watch, when to trigger, who to notify)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_alert_rule (
+    id SERIAL PRIMARY KEY,
+    rule_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    scope_type VARCHAR(32) NOT NULL,
+    scope_id INT,
+    trigger_type VARCHAR(64) NOT NULL,
+    trigger_config TEXT DEFAULT '{}',
+    severity_override VARCHAR(16),
+    channels VARCHAR(200) NOT NULL DEFAULT 'IN_APP',
+    notify_owners VARCHAR(5) NOT NULL DEFAULT 'true',
+    webhook_url VARCHAR(500),
+    subscribers VARCHAR(2000),
+    is_active VARCHAR(5) NOT NULL DEFAULT 'true',
+    created_by VARCHAR(200),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_rule_scope ON argus_alert_rule (scope_type, scope_id);
+CREATE INDEX IF NOT EXISTS idx_alert_rule_active ON argus_alert_rule (is_active);
+
+-- ---------------------------------------------------------------------------
+-- Alert - Lineage Alert (schema change impact events)
+-- ---------------------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS argus_lineage_alert (
     id SERIAL PRIMARY KEY,
     alert_type VARCHAR(32) NOT NULL,
@@ -678,6 +708,7 @@ CREATE TABLE IF NOT EXISTS argus_lineage_alert (
     source_dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
     affected_dataset_id INT REFERENCES catalog_datasets(id) ON DELETE CASCADE,
     lineage_id INT REFERENCES argus_dataset_lineage(id) ON DELETE SET NULL,
+    rule_id INT REFERENCES argus_alert_rule(id) ON DELETE SET NULL,
     change_summary VARCHAR(500) NOT NULL,
     change_detail TEXT,
     status VARCHAR(20) NOT NULL,
@@ -689,24 +720,7 @@ CREATE TABLE IF NOT EXISTS argus_lineage_alert (
 CREATE INDEX IF NOT EXISTS idx_lineage_alert_affected ON argus_lineage_alert USING btree (affected_dataset_id);
 CREATE INDEX IF NOT EXISTS idx_lineage_alert_source ON argus_lineage_alert USING btree (source_dataset_id);
 CREATE INDEX IF NOT EXISTS idx_lineage_alert_status ON argus_lineage_alert USING btree (status);
-
--- ---------------------------------------------------------------------------
--- Alert - Subscription (who wants to be notified about what)
--- ---------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS argus_alert_subscription (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(200) NOT NULL,
-    scope_type VARCHAR(32) NOT NULL,
-    scope_id INT,
-    channels VARCHAR(200) NOT NULL,
-    severity_filter VARCHAR(16) NOT NULL,
-    is_active VARCHAR(5) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_alert_sub_scope ON argus_alert_subscription USING btree (scope_type, scope_id);
-CREATE INDEX IF NOT EXISTS idx_alert_sub_user ON argus_alert_subscription USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_alert_rule ON argus_lineage_alert USING btree (rule_id);
 
 -- ---------------------------------------------------------------------------
 -- Alert - Notification Log (delivery records)
@@ -722,6 +736,176 @@ CREATE TABLE IF NOT EXISTS argus_alert_notification (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alert_notification_alert ON argus_alert_notification USING btree (alert_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Dictionary (표준 사전)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_dictionary (
+    id SERIAL PRIMARY KEY,
+    dict_name VARCHAR(200) NOT NULL UNIQUE,
+    description TEXT,
+    version VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_date DATE,
+    expiry_date DATE,
+    created_by VARCHAR(200),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Word (표준 단어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_word (
+    id SERIAL PRIMARY KEY,
+    dictionary_id INT NOT NULL REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    word_name VARCHAR(100) NOT NULL,
+    word_english VARCHAR(100) NOT NULL,
+    word_abbr VARCHAR(50) NOT NULL,
+    description TEXT,
+    word_type VARCHAR(20) NOT NULL DEFAULT 'GENERAL',
+    is_forbidden VARCHAR(5) DEFAULT 'false',
+    synonym_group_id INT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (dictionary_id, word_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_std_word_dict ON catalog_standard_word (dictionary_id);
+CREATE INDEX IF NOT EXISTS idx_std_word_type ON catalog_standard_word (word_type);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Code Group (코드 그룹)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_code_group (
+    id SERIAL PRIMARY KEY,
+    dictionary_id INT NOT NULL REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    group_name VARCHAR(200) NOT NULL,
+    group_english VARCHAR(200),
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (dictionary_id, group_name)
+);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Code Value (코드 값)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_code_value (
+    id SERIAL PRIMARY KEY,
+    code_group_id INT NOT NULL REFERENCES catalog_code_group(id) ON DELETE CASCADE,
+    code_value VARCHAR(100) NOT NULL,
+    code_name VARCHAR(200) NOT NULL,
+    code_english VARCHAR(200),
+    description TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active VARCHAR(5) DEFAULT 'true',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (code_group_id, code_value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_code_value_group ON catalog_code_value (code_group_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Domain (표준 도메인)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_domain (
+    id SERIAL PRIMARY KEY,
+    dictionary_id INT NOT NULL REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    domain_name VARCHAR(100) NOT NULL,
+    domain_group VARCHAR(100),
+    data_type VARCHAR(50) NOT NULL,
+    data_length INT,
+    data_precision INT,
+    data_scale INT,
+    description TEXT,
+    code_group_id INT REFERENCES catalog_code_group(id) ON DELETE SET NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (dictionary_id, domain_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_std_domain_dict ON catalog_standard_domain (dictionary_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term (표준 용어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_term (
+    id SERIAL PRIMARY KEY,
+    dictionary_id INT NOT NULL REFERENCES catalog_standard_dictionary(id) ON DELETE CASCADE,
+    term_name VARCHAR(200) NOT NULL,
+    term_english VARCHAR(200) NOT NULL,
+    term_abbr VARCHAR(100) NOT NULL,
+    physical_name VARCHAR(100) NOT NULL,
+    domain_id INT REFERENCES catalog_standard_domain(id) ON DELETE SET NULL,
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(200),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (dictionary_id, term_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_std_term_dict ON catalog_standard_term (dictionary_id);
+CREATE INDEX IF NOT EXISTS idx_std_term_physical ON catalog_standard_term (physical_name);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term Words (용어 구성 단어)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_term_words (
+    id SERIAL PRIMARY KEY,
+    term_id INT NOT NULL REFERENCES catalog_standard_term(id) ON DELETE CASCADE,
+    word_id INT NOT NULL REFERENCES catalog_standard_word(id) ON DELETE CASCADE,
+    ordinal INT NOT NULL,
+    UNIQUE (term_id, word_id, ordinal)
+);
+
+CREATE INDEX IF NOT EXISTS idx_std_term_words_term ON catalog_standard_term_words (term_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Term-Column Mapping (표준 용어 ↔ 실제 컬럼 매핑)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_term_column_mapping (
+    id SERIAL PRIMARY KEY,
+    term_id INT NOT NULL REFERENCES catalog_standard_term(id) ON DELETE CASCADE,
+    dataset_id INT NOT NULL REFERENCES catalog_datasets(id) ON DELETE CASCADE,
+    schema_id INT NOT NULL REFERENCES catalog_dataset_schemas(id) ON DELETE CASCADE,
+    mapping_type VARCHAR(20) NOT NULL DEFAULT 'MATCHED',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (term_id, schema_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_term_col_mapping_term ON catalog_term_column_mapping (term_id);
+CREATE INDEX IF NOT EXISTS idx_term_col_mapping_dataset ON catalog_term_column_mapping (dataset_id);
+
+-- ---------------------------------------------------------------------------
+-- Data Standard - Change Log (변경 이력)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS catalog_standard_change_log (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(20) NOT NULL,
+    entity_id INT NOT NULL,
+    change_type VARCHAR(20) NOT NULL,
+    field_name VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    changed_by VARCHAR(200),
+    changed_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_std_change_log_entity ON catalog_standard_change_log (entity_type, entity_id);
 
 -- ---------------------------------------------------------------------------
 -- Dataset Embeddings (semantic search)

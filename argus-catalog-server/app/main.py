@@ -20,6 +20,7 @@ from app.models.store_router import router as model_store_router
 from app.oci_hub.router import router as oci_hub_router
 from app.models.uc_compat import router as uc_compat_router
 from app.search.router import router as search_router
+from app.standard.router import router as standard_router
 from app.settings.router import router as settings_router
 from app.usermgr.router import router as usermgr_router
 from app.auth.router import router as auth_router  # Added for SSO AUTH
@@ -156,6 +157,7 @@ app.include_router(oci_hub_router, prefix="/api/v1")
 app.include_router(uc_compat_router)  # /api/2.0/mlflow/unity-catalog (no extra prefix)
 app.include_router(search_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
+app.include_router(standard_router, prefix="/api/v1")
 app.include_router(usermgr_router, prefix="/api/v1")
 app.include_router(alert_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")  # Added for SSO AUTH
