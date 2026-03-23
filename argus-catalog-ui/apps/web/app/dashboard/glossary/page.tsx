@@ -240,8 +240,30 @@ export default function GlossaryPage() {
     load()
   }, [load])
 
+  // Grid selection for Move Term
+  const gridRef = useRef<AgGridReact>(null)
+  const [gridSelectedIds, setGridSelectedIds] = useState<Set<number>>(new Set())
+  const [moveTermPopoverOpen, setMoveTermPopoverOpen] = useState(false)
+
+  const onGridSelectionChanged = useCallback(() => {
+    const api = gridRef.current?.api
+    if (!api) return
+    const ids = new Set<number>()
+    api.getSelectedRows().forEach((row: { id: number }) => ids.add(row.id))
+    setGridSelectedIds(ids)
+  }, [])
+
+  const moveTermsTo = async (targetId: number | null) => {
+    for (const id of gridSelectedIds) {
+      await updateGlossaryTerm(id, { parent_id: targetId })
+    }
+    setGridSelectedIds(new Set())
+    setMoveTermPopoverOpen(false)
+    await load()
+  }
+
   const columnDefs = useMemo<ColDef[]>(() => [
-    { headerName: "#", valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1, width: 50, maxWidth: 55, editable: false, sortable: false, cellStyle: { color: "#9ca3af", textAlign: "right" } },
+    { headerCheckboxSelection: true, checkboxSelection: true, width: 45, maxWidth: 45, editable: false, sortable: false, headerName: "" },
     { headerName: "Name", field: "name", minWidth: 160, editable: true, cellStyle: { fontWeight: 500 } },
     { headerName: "Description", field: "description", flex: 1, minWidth: 250, editable: true, wrapText: true, autoHeight: true, cellStyle: { lineHeight: "1.4", whiteSpace: "normal" } },
     { headerName: "", field: "id", width: 45, maxWidth: 45, editable: false, sortable: false, cellRenderer: "deleteRenderer" },
@@ -447,9 +469,43 @@ export default function GlossaryPage() {
                 <span className="text-sm text-muted-foreground">({rightTerms.length})</span>
               </div>
               {user?.is_admin && (
-                <Button variant="outline" size="sm" onClick={addTerm}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Add Term
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={addTerm}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />Add Term
+                  </Button>
+                  {gridSelectedIds.size > 0 && (
+                    <Popover open={moveTermPopoverOpen} onOpenChange={setMoveTermPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <MoveRight className="h-3.5 w-3.5 mr-1" />Move ({gridSelectedIds.size})
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[240px] p-0" align="end">
+                        <Command>
+                          <CommandInput placeholder="Search folder..." />
+                          <CommandList>
+                            <CommandEmpty>No folders found.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem onSelect={() => moveTermsTo(null)}>
+                                <BookOpen className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Root (최상위)
+                              </CommandItem>
+                              {terms
+                                .filter(t => (t.term_type ?? "TERM") === "CATEGORY")
+                                .map(t => (
+                                  <CommandItem key={t.id} onSelect={() => moveTermsTo(t.id)}>
+                                    <FolderOpen className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                                    {t.name}
+                                  </CommandItem>
+                                ))
+                              }
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
               )}
             </div>
             <div className="ag-theme-alpine flex-1 min-h-0" style={{
@@ -457,11 +513,14 @@ export default function GlossaryPage() {
               "--ag-font-size": "14px",
             } as React.CSSProperties}>
               <AgGridReact
+                ref={gridRef}
                 columnDefs={columnDefs}
                 rowData={rightTerms}
                 defaultColDef={{ resizable: true, sortable: true, filter: false, minWidth: 50 }}
                 headerHeight={32}
                 rowHeight={30}
+                rowSelection="multiple"
+                onSelectionChanged={onGridSelectionChanged}
                 stopEditingWhenCellsLoseFocus
                 onCellValueChanged={onCellValueChanged}
                 animateRows={false}
