@@ -396,7 +396,7 @@ export default function GlossaryPage() {
                           value={editingName}
                           onChange={e => setEditingName(e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") cancelRename() }}
-                          className="h-6 text-xs px-1 flex-1"
+                          className="h-7 text-sm px-1 flex-1"
                           autoFocus
                         />
                         <button type="button" onClick={saveRename} className="text-green-600 hover:text-green-800">
