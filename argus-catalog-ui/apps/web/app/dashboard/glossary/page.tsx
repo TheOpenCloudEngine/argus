@@ -70,6 +70,79 @@ function collectIds(node: TreeNode): number[] {
 }
 
 // ---------------------------------------------------------------------------
+// Folder Tree Picker (used in Move popovers)
+// ---------------------------------------------------------------------------
+
+function FolderTreePicker({
+  terms,
+  excludeIds,
+  onSelect,
+}: {
+  terms: GlossaryTerm[]
+  excludeIds?: Set<number>
+  onSelect: (targetId: number | null) => void
+}) {
+  const categories = terms.filter(t => (t.term_type ?? "TERM") === "CATEGORY")
+  const catTree = buildTree(categories)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set(categories.map(c => c.id)))
+
+  const toggleExp = (id: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const renderNodes = (nodes: TreeNode[]): React.ReactNode => {
+    return nodes.map(node => {
+      if (excludeIds?.has(node.id)) return null
+      const hasChildren = node.children.filter(c => (c.term_type ?? "TERM") === "CATEGORY").length > 0
+      const isExp = expanded.has(node.id)
+      return (
+        <div key={node.id}>
+          <button
+            type="button"
+            onClick={() => onSelect(node.id)}
+            className="w-full text-left flex items-center gap-1.5 px-2 py-1.5 text-sm hover:bg-muted/50 rounded transition-colors"
+            style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleExp(node.id) }}
+                className="shrink-0 p-0.5"
+              >
+                <ChevronRight className={`h-3 w-3 transition-transform ${isExp ? "rotate-90" : ""}`} />
+              </button>
+            ) : (
+              <span className="w-4" />
+            )}
+            <FolderOpen className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span className="truncate">{node.name}</span>
+          </button>
+          {hasChildren && isExp && renderNodes(node.children.filter(c => (c.term_type ?? "TERM") === "CATEGORY"))}
+        </div>
+      )
+    })
+  }
+
+  return (
+    <div className="py-1 max-h-[300px] overflow-y-auto">
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className="w-full text-left flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-muted/50 rounded transition-colors"
+      >
+        <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+        Root (최상위)
+      </button>
+      {renderNodes(catTree)}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Delete renderer for AG Grid
 // ---------------------------------------------------------------------------
 const TermDeleteCtx = createContext<(id: number) => void>(() => {})
@@ -321,28 +394,12 @@ export default function GlossaryPage() {
                         <MoveRight className="h-3.5 w-3.5 mr-1" />Move
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[240px] p-0" align="end">
-                      <Command>
-                        <CommandInput placeholder="Search folder..." />
-                        <CommandList>
-                          <CommandEmpty>No folders found.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem onSelect={() => moveTo(null)}>
-                              <BookOpen className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              Root (최상위)
-                            </CommandItem>
-                            {terms
-                              .filter(t => (t.term_type ?? "TERM") === "CATEGORY" && !checkedIds.has(t.id))
-                              .map(t => (
-                                <CommandItem key={t.id} onSelect={() => moveTo(t.id)}>
-                                  <FolderOpen className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                                  {t.name}
-                                </CommandItem>
-                              ))
-                            }
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
+                    <PopoverContent className="w-[260px] p-0" align="end">
+                      <FolderTreePicker
+                        terms={terms}
+                        excludeIds={checkedIds}
+                        onSelect={(id) => { moveTo(id); setMovePopoverOpen(false) }}
+                      />
                     </PopoverContent>
                   </Popover>
                 )}
@@ -480,28 +537,11 @@ export default function GlossaryPage() {
                           <MoveRight className="h-3.5 w-3.5 mr-1" />Move ({gridSelectedIds.size})
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[240px] p-0" align="end">
-                        <Command>
-                          <CommandInput placeholder="Search folder..." />
-                          <CommandList>
-                            <CommandEmpty>No folders found.</CommandEmpty>
-                            <CommandGroup>
-                              <CommandItem onSelect={() => moveTermsTo(null)}>
-                                <BookOpen className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                Root (최상위)
-                              </CommandItem>
-                              {terms
-                                .filter(t => (t.term_type ?? "TERM") === "CATEGORY")
-                                .map(t => (
-                                  <CommandItem key={t.id} onSelect={() => moveTermsTo(t.id)}>
-                                    <FolderOpen className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                                    {t.name}
-                                  </CommandItem>
-                                ))
-                              }
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
+                      <PopoverContent className="w-[260px] p-0" align="end">
+                        <FolderTreePicker
+                          terms={terms}
+                          onSelect={(id) => { moveTermsTo(id); setMoveTermPopoverOpen(false) }}
+                        />
                       </PopoverContent>
                     </Popover>
                   )}
