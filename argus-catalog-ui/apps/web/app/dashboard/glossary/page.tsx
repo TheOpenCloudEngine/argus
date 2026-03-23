@@ -286,14 +286,7 @@ export default function GlossaryPage() {
           {/* ========== Left: Tree ========== */}
           <div className="flex flex-col w-72 min-w-[260px] min-h-0 border rounded-lg">
             <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0">
-              <span className="text-sm font-medium">
-                Classification
-                {checkedIds.size > 0 && (
-                  <span className="text-xs text-muted-foreground font-normal ml-1">
-                    ({checkedIds.size} selected)
-                  </span>
-                )}
-              </span>
+              <span className="text-sm font-medium">Classification</span>
               <div className="flex items-center gap-1">
                 {user?.is_admin && (
                   <Button variant="outline" size="sm" onClick={addCategory}>
