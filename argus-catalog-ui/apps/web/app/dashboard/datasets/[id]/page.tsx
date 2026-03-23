@@ -1396,7 +1396,6 @@ export default function DatasetDetailPage() {
                       <TableRow>
                         <TableHead>Term</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead>Source</TableHead>
                         <TableHead className="w-[60px]" />
                       </TableRow>
                     </TableHeader>
@@ -1408,9 +1407,6 @@ export default function DatasetDetailPage() {
                           </TableCell>
                           <TableCell className="text-sm max-w-[300px] truncate">
                             {term.description || "-"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {term.source || "-"}
                           </TableCell>
                           <TableCell>
                             <Button
