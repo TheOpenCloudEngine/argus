@@ -21,12 +21,27 @@ import { authFetch } from "@/features/auth/auth-fetch"
 
 const BASE = "/api/v1"
 
+type EditRule = {
+  id: number
+  rule_name: string
+  scope_type: string
+  scope_id: number | null
+  trigger_type: string
+  trigger_config: string
+  severity_override: string | null
+  channels: string
+  notify_owners: string
+  webhook_url: string | null
+  subscribers: string | null
+  description: string | null
+}
+
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: () => void
-  // 사전 설정된 scope (lineage 탭에서 진입 시)
   presetScope?: { type: string; id: number; name: string }
+  editRule?: EditRule | null
 }
 
 type Tag = { id: number; name: string; color: string }
@@ -40,7 +55,8 @@ type LineageSummary = {
   target_platform_type: string | null
 }
 
-export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }: Props) {
+export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope, editRule }: Props) {
+  const isEdit = !!editRule
   const [step, setStep] = useState(1)
 
   // Step 1
@@ -70,24 +86,40 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset on open
+  // Reset on open — populate from editRule if editing
   useEffect(() => {
     if (!open) return
     setStep(1)
-    setRuleName("")
-    setScopeType(presetScope?.type || "ALL")
-    setScopeId(presetScope?.id || null)
-    setTriggerType(presetScope?.type === "LINEAGE" ? "MAPPING_BROKEN" : "ANY")
-    setChangeTypes(["DROP", "MODIFY"])
-    setWatchColumns("")
-    setSeverityOverride("auto")
-    setChannels(["IN_APP"])
-    setWebhookUrl("")
-    setSubscribers("")
-    setNotifyOwners(true)
-    setDescription("")
     setError(null)
-  }, [open, presetScope])
+    if (editRule) {
+      setRuleName(editRule.rule_name)
+      setScopeType(editRule.scope_type)
+      setScopeId(editRule.scope_id)
+      setTriggerType(editRule.trigger_type)
+      const config = editRule.trigger_config ? JSON.parse(editRule.trigger_config) : {}
+      setChangeTypes(config.change_types || ["DROP", "MODIFY"])
+      setWatchColumns((config.columns || []).join(", "))
+      setSeverityOverride(editRule.severity_override || "auto")
+      setChannels(editRule.channels ? editRule.channels.split(",") : ["IN_APP"])
+      setWebhookUrl(editRule.webhook_url || "")
+      setSubscribers(editRule.subscribers || "")
+      setNotifyOwners(editRule.notify_owners === "true")
+      setDescription(editRule.description || "")
+    } else {
+      setRuleName("")
+      setScopeType(presetScope?.type || "ALL")
+      setScopeId(presetScope?.id || null)
+      setTriggerType(presetScope?.type === "LINEAGE" ? "MAPPING_BROKEN" : "ANY")
+      setChangeTypes(["DROP", "MODIFY"])
+      setWatchColumns("")
+      setSeverityOverride("auto")
+      setChannels(["IN_APP"])
+      setWebhookUrl("")
+      setSubscribers("")
+      setNotifyOwners(true)
+      setDescription("")
+    }
+  }, [open, presetScope, editRule])
 
   // Load lookup data
   useEffect(() => {
@@ -176,8 +208,10 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
     }
 
     try {
-      const resp = await authFetch(`${BASE}/alerts/rules`, {
-        method: "POST",
+      const url = isEdit ? `${BASE}/alerts/rules/${editRule!.id}` : `${BASE}/alerts/rules`
+      const method = isEdit ? "PUT" : "POST"
+      const resp = await authFetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
@@ -198,7 +232,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Alert Rule</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Alert Rule" : "Create Alert Rule"}</DialogTitle>
         </DialogHeader>
 
         {/* Step indicator */}
@@ -445,7 +479,7 @@ export function RuleCreateDialog({ open, onOpenChange, onCreated, presetScope }:
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Rule"}
+                {saving ? "Saving..." : isEdit ? "Update Rule" : "Save Rule"}
               </Button>
             </div>
           </div>

@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
-import { Bell, Check, Eye, X, Plus, Trash2, Database, Tag, GitBranch, Server, Globe } from "lucide-react"
+import { Bell, Check, Eye, X, Plus, Pencil, Trash2, Database, Tag, GitBranch, Server, Globe } from "lucide-react"
 import { authFetch } from "@/features/auth/auth-fetch"
 import { RuleCreateDialog } from "@/features/alerts/components/rule-create-dialog"
 
@@ -55,6 +55,7 @@ type AlertRule = {
 export default function AlertsPage() {
   const [tab, setTab] = useState("alerts")
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
+  const [editingRule, setEditingRule] = useState<AlertRule | null>(null)
 
   return (
     <>
@@ -67,7 +68,7 @@ export default function AlertsPage() {
               <TabsTrigger value="rules">Rules</TabsTrigger>
             </TabsList>
             {tab === "rules" && (
-              <Button size="sm" onClick={() => setRuleDialogOpen(true)} className="gap-1.5">
+              <Button size="sm" onClick={() => { setEditingRule(null); setRuleDialogOpen(true) }} className="gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
                 Add Rule
               </Button>
@@ -78,15 +79,16 @@ export default function AlertsPage() {
             <AlertsTab />
           </TabsContent>
           <TabsContent value="rules" className="mt-4">
-            <RulesTab onAddRule={() => setRuleDialogOpen(true)} />
+            <RulesTab onAddRule={() => setRuleDialogOpen(true)} onEditRule={(rule) => { setEditingRule(rule); setRuleDialogOpen(true) }} />
           </TabsContent>
         </Tabs>
       </div>
 
       <RuleCreateDialog
         open={ruleDialogOpen}
-        onOpenChange={setRuleDialogOpen}
+        onOpenChange={(o) => { setRuleDialogOpen(o); if (!o) setEditingRule(null) }}
         onCreated={() => setTab("rules")}
+        editRule={editingRule}
       />
     </>
   )
@@ -308,7 +310,7 @@ function AlertsTab() {
 // Rules Tab
 // ---------------------------------------------------------------------------
 
-function RulesTab({ onAddRule }: { onAddRule: () => void }) {
+function RulesTab({ onAddRule, onEditRule }: { onAddRule: () => void; onEditRule: (rule: AlertRule) => void }) {
   const [rules, setRules] = useState<AlertRule[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -401,6 +403,9 @@ function RulesTab({ onAddRule }: { onAddRule: () => void }) {
                   checked={rule.is_active === "true"}
                   onCheckedChange={() => toggleActive(rule)}
                 />
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditRule(rule)}>
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteRule(rule.id)}>
                   <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
