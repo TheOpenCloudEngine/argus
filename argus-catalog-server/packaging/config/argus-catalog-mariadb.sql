@@ -761,4 +761,14 @@ CREATE TABLE IF NOT EXISTS argus_alert_notification (
 CREATE INDEX IF NOT EXISTS idx_alert_notification_alert ON argus_alert_notification (alert_id);
 
 -- ---------------------------------------------------------------------------
+-- Seed: Source Analysis Platforms (Java / Python)
+-- ---------------------------------------------------------------------------
+
+INSERT IGNORE INTO catalog_platforms (name, logo_url, platform_id, type)
+VALUES ('java', NULL, UUID(), 'source_analysis');
+
+INSERT IGNORE INTO catalog_platforms (name, logo_url, platform_id, type)
+VALUES ('python', NULL, UUID(), 'source_analysis');
+
+-- ---------------------------------------------------------------------------
 
