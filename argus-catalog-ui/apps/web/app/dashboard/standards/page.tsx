@@ -825,7 +825,7 @@ function CodesTab({ dictId }: { dictId: number }) {
         {/* Left: Code Groups */}
         <div className="flex flex-col w-2/5 min-h-0">
           <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <span className="text-xs font-medium text-muted-foreground">Code Groups</span>
+            <span className="text-sm font-medium text-muted-foreground">Code Groups</span>
             <Button variant="outline" size="sm" onClick={addGroup}>
               <Plus className="h-3.5 w-3.5 mr-1" />Add
             </Button>
@@ -854,7 +854,7 @@ function CodesTab({ dictId }: { dictId: number }) {
         {/* Right: Code Values */}
         <div className="flex flex-col w-3/5 min-h-0">
           <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               {selectedGroup ? `${selectedGroup.group_name} — Values` : "Select a group"}
             </span>
             {selectedGroupId && (
