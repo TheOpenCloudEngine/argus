@@ -243,8 +243,7 @@ export default function GlossaryPage() {
   const columnDefs = useMemo<ColDef[]>(() => [
     { headerName: "#", valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1, width: 50, maxWidth: 55, editable: false, sortable: false, cellStyle: { color: "#9ca3af", textAlign: "right" } },
     { headerName: "Name", field: "name", minWidth: 160, editable: true, cellStyle: { fontWeight: 500 } },
-    { headerName: "Description", field: "description", flex: 1, minWidth: 200, editable: true },
-    { headerName: "Source", field: "source", width: 130, editable: true },
+    { headerName: "Description", field: "description", flex: 1, minWidth: 250, editable: true, wrapText: true, autoHeight: true, cellStyle: { lineHeight: "1.4", whiteSpace: "normal" } },
     { headerName: "", field: "id", width: 45, maxWidth: 45, editable: false, sortable: false, cellRenderer: "deleteRenderer" },
   ], [])
 
