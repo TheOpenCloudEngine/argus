@@ -40,13 +40,20 @@ function buildTree(terms: GlossaryTerm[]): TreeNode[] {
   for (const t of terms) map.set(t.id, { ...t, children: [], depth: 0 })
   for (const node of map.values()) {
     if (node.parent_id && map.has(node.parent_id)) {
-      const parent = map.get(node.parent_id)!
-      node.depth = parent.depth + 1
-      parent.children.push(node)
+      map.get(node.parent_id)!.children.push(node)
     } else {
       roots.push(node)
     }
   }
+  // Compute depth recursively after tree structure is built
+  const setDepth = (nodes: TreeNode[], d: number) => {
+    for (const n of nodes) {
+      n.depth = d
+      setDepth(n.children, d + 1)
+    }
+  }
+  setDepth(roots, 0)
+  // Sort alphabetically
   const sortNodes = (nodes: TreeNode[]) => {
     nodes.sort((a, b) => a.name.localeCompare(b.name))
     for (const n of nodes) sortNodes(n.children)
