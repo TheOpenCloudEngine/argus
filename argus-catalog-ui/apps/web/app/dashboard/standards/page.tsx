@@ -821,9 +821,6 @@ function CodesTab({ dictId }: { dictId: number }) {
     <CodeGroupDeleteCtx.Provider value={deleteGroup}>
     <CodeValueDeleteCtx.Provider value={deleteValue}>
     <div className="flex flex-col flex-1 min-h-0 h-full">
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <p className="text-sm text-muted-foreground">{groups.length} code groups</p>
-      </div>
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Left: Code Groups */}
         <div className="flex flex-col w-2/5 min-h-0">
