@@ -284,7 +284,7 @@ export default function GlossaryPage() {
         <div className="flex flex-1 gap-4 min-h-0">
 
           {/* ========== Left: Tree ========== */}
-          <div className="flex flex-col w-72 min-w-[260px] min-h-0 border rounded-lg">
+          <div className="flex flex-col w-72 min-w-[260px] min-h-0 border rounded-lg" style={{ fontFamily: "var(--font-roboto-condensed), 'Roboto Condensed', sans-serif" }}>
             <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0">
               <span className="text-sm font-medium">Classification</span>
               <div className="flex items-center gap-1">
@@ -454,6 +454,7 @@ export default function GlossaryPage() {
               )}
             </div>
             <div className="ag-theme-alpine flex-1 min-h-0" style={{
+              "--ag-font-family": "var(--font-roboto-condensed), 'Roboto Condensed', sans-serif",
               "--ag-font-size": "14px",
             } as React.CSSProperties}>
               <AgGridReact
