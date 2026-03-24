@@ -20,6 +20,7 @@ import {
   Flame,
   Globe,
   History,
+  Loader2,
   Pencil,
   Plus,
   FolderOpen,
@@ -28,6 +29,7 @@ import {
   Server,
   Settings2,
   Shield,
+  Sparkles,
   Tags,
   Trash2,
   Users,
@@ -52,6 +54,9 @@ import {
   CommandItem,
   CommandList,
 } from "@workspace/ui/components/command"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 // Textarea removed — replaced by Tiptap MarkdownEditor
@@ -104,6 +109,10 @@ import { AirflowDagTab } from "@/features/datasets/components/airflow-dag-tab"
 import { LineageTab } from "@/features/datasets/components/lineage-tab"
 import { QualityTab } from "@/features/datasets/components/quality-tab"
 import { TermsTab } from "@/features/datasets/components/terms-tab"
+import {
+  generateDescription, generateColumns, suggestTags, detectPII,
+  type DescriptionResult, type ColumnsResult,
+} from "@/features/datasets/ai-api"
 import { GitBranch, MessageSquare } from "lucide-react"
 import { CommentSection } from "@/components/comments"
 
@@ -461,6 +470,13 @@ export default function DatasetDetailPage() {
   const [descDraft, setDescDraft] = useState("")
   const [descSaving, setDescSaving] = useState(false)
 
+  // AI generation
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiDescResult, setAiDescResult] = useState<DescriptionResult | null>(null)
+  const [aiColsResult, setAiColsResult] = useState<ColumnsResult | null>(null)
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [aiDialogType, setAiDialogType] = useState<"description" | "columns" | null>(null)
+
   const load = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true)
@@ -609,6 +625,76 @@ export default function DatasetDetailPage() {
   const _unused_handleDescKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") cancelDescEdit()
     else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveDesc()
+  }
+
+  // -------------------------------------------------------------------------
+  // AI metadata generation
+  // -------------------------------------------------------------------------
+  const handleAiGenerate = async (type: "description" | "columns" | "tags" | "pii") => {
+    if (!dataset) return
+    setAiGenerating(true)
+    try {
+      if (type === "description") {
+        const result = await generateDescription(datasetId, { apply: false })
+        if (result.skipped) {
+          toast.info(result.reason || "Description already exists")
+        } else {
+          setAiDescResult(result)
+          setAiDialogType("description")
+          setAiDialogOpen(true)
+        }
+      } else if (type === "columns") {
+        const result = await generateColumns(datasetId, { apply: false })
+        if (result.skipped) {
+          toast.info(result.reason || "All columns already have descriptions")
+        } else {
+          setAiColsResult(result)
+          setAiDialogType("columns")
+          setAiDialogOpen(true)
+        }
+      } else if (type === "tags") {
+        const result = await suggestTags(datasetId, { apply: true })
+        toast.success(`Applied ${result.applied_tags.length} tag(s), created ${result.created_tags.length} new tag(s)`)
+        load(false)
+      } else if (type === "pii") {
+        const result = await detectPII(datasetId, { apply: true })
+        if (result.pii_columns.length === 0) {
+          toast.info("No PII columns detected")
+        } else {
+          toast.success(`Detected ${result.pii_columns.length} PII column(s): ${result.pii_columns.map(c => `${c.name}(${c.pii_type})`).join(", ")}`)
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI generation failed")
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  const handleAiApplyDescription = async () => {
+    if (!aiDescResult || !dataset) return
+    try {
+      const result = await generateDescription(datasetId, { apply: true, force: true })
+      setDataset({ ...dataset, description: result.description })
+      setAiDialogOpen(false)
+      setAiDescResult(null)
+      toast.success("Description applied")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Apply failed")
+    }
+  }
+
+  const handleAiApplyColumns = async () => {
+    if (!aiColsResult) return
+    try {
+      await generateColumns(datasetId, { apply: true, force: true })
+      setAiDialogOpen(false)
+      setAiColsResult(null)
+      toast.success(`Applied ${aiColsResult.total_generated} column description(s)`)
+      load(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Apply failed")
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -867,6 +953,38 @@ export default function DatasetDetailPage() {
                               </DropdownMenuItem>
                             )
                           })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* AI Generate dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" disabled={aiGenerating}>
+                          {aiGenerating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          AI Generate
+                          <ChevronDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleAiGenerate("description")}>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate Description
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("columns")}>
+                          <Columns3 className="h-4 w-4 mr-2" />
+                          Generate Column Descriptions
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("tags")}>
+                          <Tags className="h-4 w-4 mr-2" />
+                          Suggest Tags
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("pii")}>
+                          <Shield className="h-4 w-4 mr-2" />
+                          Detect PII
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </>
@@ -1507,6 +1625,80 @@ export default function DatasetDetailPage() {
         </Tabs>
 
       </div>
+
+      {/* AI Description Preview Dialog */}
+      <Dialog open={aiDialogOpen && aiDialogType === "description"} onOpenChange={(open) => { if (!open) { setAiDialogOpen(false); setAiDescResult(null) } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              AI Generated Description
+            </DialogTitle>
+          </DialogHeader>
+          {aiDescResult && (
+            <div className="space-y-4">
+              <div className="rounded-md border p-3 text-sm whitespace-pre-wrap bg-muted/50">
+                {aiDescResult.description}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span>Confidence: {(aiDescResult.confidence * 100).toFixed(0)}%</span>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setAiDialogOpen(false); setAiDescResult(null) }}>
+                  Dismiss
+                </Button>
+                <Button size="sm" onClick={handleAiApplyDescription}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Apply
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Column Descriptions Preview Dialog */}
+      <Dialog open={aiDialogOpen && aiDialogType === "columns"} onOpenChange={(open) => { if (!open) { setAiDialogOpen(false); setAiColsResult(null) } }}>
+        <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              AI Generated Column Descriptions
+            </DialogTitle>
+          </DialogHeader>
+          {aiColsResult && (
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[150px]">Column</TableHead>
+                    <TableHead>Generated Description</TableHead>
+                    <TableHead className="w-[60px] text-right">Conf.</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {aiColsResult.columns.map((col) => (
+                    <TableRow key={col.field_path}>
+                      <TableCell className="font-mono text-xs">{col.field_path}</TableCell>
+                      <TableCell className="text-sm">{col.description}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">{(col.confidence * 100).toFixed(0)}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex items-center gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setAiDialogOpen(false); setAiColsResult(null) }}>
+                  Dismiss
+                </Button>
+                <Button size="sm" onClick={handleAiApplyColumns}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Apply All ({aiColsResult.total_generated})
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </>
   )

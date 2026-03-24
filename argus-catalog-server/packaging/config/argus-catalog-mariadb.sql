@@ -303,6 +303,9 @@ CREATE TABLE IF NOT EXISTS catalog_model_versions (
     finished_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    stage VARCHAR(20) DEFAULT 'NONE',
+    stage_changed_at TIMESTAMP NULL,
+    stage_changed_by VARCHAR(200),
     created_by VARCHAR(200),
     updated_by VARCHAR(200),
     UNIQUE (model_id, version)
@@ -471,7 +474,7 @@ CREATE TABLE IF NOT EXISTS catalog_comments (
     reply_count INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_deleted VARCHAR(5) NOT NULL,
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
     category VARCHAR(20) NOT NULL DEFAULT 'general'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
