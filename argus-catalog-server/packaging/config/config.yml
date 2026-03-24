@@ -45,3 +45,9 @@ database:
     max_overflow: ${db.pool.max_overflow:10}
     recycle: ${db.pool.recycle:3600}
   echo: ${db.echo:false}
+
+external:
+  cache:
+    max_size: 1000
+    ttl_seconds: 300
+    enabled: true

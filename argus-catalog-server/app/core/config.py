@@ -90,6 +90,11 @@ class Settings:
         self.os_bucket: str = "model-artifacts"
         self.os_presigned_url_expiry: int = 3600
 
+        # External API Cache
+        self.cache_max_size: int = int(_get_nested("external", "cache", "max_size", 1000))
+        self.cache_ttl_seconds: int = int(_get_nested("external", "cache", "ttl_seconds", 300))
+        self.cache_enabled: bool = _to_bool(_get_nested("external", "cache", "enabled", True))
+
 
 def init_settings(
     yaml_path: str | None = None,
