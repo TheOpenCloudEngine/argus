@@ -52,14 +52,20 @@ class CatalogConnector(SourceConnector):
         """Fetch all datasets with schema info."""
         client = await self._get_client()
         items = []
-        offset = 0
-        limit = 100
+        page = 1
+        page_size = 100
 
         while True:
-            resp = await client.get("/catalog/datasets", params={"limit": limit, "offset": offset})
+            resp = await client.get(
+                "/catalog/datasets", params={"page": page, "page_size": page_size}
+            )
             resp.raise_for_status()
             data = resp.json()
-            datasets = data.get("datasets", data) if isinstance(data, dict) else data
+            # Support both {items:[...]} and plain list formats
+            if isinstance(data, dict):
+                datasets = data.get("items", data.get("datasets", []))
+            else:
+                datasets = data
             if not datasets:
                 break
 
@@ -107,9 +113,9 @@ class CatalogConnector(SourceConnector):
                     )
                 )
 
-            if len(datasets) < limit:
+            if len(datasets) < page_size:
                 break
-            offset += limit
+            page += 1
 
         logger.info("Fetched %d datasets from catalog", len(items))
         return items

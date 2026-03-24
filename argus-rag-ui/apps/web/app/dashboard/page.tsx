@@ -59,7 +59,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Embedding info */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+      <div className="bg-gray-50 rounded-lg p-4">
         <h2 className="text-sm font-medium text-gray-500 mb-2">Embedding Model</h2>
         <p className="text-lg font-semibold">
           {stats.embedding_model || "Not configured"}
@@ -129,7 +129,7 @@ function StatCard({
   value: string | number;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border p-4">
+    <div className="bg-white rounded-lg border p-4">
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <span className="text-sm text-gray-500">{label}</span>

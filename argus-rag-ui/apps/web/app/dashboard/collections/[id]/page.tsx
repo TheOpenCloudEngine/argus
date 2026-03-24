@@ -200,7 +200,7 @@ export default function CollectionDetailPage() {
 
 function MiniStat({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string | number }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800 rounded p-3">
+    <div className="bg-gray-50 rounded p-3">
       <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">{icon}{label}</div>
       <div className="font-semibold text-sm truncate">{value}</div>
     </div>

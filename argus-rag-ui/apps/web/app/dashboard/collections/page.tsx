@@ -75,7 +75,7 @@ export default function CollectionsPage() {
 
       {/* Create dialog */}
       {showCreate && (
-        <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800 space-y-3">
+        <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
           <input
             placeholder="Collection name"
             value={newName}
@@ -120,7 +120,7 @@ export default function CollectionsPage() {
         </thead>
         <tbody>
           {collections.map((c) => (
-            <tr key={c.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+            <tr key={c.id} className="border-b hover:bg-gray-50">
               <td className="py-2">
                 <Link
                   href={`/dashboard/collections/${c.id}`}

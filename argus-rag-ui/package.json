@@ -16,5 +16,8 @@
   "packageManager": "pnpm@9.0.6",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "tailwindcss": "^4.2.2"
   }
 }

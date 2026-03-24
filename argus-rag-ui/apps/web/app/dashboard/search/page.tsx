@@ -134,7 +134,7 @@ export default function SearchPlaygroundPage() {
                 <span className="font-mono">{hit.similarity.toFixed(4)}</span>
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap line-clamp-3">
+            <p className="text-sm text-gray-600 whitespace-pre-wrap line-clamp-3">
               {hit.chunk_text}
             </p>
           </div>
