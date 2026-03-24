@@ -4,6 +4,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { OciModelRegistrySettings } from "@/features/settings/oci-model-registry-settings"
 import { EmbeddingSettings } from "@/features/settings/embedding-settings"
+import { LLMSettings } from "@/features/settings/llm-settings"
 import { AuthSettings } from "@/features/settings/auth-settings"
 import { CorsSettings } from "@/features/settings/cors-settings"
 
@@ -18,6 +19,7 @@ export default function SettingsPage() {
             <TabsTrigger value="cors">CORS</TabsTrigger>
             <TabsTrigger value="oci-model-registry">OCI Model Registry</TabsTrigger>
             <TabsTrigger value="embedding">Embedding</TabsTrigger>
+            <TabsTrigger value="llm">LLM / AI</TabsTrigger>
           </TabsList>
           <TabsContent value="auth" className="mt-4">
             <AuthSettings />
@@ -30,6 +32,9 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="embedding" className="mt-4">
             <EmbeddingSettings />
+          </TabsContent>
+          <TabsContent value="llm" className="mt-4">
+            <LLMSettings />
           </TabsContent>
         </Tabs>
       </div>

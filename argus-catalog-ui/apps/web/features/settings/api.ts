@@ -235,3 +235,93 @@ export async function updateCorsConfig(config: CorsConfig): Promise<void> {
   if (!res.ok) throw new Error(`Failed to update CORS config: ${res.status}`)
 }
 
+
+// ---------------------------------------------------------------------------
+// LLM (AI metadata generation) configuration
+// ---------------------------------------------------------------------------
+
+export type LLMConfig = {
+  enabled: boolean
+  provider: string
+  model: string
+  api_key: string
+  api_url: string
+  temperature: number
+  max_tokens: number
+  auto_generate_on_sync: boolean
+  language: string
+}
+
+export async function fetchLLMConfig(): Promise<LLMConfig> {
+  const res = await authFetch(`${BASE}/llm`)
+  if (!res.ok) throw new Error(`Failed to fetch LLM config: ${res.status}`)
+  return res.json()
+}
+
+export async function updateLLMConfig(config: LLMConfig): Promise<void> {
+  const res = await authFetch(`${BASE}/llm`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Failed to update LLM config: ${res.status}`)
+}
+
+export async function testLLM(
+  config: LLMConfig,
+): Promise<{ success: boolean; message: string }> {
+  const res = await authFetch(`${BASE}/llm/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`Test failed: ${res.status}`)
+  return res.json()
+}
+
+export type AIStats = {
+  total_generations: number
+  applied_count: number
+  pending_count: number
+  total_prompt_tokens: number
+  total_completion_tokens: number
+  description_coverage: {
+    total_datasets: number
+    described_datasets: number
+    coverage_pct: number
+  }
+  by_type: Record<string, number>
+  provider: string | null
+  model: string | null
+}
+
+export async function fetchAIStats(): Promise<AIStats> {
+  const res = await authFetch("/api/v1/ai/stats")
+  if (!res.ok) throw new Error(`Failed to fetch AI stats: ${res.status}`)
+  return res.json()
+}
+
+export type BulkGenerateRequest = {
+  generation_types: string[]
+  apply: boolean
+  language?: string
+  platform_id?: number
+  empty_only: boolean
+}
+
+export type BulkGenerateResult = {
+  total: number
+  processed: number
+  errors: number
+}
+
+export async function bulkGenerate(req: BulkGenerateRequest): Promise<BulkGenerateResult> {
+  const res = await authFetch("/api/v1/ai/bulk-generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) throw new Error(`Bulk generate failed: ${res.status}`)
+  return res.json()
+}
+

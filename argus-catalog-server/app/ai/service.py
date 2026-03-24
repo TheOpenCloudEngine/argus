@@ -108,13 +108,50 @@ async def _get_llm_config(session: AsyncSession) -> dict[str, str]:
     return await get_config_by_category(session, "llm")
 
 
+def _load_sample_data(
+    platform_name: str, dataset_name: str, max_rows: int = 5,
+) -> tuple[list[dict] | None, dict[str, list] | None]:
+    """Load sample data from Parquet file on disk.
+
+    Returns (sample_rows, sample_values) or (None, None) if not available.
+    """
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    parquet_path = (
+        Path(settings.data_dir) / "samples" / platform_name / dataset_name / "sample.parquet"
+    )
+    if not parquet_path.exists():
+        return None, None
+
+    try:
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(str(parquet_path))
+        df = table.to_pandas().head(max_rows)
+
+        rows = []
+        for _, row in df.iterrows():
+            rows.append({col: str(val) for col, val in row.items()})
+
+        values: dict[str, list] = {}
+        for col in df.columns:
+            values[col] = [str(v) for v in df[col].tolist()]
+
+        return rows, values
+    except Exception:
+        return None, None
+
+
 async def _get_dataset_context(session: AsyncSession, dataset_id: int) -> dict | None:
-    """Load dataset + platform + schema for prompt building."""
+    """Load dataset + platform + schema + sample data for prompt building."""
     result = await session.execute(
         select(
             Dataset.id, Dataset.name, Dataset.description, Dataset.qualified_name,
             Dataset.platform_properties,
             Platform.type.label("platform_type"), Platform.name.label("platform_name"),
+            Platform.platform_id.label("platform_id_str"),
         )
         .join(Platform, Dataset.platform_id == Platform.id)
         .where(Dataset.id == dataset_id)
@@ -159,6 +196,11 @@ async def _get_dataset_context(session: AsyncSession, dataset_id: int) -> dict |
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Load sample data from Parquet file
+    sample_rows, sample_values = _load_sample_data(
+        row.platform_id_str, row.name,
+    )
+
     return {
         "dataset_id": row.id,
         "name": row.name,
@@ -170,6 +212,8 @@ async def _get_dataset_context(session: AsyncSession, dataset_id: int) -> dict |
         "columns": columns,
         "ddl": props.get("ddl"),
         "row_count": props.get("estimated_rows"),
+        "sample_rows": sample_rows,
+        "sample_values": sample_values,
     }
 
 
@@ -241,6 +285,7 @@ async def generate_dataset_description(
         platform_type=ctx["platform_type"],
         columns=ctx["columns"],
         ddl=ctx["ddl"],
+        sample_rows=ctx.get("sample_rows"),
         row_count=ctx["row_count"],
         language=lang,
     )
@@ -334,6 +379,7 @@ async def generate_column_descriptions(
         database=ctx["database"],
         table_description=ctx["description"],
         columns=target_columns,
+        sample_values=ctx.get("sample_values"),
         language=lang,
     )
 
@@ -536,6 +582,7 @@ async def detect_pii(
         table_name=ctx["table_name"],
         database=ctx["database"],
         columns=ctx["columns"],
+        sample_values=ctx.get("sample_values"),
     )
 
     llm_result = await _call_llm(prompt, max_tokens=int(cfg.get("llm_max_tokens", "1024")))
