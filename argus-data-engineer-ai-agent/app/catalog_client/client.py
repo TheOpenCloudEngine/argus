@@ -209,6 +209,18 @@ class CatalogClient:
             json={"dictionary_id": dictionary_id, "dataset_id": dataset_id},
         )
 
+    async def analyze_impala_query_profile(self, query_id: str) -> dict:
+        """Fetch and analyze an Impala query profile for bottlenecks."""
+        return await self.post(f"/impala/queries/{query_id}/analyze")
+
+    async def analyze_impala_profile_text(self, profile_text: str) -> dict:
+        """Analyze a raw Impala profile text for bottlenecks."""
+        return await self.post("/impala/profile/analyze", json={"profile_text": profile_text})
+
+    async def get_impala_query_profile(self, query_id: str) -> dict:
+        """Fetch the raw runtime profile for an Impala query."""
+        return await self.get(f"/impala/queries/{query_id}/profile")
+
     async def get_catalog_stats(self) -> dict:
         """Get catalog dashboard statistics."""
         return await self.get("/catalog/stats")

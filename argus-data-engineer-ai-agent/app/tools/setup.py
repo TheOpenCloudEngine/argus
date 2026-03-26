@@ -57,6 +57,17 @@ def create_tool_registry(catalog: CatalogClient) -> ToolRegistry:
     registry.register(GetDatasetTermMappingTool(catalog))
     registry.register(AutoMapDatasetTool(catalog))
 
+    # --- Analysis tools ---
+    from app.tools.analysis.impala_profile import (
+        AnalyzeImpalaProfileTextTool,
+        AnalyzeImpalaQueryProfileTool,
+        GetImpalaQueryProfileTool,
+    )
+
+    registry.register(AnalyzeImpalaQueryProfileTool(catalog))
+    registry.register(AnalyzeImpalaProfileTextTool(catalog))
+    registry.register(GetImpalaQueryProfileTool(catalog))
+
     # --- Code generation tools ---
     from app.tools.codegen.ddl import GenerateDDLTool
     from app.tools.codegen.pipeline_config import GeneratePipelineConfigTool
