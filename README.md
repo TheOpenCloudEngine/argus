@@ -175,4 +175,5 @@ Workspace 생성
 * Park Jun Hong - Docker Image
 * Park Jae Soo - Docker Image
 * Choi Gyeong Min - Data Gathering (Semiconductor)
+* Kim Gyun Tae - Data Engineering
 * Kim Byoung Gon - PM / UI
