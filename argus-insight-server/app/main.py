@@ -28,7 +28,8 @@ from app.security.router import router as security_router
 from app.servermgr.router import router as servermgr_router
 from app.unity_catalog.router import router as unity_catalog_router
 from app.usermgr.router import router as usermgr_router
-from app.apps.vscode.router import router as vscode_router
+from app.apps.registry_router import router as app_registry_router
+from app.apps.instance_router import router as app_instance_router
 from workspace_provisioner.router import router as workspace_router
 from workspace_provisioner.router import init_gitlab_client
 
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI):
     import app.notes.models  # noqa: F401
     import app.objectfilemgr.models  # noqa: F401
     import app.usermgr.models  # noqa: F401
-    import app.apps.vscode.models  # noqa: F401
+    import app.apps.models  # noqa: F401
     import workspace_provisioner.models  # noqa: F401
     import workspace_provisioner.workflow.models  # noqa: F401
 
@@ -95,6 +96,11 @@ async def lifespan(app: FastAPI):
     # Seed default admin user in local auth mode
     async with async_session() as session:
         await seed_admin_user(session)
+
+    # Seed default apps
+    from app.apps.service import seed_apps
+    async with async_session() as session:
+        await seed_apps(session)
 
     # Initialize GitLab client for workspace provisioner
     if settings.gitlab_url and settings.gitlab_token:
@@ -139,7 +145,8 @@ app.include_router(notes_router, prefix="/api/v1")
 app.include_router(objectfilemgr_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")
 app.include_router(unity_catalog_router, prefix="/api/v1")
-app.include_router(vscode_router, prefix="/api/v1")
+app.include_router(app_registry_router, prefix="/api/v1")
+app.include_router(app_instance_router, prefix="/api/v1")
 app.include_router(workspace_router, prefix="/api/v1")
 
 

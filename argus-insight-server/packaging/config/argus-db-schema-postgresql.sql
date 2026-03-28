@@ -342,6 +342,58 @@ COMMENT ON COLUMN argus_notebook_page_versions.title IS 'Page title at this vers
 COMMENT ON COLUMN argus_notebook_page_versions.content IS 'Full markdown content snapshot';
 COMMENT ON COLUMN argus_notebook_page_versions.change_summary IS 'Optional description of what changed';
 
+-- ---------------------------------------------------------------------------
+-- App platform tables
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_apps (
+    id                SERIAL          PRIMARY KEY,
+    app_type          VARCHAR(50)     NOT NULL UNIQUE,
+    display_name      VARCHAR(100)    NOT NULL,
+    description       VARCHAR(500),
+    icon              VARCHAR(50),
+    template_dir      VARCHAR(100)    NOT NULL,
+    default_namespace VARCHAR(255)    NOT NULL DEFAULT 'argus-apps',
+    hostname_pattern  VARCHAR(255)    NOT NULL DEFAULT 'argus-{app_type}-{username}.argus-insight.{domain}',
+    enabled           BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_apps IS 'App catalog — registered deployable app types';
+COMMENT ON COLUMN argus_apps.app_type IS 'Unique app identifier (e.g. vscode, jupyter)';
+COMMENT ON COLUMN argus_apps.template_dir IS 'K8s manifest template directory name';
+COMMENT ON COLUMN argus_apps.hostname_pattern IS 'Hostname pattern with {app_type}, {username}, {domain} placeholders';
+
+CREATE TABLE IF NOT EXISTS argus_app_instances (
+    id                SERIAL          PRIMARY KEY,
+    instance_id       VARCHAR(8)      NOT NULL UNIQUE,
+    app_id            INTEGER         NOT NULL REFERENCES argus_apps(id),
+    user_id           INTEGER         NOT NULL REFERENCES argus_users(id),
+    username          VARCHAR(100)    NOT NULL,
+    app_type          VARCHAR(50)     NOT NULL,
+    domain            VARCHAR(255)    NOT NULL,
+    k8s_namespace     VARCHAR(255)    NOT NULL,
+    hostname          VARCHAR(500)    NOT NULL,
+    status            VARCHAR(20)     NOT NULL DEFAULT 'deploying',
+    config            TEXT,
+    deploy_steps      TEXT,
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE argus_app_instances IS 'Running instances of apps (one user can have multiple)';
+COMMENT ON COLUMN argus_app_instances.instance_id IS 'Unique 8-char hex ID (UUID4 prefix) used in hostname and K8s resource names';
+COMMENT ON COLUMN argus_app_instances.app_type IS 'Denormalized app type for query convenience';
+COMMENT ON COLUMN argus_app_instances.status IS 'deploying | running | failed | deleting | deleted';
+COMMENT ON COLUMN argus_app_instances.config IS 'App-specific configuration as JSON';
+COMMENT ON COLUMN argus_app_instances.deploy_steps IS 'Deployment step progress as JSON array';
+
+-- Seed default apps
+INSERT INTO argus_apps (app_type, display_name, description, icon, template_dir, default_namespace, hostname_pattern) VALUES
+('vscode', 'VS Code Server', 'Browser-based VS Code with S3 workspace storage', 'Code', 'vscode', 'argus-apps', 'argus-{app_type}-{instance_id}.{domain}')
+ON CONFLICT (app_type) DO NOTHING;
+
 -- Seed default roles
 INSERT INTO argus_roles (role_id, name, description) VALUES ('argus-admin', 'Admin', 'Administrator with full access') ON CONFLICT (role_id) DO NOTHING;
 INSERT INTO argus_roles (role_id, name, description) VALUES ('argus-superuser', 'Superuser', 'Super user with elevated access') ON CONFLICT (role_id) DO NOTHING;

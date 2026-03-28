@@ -263,6 +263,49 @@ CREATE TABLE IF NOT EXISTS argus_notebook_page_versions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Version history snapshots for notebook pages';
 
+-- ---------------------------------------------------------------------------
+-- App platform tables
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS argus_apps (
+    id                INT             AUTO_INCREMENT PRIMARY KEY,
+    app_type          VARCHAR(50)     NOT NULL UNIQUE           COMMENT 'Unique app identifier (e.g. vscode)',
+    display_name      VARCHAR(100)    NOT NULL                  COMMENT 'Display name',
+    description       VARCHAR(500)                              COMMENT 'Description',
+    icon              VARCHAR(50)                               COMMENT 'Lucide icon name',
+    template_dir      VARCHAR(100)    NOT NULL                  COMMENT 'K8s template directory name',
+    default_namespace VARCHAR(255)    NOT NULL DEFAULT 'argus-apps' COMMENT 'Default K8s namespace',
+    hostname_pattern  VARCHAR(255)    NOT NULL DEFAULT 'argus-{app_type}-{username}.argus-insight.{domain}' COMMENT 'Hostname pattern',
+    enabled           BOOLEAN         NOT NULL DEFAULT TRUE     COMMENT 'Whether the app is enabled',
+    created_at        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='App catalog - registered deployable app types';
+
+CREATE TABLE IF NOT EXISTS argus_app_instances (
+    id                INT             AUTO_INCREMENT PRIMARY KEY,
+    instance_id       VARCHAR(8)      NOT NULL UNIQUE           COMMENT 'Unique 8-char hex ID for hostname and K8s resources',
+    app_id            INT             NOT NULL                  COMMENT 'FK to argus_apps',
+    user_id           INT             NOT NULL                  COMMENT 'FK to argus_users',
+    username          VARCHAR(100)    NOT NULL,
+    app_type          VARCHAR(50)     NOT NULL                  COMMENT 'Denormalized app type',
+    domain            VARCHAR(255)    NOT NULL,
+    k8s_namespace     VARCHAR(255)    NOT NULL,
+    hostname          VARCHAR(500)    NOT NULL,
+    status            VARCHAR(20)     NOT NULL DEFAULT 'deploying' COMMENT 'deploying|running|failed|deleting|deleted',
+    config            TEXT                                      COMMENT 'App-specific config as JSON',
+    deploy_steps      TEXT                                      COMMENT 'Deployment step progress as JSON array',
+    created_at        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_instance_app FOREIGN KEY (app_id) REFERENCES argus_apps(id),
+    CONSTRAINT fk_instance_user FOREIGN KEY (user_id) REFERENCES argus_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Running instances of apps (one user can have multiple)';
+
+-- Seed default apps
+INSERT IGNORE INTO argus_apps (app_type, display_name, description, icon, template_dir, default_namespace, hostname_pattern) VALUES
+('vscode', 'VS Code Server', 'Browser-based VS Code with S3 workspace storage', 'Code', 'vscode', 'argus-apps', 'argus-{app_type}-{instance_id}.{domain}');
+
 -- Seed default roles
 INSERT IGNORE INTO argus_roles (role_id, name, description) VALUES ('argus-admin', 'Admin', 'Administrator with full access');
 INSERT IGNORE INTO argus_roles (role_id, name, description) VALUES ('argus-superuser', 'Superuser', 'Super user with elevated access');
