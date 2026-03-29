@@ -38,7 +38,6 @@ from workspace_provisioner.schemas import (
     WorkspaceMemberResponse,
     WorkspacePipelineResponse,
     WorkspaceResponse,
-    WorkflowExecutionResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,13 +143,38 @@ def _verify_ws_token(token: str, workspace_name: str) -> dict | None:
 async def workspace_auth_verify(
     request: Request,
     workspace: str = Query(""),
+    service_id: str = Query(""),
     argus_ws_token: str | None = Cookie(None),
     x_original_url: str | None = Header(None),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Nginx Ingress auth-url subrequest endpoint for workspace services."""
+    """Nginx Ingress auth-url subrequest endpoint for workspace services.
+
+    Supports both workspace name and service_id based lookups.
+    With service_id hostnames, the service_id is extracted from the hostname
+    and mapped to the workspace name via argus_workspace_services.
+    """
     if not argus_ws_token:
         return Response(status_code=401)
+
     ws_name = workspace
+
+    # If no workspace name, try to resolve from service_id
+    if not ws_name and service_id:
+        from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceService
+        svc_result = await session.execute(
+            select(ArgusWorkspaceService).where(
+                ArgusWorkspaceService.service_id == service_id
+            )
+        )
+        svc = svc_result.scalars().first()
+        if svc:
+            ws_result = await session.execute(
+                select(ArgusWorkspace.name).where(ArgusWorkspace.id == svc.workspace_id)
+            )
+            ws_name = ws_result.scalar() or ""
+
+    # Fallback: extract from X-Original-URL hostname
     if not ws_name and x_original_url:
         parsed = urlparse(x_original_url)
         host = parsed.hostname or ""
@@ -158,7 +182,23 @@ async def workspace_auth_verify(
         if parts:
             prefix_parts = parts[0].split("-")
             if len(prefix_parts) >= 3:
-                ws_name = "-".join(prefix_parts[2:])
+                # Try service_id lookup from hostname (e.g., argus-mlflow-67e8a400a3f1)
+                potential_sid = prefix_parts[-1]
+                from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceService
+                svc_result = await session.execute(
+                    select(ArgusWorkspaceService).where(
+                        ArgusWorkspaceService.service_id == potential_sid
+                    )
+                )
+                svc = svc_result.scalars().first()
+                if svc:
+                    ws_result = await session.execute(
+                        select(ArgusWorkspace.name).where(
+                            ArgusWorkspace.id == svc.workspace_id
+                        )
+                    )
+                    ws_name = ws_result.scalar() or ""
+
     if not ws_name:
         return Response(status_code=401)
     payload = _verify_ws_token(argus_ws_token, ws_name)
@@ -424,7 +464,8 @@ async def get_workspace_services(
     return [
         WorkspaceServiceResponse(
             id=s.id, workspace_id=s.workspace_id,
-            plugin_name=s.plugin_name, display_name=s.display_name,
+            plugin_name=s.plugin_name, service_id=s.service_id,
+            display_name=s.display_name,
             version=s.version, endpoint=s.endpoint,
             username=s.username, password=s.password,
             access_token=s.access_token, status=s.status,
@@ -432,6 +473,29 @@ async def get_workspace_services(
             created_at=s.created_at, updated_at=s.updated_at,
         ) for s in services
     ]
+
+
+@router.delete("/workspaces/{workspace_id}/services/{service_id}")
+async def delete_workspace_service(
+    workspace_id: int,
+    service_id: int,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete a workspace service: teardown K8s resources, DNS, DB record, audit log."""
+    try:
+        await service.delete_workspace_service_with_teardown(
+            session=session,
+            workspace_id=workspace_id,
+            service_db_id=service_id,
+            actor_user_id=int(current_user.sub),
+            actor_username=current_user.username,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -696,28 +760,6 @@ async def remove_member(
 
     logger.info("DELETE /workspaces/%d/members/%d - removed (with GitLab)", workspace_id, member_id)
     return {"status": "ok", "message": "Member removed"}
-
-
-# ---------------------------------------------------------------------------
-# Workflow status endpoints
-# ---------------------------------------------------------------------------
-
-@router.get(
-    "/workspaces/{workspace_id}/workflow",
-    response_model=list[WorkflowExecutionResponse],
-)
-async def get_workflow_status(
-    workspace_id: int,
-    session: AsyncSession = Depends(get_session),
-):
-    """Get provisioning workflow execution status for a workspace.
-
-    Returns all workflow executions (most recent first) with detailed
-    step-by-step status. Use this to monitor provisioning progress
-    after creating a workspace.
-    """
-    logger.info("GET /workspaces/%d/workflow", workspace_id)
-    return await service.get_workflow_status(session, workspace_id)
 
 
 # ---------------------------------------------------------------------------

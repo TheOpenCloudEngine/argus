@@ -186,6 +186,47 @@ class KServeConfig(BaseModel):
     )
 
 
+class JupyterLabConfig(BaseModel):
+    """JupyterLab deployment settings."""
+
+    image: str = Field(
+        default="quay.io/jupyter/scipy-notebook:2025-03-17",
+        description="JupyterLab container image",
+    )
+    cpu_request: str = Field(default="500m", description="CPU request")
+    cpu_limit: str = Field(default="2", description="CPU limit")
+    memory_request: str = Field(default="1Gi", description="Memory request")
+    memory_limit: str = Field(default="4Gi", description="Memory limit")
+    workspace_path: str = Field(default="/workspace", description="Workspace S3 bucket mount path")
+    user_data_path: str = Field(default="/data", description="Personal S3 bucket mount path")
+    default_kernel: str = Field(default="python3", description="Default Jupyter kernel")
+    pip_index_url: str = Field(default="https://pypi.org/simple", description="Python pip index URL")
+    install_packages: list[str] = Field(default_factory=list, description="Additional pip packages to install on startup")
+    s3fs_image: str = Field(default="efrecon/s3fs:1.94", description="s3fs FUSE mount sidecar image")
+
+
+class JupyterTensorFlowConfig(JupyterLabConfig):
+    """JupyterLab TensorFlow deployment settings."""
+
+    image: str = Field(
+        default="quay.io/jupyter/tensorflow-notebook:2025-03-17",
+        description="JupyterLab TensorFlow container image",
+    )
+    memory_request: str = Field(default="2Gi", description="Memory request")
+    memory_limit: str = Field(default="8Gi", description="Memory limit")
+
+
+class JupyterPySparkConfig(JupyterLabConfig):
+    """JupyterLab PySpark deployment settings."""
+
+    image: str = Field(
+        default="quay.io/jupyter/pyspark-notebook:2025-03-17",
+        description="JupyterLab PySpark container image",
+    )
+    memory_request: str = Field(default="2Gi", description="Memory request")
+    memory_limit: str = Field(default="8Gi", description="Memory limit")
+
+
 class MinioWorkspaceConfig(BaseModel):
     """MinIO Workspace Bucket settings."""
 

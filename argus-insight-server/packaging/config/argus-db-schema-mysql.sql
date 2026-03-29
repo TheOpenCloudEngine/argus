@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     id              INT             AUTO_INCREMENT PRIMARY KEY,
     workspace_id    INT             NOT NULL,
     plugin_name     VARCHAR(100)    NOT NULL,
+    service_id      VARCHAR(20)     COMMENT 'Unique service ID used in external hostname',
     display_name    VARCHAR(255),
     version         VARCHAR(50),
     endpoint        VARCHAR(500),
@@ -351,11 +352,10 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     metadata        JSON,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_ws_service (workspace_id, plugin_name),
     KEY idx_ws_services_workspace (workspace_id),
     CONSTRAINT fk_ws_service_workspace FOREIGN KEY (workspace_id) REFERENCES argus_workspaces(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Service instances deployed to a workspace (one per plugin)';
+  COMMENT='Service instances deployed to a workspace (multi-instance for vscode/jupyter)';
 
 -- Workspace audit log
 CREATE TABLE IF NOT EXISTS argus_workspace_audit_logs (

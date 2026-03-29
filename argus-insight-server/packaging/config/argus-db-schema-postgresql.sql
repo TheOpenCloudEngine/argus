@@ -433,6 +433,7 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     id              SERIAL          PRIMARY KEY,
     workspace_id    INTEGER         NOT NULL REFERENCES argus_workspaces(id) ON DELETE CASCADE,
     plugin_name     VARCHAR(100)    NOT NULL,
+    service_id      VARCHAR(20),
     display_name    VARCHAR(255),
     version         VARCHAR(50),
     endpoint        VARCHAR(500),
@@ -442,11 +443,10 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     status          VARCHAR(20)     NOT NULL DEFAULT 'running',
     metadata        JSON,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    UNIQUE(workspace_id, plugin_name)
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE argus_workspace_services IS 'Service instances deployed to a workspace (one per plugin)';
+COMMENT ON TABLE argus_workspace_services IS 'Service instances deployed to a workspace (multi-instance for vscode/jupyter)';
 CREATE INDEX IF NOT EXISTS idx_ws_services_workspace ON argus_workspace_services(workspace_id);
 
 -- Workspace audit log

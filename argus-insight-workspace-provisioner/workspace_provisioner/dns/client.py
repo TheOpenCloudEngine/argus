@@ -23,6 +23,25 @@ async def get_pdns_settings(session) -> dict[str, str]:
     return cfg
 
 
+async def _find_zone(pdns_ip: str, pdns_port: str, pdns_api_key: str, hostname: str) -> str | None:
+    """Find the most specific zone that matches a hostname by querying PowerDNS."""
+    fqdn = hostname if hostname.endswith(".") else f"{hostname}."
+    base_url = f"http://{pdns_ip}:{pdns_port}/api/v1/servers/localhost"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{base_url}/zones", headers={"X-API-Key": pdns_api_key})
+        if resp.status_code != 200:
+            return None
+        zones = [z["name"] for z in resp.json()]
+        # Find the most specific (longest) zone that is a suffix of the fqdn
+        matching = [z for z in zones if fqdn.endswith(f".{z}") or fqdn == z]
+        if matching:
+            return max(matching, key=len)
+    except Exception:
+        logger.debug("Failed to query zones for zone matching", exc_info=True)
+    return None
+
+
 async def register_dns(
     pdns_ip: str,
     pdns_port: str,
@@ -32,8 +51,11 @@ async def register_dns(
     target_ip: str,
 ) -> None:
     """Register an A record in PowerDNS."""
-    zone = domain_name if domain_name.endswith(".") else f"{domain_name}."
     fqdn = hostname if hostname.endswith(".") else f"{hostname}."
+    # Find the best matching zone for this hostname
+    zone = await _find_zone(pdns_ip, pdns_port, pdns_api_key, fqdn)
+    if not zone:
+        zone = domain_name if domain_name.endswith(".") else f"{domain_name}."
     base_url = f"http://{pdns_ip}:{pdns_port}/api/v1/servers/localhost"
     url = f"{base_url}/zones/{zone}"
 
@@ -63,8 +85,10 @@ async def delete_dns(
     hostname: str,
 ) -> None:
     """Remove an A record from PowerDNS."""
-    zone = domain_name if domain_name.endswith(".") else f"{domain_name}."
     fqdn = hostname if hostname.endswith(".") else f"{hostname}."
+    zone = await _find_zone(pdns_ip, pdns_port, pdns_api_key, fqdn)
+    if not zone:
+        zone = domain_name if domain_name.endswith(".") else f"{domain_name}."
     base_url = f"http://{pdns_ip}:{pdns_port}/api/v1/servers/localhost"
     url = f"{base_url}/zones/{zone}"
 

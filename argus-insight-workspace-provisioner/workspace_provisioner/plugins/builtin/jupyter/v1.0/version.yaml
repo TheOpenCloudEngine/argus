@@ -1,0 +1,15 @@
+version: "1.0"
+display_name: "v1.0 (scipy-notebook + dual S3)"
+description: JupyterLab with scipy stack and dual S3 bucket mount (workspace + personal)
+status: stable
+release_date: "2026-03-29"
+step_class: workspace_provisioner.workflow.steps.jupyter_deploy.JupyterLabDeployStep
+config_class: workspace_provisioner.config.JupyterLabConfig
+template_dir: jupyter
+changelog: |
+  - Initial version
+  - jupyter/scipy-notebook with numpy, pandas, scipy, matplotlib
+  - Token-free access (--NotebookApp.token='')
+  - Dual S3 mount: /workspace (shared) + /data (personal)
+  - Nginx Ingress with workspace auth support
+upgradeable_from: []
