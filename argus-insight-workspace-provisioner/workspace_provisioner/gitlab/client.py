@@ -313,6 +313,25 @@ class GitLabClient:
             else:
                 raise
 
+    async def remove_project_member(
+        self,
+        project_id: int,
+        user_id: int,
+    ) -> None:
+        """Remove a user from a project.
+
+        Args:
+            project_id: GitLab project ID.
+            user_id: GitLab user ID to remove.
+        """
+        project = await self._run_sync(self._gl.projects.get, project_id)
+        try:
+            member = await self._run_sync(project.members.get, user_id)
+            await self._run_sync(member.delete)
+            logger.info("Removed user %d from project %d", user_id, project_id)
+        except Exception as e:
+            logger.warning("Failed to remove user %d from project %d: %s", user_id, project_id, e)
+
     async def create_project_access_token(
         self,
         project_id: int,

@@ -42,7 +42,14 @@ from workspace_provisioner.workflow.steps.gitlab_create_project import (
 logger = logging.getLogger(__name__)
 
 
-def _build_workspace_response(ws: ArgusWorkspace) -> WorkspaceResponse:
+async def _build_workspace_response(ws: ArgusWorkspace, session: AsyncSession | None = None) -> WorkspaceResponse:
+    username = None
+    if session and ws.created_by:
+        from app.usermgr.models import ArgusUser
+        result = await session.execute(
+            select(ArgusUser.username).where(ArgusUser.id == ws.created_by)
+        )
+        username = result.scalar()
     return WorkspaceResponse(
         id=ws.id,
         name=ws.name,
@@ -61,6 +68,7 @@ def _build_workspace_response(ws: ArgusWorkspace) -> WorkspaceResponse:
         kserve_endpoint=ws.kserve_endpoint,
         status=WorkspaceStatus(ws.status),
         created_by=ws.created_by,
+        created_by_username=username,
         created_at=ws.created_at,
         updated_at=ws.updated_at,
     )
@@ -162,7 +170,7 @@ async def create_workspace(
         _run_provisioning_workflow(workspace.id, req, gitlab_client, creator_info)
     )
 
-    return _build_workspace_response(workspace)
+    return await _build_workspace_response(workspace, session)
 
 
 
@@ -458,7 +466,7 @@ async def get_workspace(session: AsyncSession, workspace_id: int) -> WorkspaceRe
     if not ws:
         logger.info("Workspace not found: id=%d", workspace_id)
         return None
-    return _build_workspace_response(ws)
+    return await _build_workspace_response(ws, session)
 
 
 async def list_workspaces(
@@ -481,8 +489,9 @@ async def list_workspaces(
     result = await session.execute(query)
     workspaces = result.scalars().all()
 
+    items = [await _build_workspace_response(ws, session) for ws in workspaces]
     return PaginatedWorkspaceResponse(
-        items=[_build_workspace_response(ws) for ws in workspaces],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -551,7 +560,7 @@ async def delete_workspace(
         _run_deletion_workflow(workspace_id, deletion_context, gitlab_client, req)
     )
 
-    return _build_workspace_response(ws)
+    return await _build_workspace_response(ws, session)
 
 
 def _build_deletion_context(
@@ -774,6 +783,32 @@ async def get_workspace_credentials(
 # Membership
 # ---------------------------------------------------------------------------
 
+async def _build_member_response(
+    session: AsyncSession,
+    m: ArgusWorkspaceMember,
+    owner_user_id: int | None = None,
+) -> WorkspaceMemberResponse:
+    """Build a member response with user info."""
+    from app.usermgr.models import ArgusUser
+    user_result = await session.execute(
+        select(ArgusUser).where(ArgusUser.id == m.user_id)
+    )
+    user = user_result.scalars().first()
+    return WorkspaceMemberResponse(
+        id=m.id,
+        workspace_id=m.workspace_id,
+        user_id=m.user_id,
+        username=user.username if user else None,
+        display_name=f"{user.first_name} {user.last_name}".strip() if user else None,
+        email=user.email if user else None,
+        role=m.role,
+        is_owner=(m.user_id == owner_user_id) if owner_user_id else False,
+        gitlab_access_token=m.gitlab_access_token,
+        gitlab_token_name=m.gitlab_token_name,
+        created_at=m.created_at,
+    )
+
+
 async def add_member(
     session: AsyncSession,
     workspace_id: int,
@@ -789,15 +824,13 @@ async def add_member(
     await session.commit()
     await session.refresh(member)
     logger.info("Member added: user=%d workspace=%d role=%s", req.user_id, workspace_id, req.role)
-    return WorkspaceMemberResponse(
-        id=member.id,
-        workspace_id=member.workspace_id,
-        user_id=member.user_id,
-        role=member.role,
-        gitlab_access_token=member.gitlab_access_token,
-        gitlab_token_name=member.gitlab_token_name,
-        created_at=member.created_at,
+
+    # Get workspace owner
+    ws_result = await session.execute(
+        select(ArgusWorkspace.created_by).where(ArgusWorkspace.id == workspace_id)
     )
+    owner_id = ws_result.scalar()
+    return await _build_member_response(session, member, owner_id)
 
 
 async def list_members(
@@ -805,24 +838,20 @@ async def list_members(
 ) -> list[WorkspaceMemberResponse]:
     """List all members of a workspace."""
     logger.info("Listing members for workspace: id=%d", workspace_id)
+
+    # Get workspace owner
+    ws_result = await session.execute(
+        select(ArgusWorkspace.created_by).where(ArgusWorkspace.id == workspace_id)
+    )
+    owner_id = ws_result.scalar()
+
     result = await session.execute(
         select(ArgusWorkspaceMember).where(
             ArgusWorkspaceMember.workspace_id == workspace_id
         )
     )
     members = result.scalars().all()
-    return [
-        WorkspaceMemberResponse(
-            id=m.id,
-            workspace_id=m.workspace_id,
-            user_id=m.user_id,
-            role=m.role,
-            gitlab_access_token=m.gitlab_access_token,
-            gitlab_token_name=m.gitlab_token_name,
-            created_at=m.created_at,
-        )
-        for m in members
-    ]
+    return [await _build_member_response(session, m, owner_id) for m in members]
 
 
 async def remove_member(session: AsyncSession, member_id: int) -> bool:

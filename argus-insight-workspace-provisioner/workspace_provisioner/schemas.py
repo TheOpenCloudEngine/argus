@@ -156,7 +156,11 @@ class WorkspaceMemberResponse(BaseModel):
     id: int
     workspace_id: int
     user_id: int
+    username: str | None = None
+    display_name: str | None = None
+    email: str | None = None
     role: str
+    is_owner: bool = False
     gitlab_access_token: str | None = None
     gitlab_token_name: str | None = None
     created_at: datetime
@@ -180,6 +184,7 @@ class WorkspaceResponse(BaseModel):
     kserve_endpoint: str | None = None
     status: WorkspaceStatus
     created_by: int
+    created_by_username: str | None = None
     pipelines: list[WorkspacePipelineResponse] = []
     created_at: datetime
     updated_at: datetime

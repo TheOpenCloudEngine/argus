@@ -17,6 +17,7 @@ Endpoint summary:
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -254,6 +255,120 @@ async def add_member(
     return await service.add_member(session, workspace_id, req)
 
 
+class BulkAddMembersRequest(BaseModel):
+    user_ids: list[int]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/members/bulk",
+    response_model=list[WorkspaceMemberResponse],
+)
+async def bulk_add_members(
+    workspace_id: int,
+    req: BulkAddMembersRequest,
+    session: AsyncSession = Depends(get_session),
+    gitlab_client: GitLabClient = Depends(_get_gitlab_client),
+):
+    """Add multiple members to a workspace with GitLab provisioning.
+
+    For each user:
+    1. Check if GitLab user exists (argus-{username}), create if not.
+    2. Add as project member (Maintainer level = all except delete repo).
+    3. Create project access token.
+    4. Add to workspace members.
+    """
+    import secrets
+    from app.usermgr.models import ArgusUser
+    from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceMember
+
+    # Load workspace
+    ws_result = await session.execute(
+        select(ArgusWorkspace).where(ArgusWorkspace.id == workspace_id)
+    )
+    ws = ws_result.scalars().first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    results = []
+    for user_id in req.user_ids:
+        # Check if already a member
+        existing = await session.execute(
+            select(ArgusWorkspaceMember).where(
+                ArgusWorkspaceMember.workspace_id == workspace_id,
+                ArgusWorkspaceMember.user_id == user_id,
+            )
+        )
+        if existing.scalars().first():
+            continue
+
+        # Load user info
+        user_result = await session.execute(
+            select(ArgusUser).where(ArgusUser.id == user_id)
+        )
+        user = user_result.scalars().first()
+        if not user:
+            continue
+
+        gitlab_username = f"argus-{user.username}"
+        gitlab_token = None
+        token_name = None
+
+        try:
+            # Step 1: Ensure GitLab user exists
+            gl_user = await gitlab_client.find_user(gitlab_username)
+            if not gl_user:
+                safe_password = secrets.token_urlsafe(12) + "!A1a"
+                gl_user = await gitlab_client.create_user(
+                    username=gitlab_username,
+                    password=safe_password,
+                    email=user.email or f"{gitlab_username}@argus.local",
+                    name=f"{user.first_name} {user.last_name}".strip() or gitlab_username,
+                )
+                # Save gitlab credentials
+                user.gitlab_username = gitlab_username
+                user.gitlab_password = safe_password
+
+            # Step 2: Add to project as Maintainer (all permissions except delete repo)
+            if ws.gitlab_project_id:
+                await gitlab_client.add_project_member(
+                    project_id=ws.gitlab_project_id,
+                    user_id=gl_user["id"],
+                    access_level=40,  # Maintainer
+                )
+
+                # Step 3: Create project access token
+                token_name = f"{gitlab_username}-{ws.name}"
+                try:
+                    token_info = await gitlab_client.create_project_access_token(
+                        project_id=ws.gitlab_project_id,
+                        name=token_name,
+                    )
+                    gitlab_token = token_info["token"]
+                except Exception as e:
+                    logger.warning("Failed to create token for %s: %s", gitlab_username, e)
+
+        except Exception as e:
+            logger.warning("GitLab provisioning failed for user %d: %s", user_id, e)
+
+        # Step 4: Add workspace member
+        member = ArgusWorkspaceMember(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            role="User",
+            gitlab_access_token=gitlab_token,
+            gitlab_token_name=token_name,
+        )
+        session.add(member)
+        await session.commit()
+        await session.refresh(member)
+
+        resp = await service._build_member_response(session, member, ws.created_by)
+        results.append(resp)
+
+    logger.info("Bulk added %d members to workspace %d", len(results), workspace_id)
+    return results
+
+
 @router.get(
     "/workspaces/{workspace_id}/members",
     response_model=list[WorkspaceMemberResponse],
@@ -272,13 +387,53 @@ async def remove_member(
     workspace_id: int,
     member_id: int,
     session: AsyncSession = Depends(get_session),
+    gitlab_client: GitLabClient = Depends(_get_gitlab_client),
 ):
-    """Remove a member from a workspace."""
+    """Remove a member from a workspace and GitLab project."""
+    from app.usermgr.models import ArgusUser
+    from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceMember
+
     logger.info("DELETE /workspaces/%d/members/%d", workspace_id, member_id)
-    if not await service.remove_member(session, member_id):
-        logger.info("DELETE /workspaces/%d/members/%d - not found", workspace_id, member_id)
+
+    # Load member
+    member_result = await session.execute(
+        select(ArgusWorkspaceMember).where(ArgusWorkspaceMember.id == member_id)
+    )
+    member = member_result.scalars().first()
+    if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-    logger.info("DELETE /workspaces/%d/members/%d - removed", workspace_id, member_id)
+
+    # Prevent removing workspace owner
+    ws_result = await session.execute(
+        select(ArgusWorkspace).where(ArgusWorkspace.id == workspace_id)
+    )
+    ws = ws_result.scalars().first()
+    if ws and ws.created_by == member.user_id:
+        raise HTTPException(status_code=400, detail="Cannot remove workspace owner")
+
+    # Remove from GitLab project
+    if ws and ws.gitlab_project_id:
+        user_result = await session.execute(
+            select(ArgusUser).where(ArgusUser.id == member.user_id)
+        )
+        user = user_result.scalars().first()
+        if user:
+            gitlab_username = f"argus-{user.username}"
+            try:
+                gl_user = await gitlab_client.find_user(gitlab_username)
+                if gl_user:
+                    await gitlab_client.remove_project_member(
+                        project_id=ws.gitlab_project_id,
+                        user_id=gl_user["id"],
+                    )
+            except Exception as e:
+                logger.warning("Failed to remove GitLab member: %s", e)
+
+    # Remove from workspace
+    if not await service.remove_member(session, member_id):
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    logger.info("DELETE /workspaces/%d/members/%d - removed (with GitLab)", workspace_id, member_id)
     return {"status": "ok", "message": "Member removed"}
 
 

@@ -53,6 +53,19 @@ export async function fetchWorkspaceMembers(workspaceId: number): Promise<Worksp
   return res.json()
 }
 
+export async function bulkAddWorkspaceMembers(
+  workspaceId: number,
+  userIds: number[],
+): Promise<WorkspaceMember[]> {
+  const res = await authFetch(`${BASE}/workspaces/${workspaceId}/members/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_ids: userIds }),
+  })
+  if (!res.ok) throw new Error(await extractError(res, "Failed to add members"))
+  return res.json()
+}
+
 export async function addWorkspaceMember(
   workspaceId: number,
   userId: number,

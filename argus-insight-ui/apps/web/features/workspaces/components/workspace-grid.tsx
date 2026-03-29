@@ -204,6 +204,13 @@ export function WorkspaceGrid({ onSelect, onDeleted, refreshKey }: WorkspaceGrid
         width: 160,
       },
       {
+        headerName: "Owner",
+        field: "created_by_username",
+        width: 120,
+        valueGetter: (params) =>
+          params.data?.created_by_username || `User #${params.data?.created_by}`,
+      },
+      {
         headerName: "Status",
         field: "status",
         width: 130,

@@ -16,6 +16,7 @@ export interface WorkspaceResponse {
   kserve_endpoint: string | null
   status: "provisioning" | "active" | "failed" | "deleting" | "deleted"
   created_by: number
+  created_by_username: string | null
   created_at: string
   updated_at: string
 }
@@ -41,7 +42,11 @@ export interface WorkspaceMember {
   id: number
   workspace_id: number
   user_id: number
+  username: string | null
+  display_name: string | null
+  email: string | null
   role: string
+  is_owner: boolean
   gitlab_access_token: string | null
   gitlab_token_name: string | null
   created_at: string

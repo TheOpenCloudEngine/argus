@@ -9,13 +9,18 @@ import {
   FolderGit2,
   Loader2,
   Network,
+  Plus,
+  Search,
   Server,
+  Shield,
   Trash2,
   UserMinus,
+  UserPlus,
   Workflow,
   XCircle,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
@@ -27,6 +32,11 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@workspace/ui/components/tooltip"
 import type {
   WorkspaceResponse,
   WorkspaceMember,
@@ -34,10 +44,21 @@ import type {
   WorkflowStep,
 } from "@/features/workspaces/types"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Input } from "@workspace/ui/components/input"
+import {
+  bulkAddWorkspaceMembers,
   fetchWorkspaceMembers,
   fetchWorkspaceWorkflows,
   removeWorkspaceMember,
 } from "@/features/workspaces/api"
+import { authFetch } from "@/features/auth/auth-fetch"
 
 interface WorkspaceDetailProps {
   workspace: WorkspaceResponse
@@ -173,6 +194,14 @@ function ResourcesTab({ workspace }: { workspace: WorkspaceResponse }) {
 
 // ---------- Members Tab ----------
 
+interface SimpleUser {
+  id: number
+  username: string
+  first_name: string
+  last_name: string
+  email: string
+}
+
 function MembersTab({
   workspace,
   onRefresh,
@@ -183,6 +212,18 @@ function MembersTab({
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState<number | null>(null)
+
+  // Add Members dialog
+  const [addOpen, setAddOpen] = useState(false)
+  const [allUsers, setAllUsers] = useState<SimpleUser[]>([])
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set())
+  const [userSearch, setUserSearch] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("")
+  const [adding, setAdding] = useState(false)
+
+  // Remove confirm dialog
+  const [removeTarget, setRemoveTarget] = useState<WorkspaceMember | null>(null)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
 
   const loadMembers = () => {
     setLoading(true)
@@ -196,85 +237,272 @@ function MembersTab({
     let cancelled = false
     setLoading(true)
     fetchWorkspaceMembers(workspace.id)
-      .then((data) => {
-        if (!cancelled) setMembers(data)
-      })
-      .catch(() => {
-        if (!cancelled) setMembers([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .then((data) => { if (!cancelled) setMembers(data) })
+      .catch(() => { if (!cancelled) setMembers([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [workspace.id])
 
-  const handleRemove = async (member: WorkspaceMember) => {
-    setRemovingId(member.id)
+  const openRemoveConfirm = (member: WorkspaceMember) => {
+    if (member.is_owner) return
+    setRemoveTarget(member)
+    setRemoveConfirmOpen(true)
+  }
+
+  const handleRemoveConfirm = async () => {
+    if (!removeTarget) return
+    setRemovingId(removeTarget.id)
     try {
-      await removeWorkspaceMember(workspace.id, member.id)
+      await removeWorkspaceMember(workspace.id, removeTarget.id)
       loadMembers()
       onRefresh()
-    } catch {
-      // silently handle
-    } finally {
+    } catch { /* ignore */ }
+    finally {
       setRemovingId(null)
+      setRemoveConfirmOpen(false)
+      setRemoveTarget(null)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-        <span className="text-muted-foreground ml-2 text-sm">Loading members...</span>
-      </div>
-    )
+  const [searchLoading, setSearchLoading] = useState(false)
+
+  const searchUsers = async (query: string) => {
+    setSearchLoading(true)
+    try {
+      const url = query
+        ? `/api/v1/usermgr/users?page_size=50&search=${encodeURIComponent(query)}`
+        : "/api/v1/usermgr/users?page_size=50"
+      const res = await authFetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setAllUsers(data.items ?? [])
+      }
+    } catch { /* ignore */ }
+    finally { setSearchLoading(false) }
   }
 
-  if (members.length === 0) {
-    return (
-      <div className="text-muted-foreground py-12 text-center text-sm">No members</div>
-    )
+  const openAddDialog = async () => {
+    setAddOpen(true)
+    setSelectedUserIds(new Set())
+    setUserSearch("")
+    setAppliedSearch("")
+    setAdding(false)
+    setAllUsers([])
+    await searchUsers("")
+  }
+
+  const handleBulkAdd = async () => {
+    if (selectedUserIds.size === 0) return
+    setAdding(true)
+    try {
+      await bulkAddWorkspaceMembers(workspace.id, Array.from(selectedUserIds))
+      loadMembers()
+      onRefresh()
+      setAddOpen(false)
+    } catch { /* ignore */ }
+    finally { setAdding(false) }
+  }
+
+  const memberUserIds = new Set(members.map((m) => m.user_id))
+  const availableUsers = allUsers.filter((u) => !memberUserIds.has(u.id))
+
+  const toggleUser = (id: number) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>User ID</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Joined</TableHead>
-            <TableHead className="w-[80px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell className="font-mono text-sm">{m.user_id}</TableCell>
-              <TableCell>{roleBadge(m.role)}</TableCell>
-              <TableCell className="text-sm">{formatDateTime(m.created_at)}</TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive h-8 w-8"
-                  disabled={removingId === m.id}
-                  onClick={() => handleRemove(m)}
+    <>
+      <div className="space-y-3">
+        <div className="flex justify-end">
+          <Button size="sm" onClick={openAddDialog}>
+            <UserPlus className="h-4 w-4 mr-1.5" />
+            Add Members
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+            <span className="text-muted-foreground ml-2 text-sm">Loading members...</span>
+          </div>
+        ) : members.length === 0 ? (
+          <div className="text-muted-foreground py-12 text-center text-sm">No members</div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {members.map((m) => {
+              const initials = m.display_name
+                ? m.display_name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+                : (m.username ?? "?").slice(0, 2).toUpperCase()
+              return (
+                <Tooltip key={m.id}>
+                  <TooltipTrigger asChild>
+                    <Card className="relative hover:border-primary/50 transition-colors">
+                      {/* Delete button (non-owner only) */}
+                      {!m.is_owner && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-1.5 right-1.5 h-7 w-7 text-muted-foreground hover:text-destructive"
+                          disabled={removingId === m.id}
+                          onClick={() => openRemoveConfirm(m)}
+                        >
+                          {removingId === m.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
+                      <CardContent className="flex flex-col items-center pt-6 pb-4 px-3">
+                        <Avatar className="h-12 w-12 mb-3">
+                          <AvatarFallback className="text-sm font-medium">{initials}</AvatarFallback>
+                        </Avatar>
+                        <p className="font-medium text-sm">{m.username ?? `User #${m.user_id}`}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{m.display_name}</p>
+                        <p className="text-xs text-muted-foreground truncate max-w-full">{m.email}</p>
+                        {m.is_owner && (
+                          <Badge className="mt-2 text-xs bg-blue-600 text-white hover:bg-blue-600">
+                            <Shield className="h-3 w-3 mr-1" /> Owner
+                          </Badge>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    Joined {formatDateTime(m.created_at)}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Remove Member Confirm Dialog */}
+      <Dialog open={removeConfirmOpen} onOpenChange={setRemoveConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove Member</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this user from the workspace?
+              They will also be removed from the GitLab repository.
+            </DialogDescription>
+          </DialogHeader>
+          {removeTarget && (
+            <div className="flex items-center gap-3 py-2">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="text-sm">
+                  {removeTarget.display_name
+                    ? removeTarget.display_name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+                    : (removeTarget.username ?? "?").slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium text-sm">{removeTarget.username}</p>
+                <p className="text-xs text-muted-foreground">{removeTarget.email}</p>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setRemoveConfirmOpen(false)} disabled={removingId !== null}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRemoveConfirm} disabled={removingId !== null}>
+              {removingId !== null ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <UserMinus className="h-4 w-4 mr-1.5" />
+              )}
+              Remove
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Members Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Members</DialogTitle>
+            <DialogDescription>
+              Select users to add to this workspace. They will be provisioned in GitLab automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search users and press Enter..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  setAppliedSearch(userSearch.trim())
+                  searchUsers(userSearch.trim())
+                }
+              }}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+            {searchLoading ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+              </div>
+            ) : availableUsers.length === 0 ? (
+              <div className="text-muted-foreground text-sm text-center py-4">
+                No available users
+              </div>
+            ) : (
+              availableUsers.map((u) => (
+                <label
+                  key={u.id}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
                 >
-                  {removingId === m.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserMinus className="h-4 w-4" />
-                  )}
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                  <Checkbox
+                    checked={selectedUserIds.has(u.id)}
+                    onCheckedChange={() => toggleUser(u.id)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{u.username}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {u.first_name} {u.last_name} · {u.email}
+                    </div>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+
+          {selectedUserIds.size > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {selectedUserIds.size} user(s) selected
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkAdd} disabled={adding || selectedUserIds.size === 0}>
+              {adding ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-1.5" />
+              )}
+              Add ({selectedUserIds.size})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
