@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowUp, CheckCircle2, Circle, Loader2, Plus, SkipForward, Trash2, XCircle } from "lucide-react"
+import { ArrowDown, ArrowUp, CheckCircle2, Circle, Loader2, Plus, Trash2, XCircle } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -24,8 +24,8 @@ import { Separator } from "@workspace/ui/components/separator"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { useAuth } from "@/features/auth"
 
-import type { WorkflowStep, WorkspaceResponse } from "@/features/workspaces/types"
-import { fetchWorkspaceWorkflows } from "@/features/workspaces/api"
+import type { AuditLog, WorkspaceResponse } from "@/features/workspaces/types"
+import { fetchWorkspaceAuditLogs } from "@/features/workspaces/api"
 import { WorkspaceGrid } from "@/features/workspaces/components/workspace-grid"
 import { WorkspaceDetail } from "@/features/workspaces/components/workspace-detail"
 import { authFetch } from "@/features/auth/auth-fetch"
@@ -40,12 +40,11 @@ interface PipelineItem {
   plugins: { plugin_name: string; selected_version: string | null }[]
 }
 
-function stepIcon(status: string) {
-  switch (status) {
-    case "completed": return <CheckCircle2 className="h-4 w-4 text-green-600" />
-    case "failed": return <XCircle className="h-4 w-4 text-red-600" />
-    case "running": return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-    case "skipped": return <SkipForward className="h-4 w-4 text-gray-400" />
+function auditStepIcon(action: string) {
+  switch (action) {
+    case "step_completed": return <CheckCircle2 className="h-4 w-4 text-green-600" />
+    case "step_failed": return <XCircle className="h-4 w-4 text-red-600" />
+    case "step_started": return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
     default: return <Circle className="h-4 w-4 text-gray-400" />
   }
 }
@@ -60,7 +59,7 @@ export default function WorkspacesPage() {
   const [creating, setCreating] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [createPhase, setCreatePhase] = useState<"form" | "progress" | "done" | "error">("form")
-  const [createSteps, setCreateSteps] = useState<WorkflowStep[]>([])
+  const [createSteps, setCreateSteps] = useState<AuditLog[]>([])
   const [createdWsId, setCreatedWsId] = useState<number | null>(null)
   const createPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -297,29 +296,38 @@ export default function WorkspacesPage() {
       return
     }
 
-    // Poll for provisioning workflow progress
+    // Poll audit logs for provisioning progress
     createPollingRef.current = setInterval(async () => {
       if (!wsId) return
       try {
-        const workflows = await fetchWorkspaceWorkflows(wsId)
-        const provWf = workflows.find((w) => w.workflow_name === "workspace-provision")
-        if (provWf) {
-          setCreateSteps(provWf.steps.sort((a, b) => a.step_order - b.step_order))
+        const data = await fetchWorkspaceAuditLogs(wsId, 1, 50)
+        const stepLogs = data.items.filter((l) =>
+          ["step_started", "step_completed", "step_failed"].includes(l.action) &&
+          (l.detail as Record<string, unknown>)?.workflow_name === "workspace-provision"
+        )
+        setCreateSteps(stepLogs.reverse())
 
-          if (provWf.status === "completed") {
-            if (createPollingRef.current) clearInterval(createPollingRef.current)
-            createPollingRef.current = null
-            setCreatePhase("done")
-            setCreating(false)
-            setGridRefreshKey((k) => k + 1)
-          } else if (provWf.status === "failed") {
-            if (createPollingRef.current) clearInterval(createPollingRef.current)
-            createPollingRef.current = null
-            setAddError(provWf.error_message || "Provisioning failed")
-            setCreatePhase("error")
-            setCreating(false)
-            setGridRefreshKey((k) => k + 1)
-          }
+        const completed = data.items.find((l) =>
+          l.action === "workflow_completed" &&
+          (l.detail as Record<string, unknown>)?.workflow_name === "workspace-provision"
+        )
+        const failed = data.items.find((l) =>
+          l.action === "workflow_failed" &&
+          (l.detail as Record<string, unknown>)?.workflow_name === "workspace-provision"
+        )
+        if (completed) {
+          if (createPollingRef.current) clearInterval(createPollingRef.current)
+          createPollingRef.current = null
+          setCreatePhase("done")
+          setCreating(false)
+          setGridRefreshKey((k) => k + 1)
+        } else if (failed) {
+          if (createPollingRef.current) clearInterval(createPollingRef.current)
+          createPollingRef.current = null
+          setAddError(String((failed.detail as Record<string, unknown>)?.error || "Provisioning failed"))
+          setCreatePhase("error")
+          setCreating(false)
+          setGridRefreshKey((k) => k + 1)
         }
       } catch { /* ignore */ }
     }, 2000)
@@ -388,18 +396,21 @@ export default function WorkspacesPage() {
                   Initializing provisioning...
                 </div>
               )}
-              {createSteps.map((step) => (
-                <div key={step.id} className="flex items-center gap-3 text-sm">
-                  {stepIcon(step.status)}
-                  <span className="flex-1 font-medium">{step.step_name}</span>
-                  <span className="text-xs text-muted-foreground">{step.status}</span>
-                  {step.status === "failed" && step.error_message && (
-                    <span className="text-xs text-red-600 truncate max-w-[200px]" title={step.error_message}>
-                      {step.error_message}
-                    </span>
-                  )}
-                </div>
-              ))}
+              {createSteps.map((log) => {
+                const d = log.detail as Record<string, unknown> | null
+                return (
+                  <div key={log.id} className="flex items-center gap-3 text-sm">
+                    {auditStepIcon(log.action)}
+                    <span className="flex-1 font-medium">{String(d?.step_name ?? log.action)}</span>
+                    <span className="text-xs text-muted-foreground">{log.action.replace("step_", "")}</span>
+                    {log.action === "step_failed" && d?.error && (
+                      <span className="text-xs text-red-600 truncate max-w-[200px]" title={String(d.error)}>
+                        {String(d.error)}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
               {createPhase === "done" && (
                 <div className="mt-2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 text-sm">
                   All resources have been provisioned successfully.
