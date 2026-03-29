@@ -215,13 +215,13 @@ function ResourcesTab({ workspace }: { workspace: WorkspaceResponse }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {services.map((svc) => (
-        <ServiceCard key={svc.id} svc={svc} icon={serviceIcon(svc.plugin_name)} />
+        <ServiceCard key={svc.id} svc={svc} icon={serviceIcon(svc.plugin_name)} workspaceName={workspace.name} />
       ))}
     </div>
   )
 }
 
-function ServiceCard({ svc, icon }: { svc: WorkspaceService; icon: React.ReactNode }) {
+function ServiceCard({ svc, icon, workspaceName }: { svc: WorkspaceService; icon: React.ReactNode; workspaceName: string }) {
   const [showPassword, setShowPassword] = useState(false)
   const [showToken, setShowToken] = useState(false)
 
@@ -257,9 +257,30 @@ function ServiceCard({ svc, icon }: { svc: WorkspaceService; icon: React.ReactNo
               <dt className="text-muted-foreground">URL</dt>
               <dd className="min-w-0">
                 {isUrl(svc.endpoint) ? (
-                  <a href={svc.endpoint} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                  <button
+                    className="text-blue-600 hover:underline break-all text-left cursor-pointer"
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      try {
+                        // Get auth token
+                        const res = await authFetch(
+                          `/api/v1/workspace/workspaces/auth-launch?workspace=${workspaceName}`
+                        )
+                        if (!res.ok) throw new Error("Auth failed")
+                        const data = await res.json()
+                        // Open auth-redirect on backend directly (not via Next.js proxy)
+                        // so the cookie is set with the correct domain
+                        const serverHost = window.location.hostname
+                        const redirectUrl = `http://${serverHost}:4500/api/v1/workspace/workspaces/auth-redirect?workspace=${workspaceName}&token=${data.token}&redirect=${encodeURIComponent(svc.endpoint!)}`
+                        window.open(redirectUrl, "_blank")
+                      } catch {
+                        // Fallback: direct open
+                        window.open(svc.endpoint!, "_blank")
+                      }
+                    }}
+                  >
                     {svc.endpoint} <ExternalLink className="inline h-3.5 w-3.5" />
-                  </a>
+                  </button>
                 ) : (
                   <span className="font-mono break-all">{svc.endpoint}</span>
                 )}

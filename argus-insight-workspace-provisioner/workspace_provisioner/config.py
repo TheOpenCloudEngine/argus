@@ -228,7 +228,11 @@ class VScodeServerConfig(BaseModel):
     )
     workspace_path: str = Field(
         default="/workspace",
-        description="Workspace mount path inside the container",
+        description="Workspace S3 bucket mount path inside the container",
+    )
+    user_data_path: str = Field(
+        default="/data",
+        description="Personal S3 bucket mount path inside the container",
     )
     color_theme: str = Field(
         default="Default Dark Modern",

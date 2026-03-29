@@ -305,14 +305,10 @@ export function WorkspaceGrid({ onSelect, onDeleted, refreshKey, onAddWorkspace 
         minWidth: 150,
       },
       {
-        headerName: "Domain",
-        field: "domain",
-        width: 120,
-      },
-      {
-        headerName: "K8s Namespace",
-        field: "k8s_namespace",
-        width: 160,
+        headerName: "Description",
+        field: "description",
+        flex: 1.5,
+        minWidth: 200,
       },
       {
         headerName: "Owner",
@@ -362,7 +358,7 @@ export function WorkspaceGrid({ onSelect, onDeleted, refreshKey, onAddWorkspace 
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               {(() => {
                 const busy = params.data.status === "provisioning" || params.data.status === "deleting"
                 return (

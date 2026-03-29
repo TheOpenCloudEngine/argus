@@ -95,6 +95,130 @@ async def check_workspace_name(
     return {"exists": ws is not None, "name": name}
 
 
+# ---------------------------------------------------------------------------
+# Workspace service auth (must be before /workspaces/{workspace_id})
+# ---------------------------------------------------------------------------
+
+import base64
+import hashlib
+import hmac
+import json as json_module
+import time
+from urllib.parse import urlparse
+
+from fastapi import Cookie, Header, Request, Response
+
+_WS_AUTH_SECRET = "argus-workspace-auth-secret-key"
+_WS_AUTH_EXPIRY = 86400  # 24 hours
+
+
+def _create_ws_token(username: str, workspace_name: str, role: str) -> str:
+    payload = {
+        "sub": username, "workspace": workspace_name,
+        "role": role, "exp": int(time.time()) + _WS_AUTH_EXPIRY,
+    }
+    payload_json = json_module.dumps(payload, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode()
+    sig = hmac.new(_WS_AUTH_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(json_module.dumps({"payload": payload_b64, "sig": sig}).encode()).decode()
+
+
+def _verify_ws_token(token: str, workspace_name: str) -> dict | None:
+    try:
+        outer = json_module.loads(base64.urlsafe_b64decode(token))
+        payload_b64 = outer["payload"]
+        expected_sig = hmac.new(_WS_AUTH_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(outer["sig"], expected_sig):
+            return None
+        payload = json_module.loads(base64.urlsafe_b64decode(payload_b64))
+        if payload.get("exp", 0) < time.time():
+            return None
+        if payload.get("workspace") != workspace_name:
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+@router.get("/workspaces/auth-verify")
+async def workspace_auth_verify(
+    request: Request,
+    workspace: str = Query(""),
+    argus_ws_token: str | None = Cookie(None),
+    x_original_url: str | None = Header(None),
+):
+    """Nginx Ingress auth-url subrequest endpoint for workspace services."""
+    if not argus_ws_token:
+        return Response(status_code=401)
+    ws_name = workspace
+    if not ws_name and x_original_url:
+        parsed = urlparse(x_original_url)
+        host = parsed.hostname or ""
+        parts = host.split(".")
+        if parts:
+            prefix_parts = parts[0].split("-")
+            if len(prefix_parts) >= 3:
+                ws_name = "-".join(prefix_parts[2:])
+    if not ws_name:
+        return Response(status_code=401)
+    payload = _verify_ws_token(argus_ws_token, ws_name)
+    if payload:
+        return Response(status_code=200)
+    return Response(status_code=403)
+
+
+@router.get("/workspaces/auth-launch")
+async def workspace_auth_launch(
+    current_user: CurrentUser,
+    workspace_name: str = Query(..., alias="workspace"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Generate an auth token for accessing workspace services."""
+    from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceMember
+    result = await session.execute(
+        select(ArgusWorkspace).where(ArgusWorkspace.name == workspace_name)
+    )
+    ws = result.scalars().first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    member_result = await session.execute(
+        select(ArgusWorkspaceMember).where(
+            ArgusWorkspaceMember.workspace_id == ws.id,
+            ArgusWorkspaceMember.user_id == int(current_user.sub),
+        )
+    )
+    if not member_result.scalars().first():
+        raise HTTPException(status_code=403, detail="Not a member of this workspace")
+    token = _create_ws_token(current_user.username, workspace_name, current_user.role)
+    return {"token": token, "workspace": workspace_name}
+
+
+@router.get("/workspaces/auth-redirect")
+async def workspace_auth_redirect(
+    workspace: str = Query(...),
+    token: str = Query(...),
+    redirect: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Browser navigates here. Sets cookie and redirects to service."""
+    payload = _verify_ws_token(token, workspace)
+    if not payload:
+        return Response(content="Invalid or expired token", status_code=401)
+    from app.settings.service import get_config_by_category
+    domain_cfg = await get_config_by_category(session, "domain")
+    domain = domain_cfg.get("domain_name", "")
+    redirect_url = redirect or "/"
+    response = Response(status_code=302, headers={"Location": redirect_url})
+    response.set_cookie(
+        key="argus_ws_token", value=token,
+        domain=f".{domain}" if domain else None,
+        path="/", max_age=_WS_AUTH_EXPIRY, httponly=False, samesite="lax",
+    )
+    return response
+
+
+# ---------------------------------------------------------------------------
+
 @router.post("/workspaces", response_model=WorkspaceResponse)
 async def create_workspace(
     req: WorkspaceCreateRequest,
@@ -594,163 +718,6 @@ async def get_workflow_status(
     """
     logger.info("GET /workspaces/%d/workflow", workspace_id)
     return await service.get_workflow_status(session, workspace_id)
-
-
-# ---------------------------------------------------------------------------
-# Workspace service auth endpoints
-# ---------------------------------------------------------------------------
-
-import hashlib
-import hmac
-import json as json_module
-import time
-from urllib.parse import urlparse
-
-from fastapi import Cookie, Header, Request, Response
-
-_WS_AUTH_SECRET = "argus-workspace-auth-secret-key"
-_WS_AUTH_EXPIRY = 86400  # 24 hours
-
-
-def _create_ws_token(username: str, workspace_name: str, role: str) -> str:
-    """Create a signed workspace auth token."""
-    payload = {
-        "sub": username,
-        "workspace": workspace_name,
-        "role": role,
-        "exp": int(time.time()) + _WS_AUTH_EXPIRY,
-    }
-    payload_json = json_module.dumps(payload, separators=(",", ":"))
-    import base64
-    payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode()
-    sig = hmac.new(_WS_AUTH_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
-    return base64.urlsafe_b64encode(json_module.dumps({"payload": payload_b64, "sig": sig}).encode()).decode()
-
-
-def _verify_ws_token(token: str, workspace_name: str) -> dict | None:
-    """Verify a workspace auth token. Returns payload or None."""
-    try:
-        import base64
-        outer = json_module.loads(base64.urlsafe_b64decode(token))
-        payload_b64 = outer["payload"]
-        sig = outer["sig"]
-        expected_sig = hmac.new(_WS_AUTH_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected_sig):
-            return None
-        payload = json_module.loads(base64.urlsafe_b64decode(payload_b64))
-        if payload.get("exp", 0) < time.time():
-            return None
-        if payload.get("workspace") != workspace_name:
-            return None
-        return payload
-    except Exception:
-        return None
-
-
-@router.get("/workspaces/{workspace_name}/auth-launch")
-async def workspace_auth_launch(
-    workspace_name: str,
-    current_user: CurrentUser,
-    session: AsyncSession = Depends(get_session),
-):
-    """Generate an auth token for accessing workspace services.
-
-    The UI calls this, then opens auth-redirect URL in browser.
-    """
-    from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceMember
-
-    # Find workspace
-    result = await session.execute(
-        select(ArgusWorkspace).where(ArgusWorkspace.name == workspace_name)
-    )
-    ws = result.scalars().first()
-    if not ws:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    # Check membership
-    member_result = await session.execute(
-        select(ArgusWorkspaceMember).where(
-            ArgusWorkspaceMember.workspace_id == ws.id,
-            ArgusWorkspaceMember.user_id == int(current_user.sub),
-        )
-    )
-    if not member_result.scalars().first():
-        raise HTTPException(status_code=403, detail="Not a member of this workspace")
-
-    token = _create_ws_token(current_user.username, workspace_name, current_user.role)
-    return {"token": token, "workspace": workspace_name}
-
-
-@router.get("/workspaces/{workspace_name}/auth-redirect")
-async def workspace_auth_redirect(
-    workspace_name: str,
-    token: str = Query(...),
-    redirect: str = Query(""),
-    session: AsyncSession = Depends(get_session),
-):
-    """Browser navigates here directly. Sets cookie and redirects to service."""
-    payload = _verify_ws_token(token, workspace_name)
-    if not payload:
-        return Response(content="Invalid or expired token", status_code=401)
-
-    # Get domain for cookie
-    from app.settings.service import get_config_by_category
-    domain_cfg = await get_config_by_category(session, "domain")
-    domain = domain_cfg.get("domain_name", "")
-
-    redirect_url = redirect or f"/"
-    response = Response(status_code=302, headers={"Location": redirect_url})
-    response.set_cookie(
-        key="argus_ws_token",
-        value=token,
-        domain=f".{domain}" if domain else None,
-        path="/",
-        max_age=_WS_AUTH_EXPIRY,
-        httponly=False,
-        samesite="lax",
-    )
-    return response
-
-
-@router.get("/workspaces/auth-verify")
-async def workspace_auth_verify(
-    request: Request,
-    workspace: str = Query(""),
-    argus_ws_token: str | None = Cookie(None),
-    x_original_url: str | None = Header(None),
-):
-    """Nginx Ingress auth-url subrequest endpoint for workspace services.
-
-    Verifies the workspace auth cookie and checks membership.
-    """
-    if not argus_ws_token:
-        logger.info("WS auth verify: no cookie, workspace=%s", workspace)
-        return Response(status_code=401)
-
-    # Extract workspace name from query or from X-Original-URL hostname
-    ws_name = workspace
-    if not ws_name and x_original_url:
-        parsed = urlparse(x_original_url)
-        host = parsed.hostname or ""
-        # hostname pattern: argus-{service}-{workspace}.argus-insight.{domain}
-        # extract workspace name from hostname
-        parts = host.split(".")
-        if parts:
-            prefix_parts = parts[0].split("-")
-            # argus-mlflow-mlops6 → mlops6 (last segment after service name)
-            if len(prefix_parts) >= 3:
-                ws_name = "-".join(prefix_parts[2:])
-
-    if not ws_name:
-        logger.info("WS auth verify: cannot determine workspace from request")
-        return Response(status_code=401)
-
-    payload = _verify_ws_token(argus_ws_token, ws_name)
-    if payload:
-        return Response(status_code=200)
-
-    logger.info("WS auth verify: token invalid for workspace=%s", ws_name)
-    return Response(status_code=403)
 
 
 # ---------------------------------------------------------------------------
