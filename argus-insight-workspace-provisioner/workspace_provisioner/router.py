@@ -17,6 +17,7 @@ Endpoint summary:
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -29,6 +30,7 @@ from workspace_provisioner.schemas import (
     WorkspaceDeleteRequest,
     WorkspaceMemberAddRequest,
     WorkspaceMemberResponse,
+    WorkspacePipelineResponse,
     WorkspaceResponse,
     WorkflowExecutionResponse,
 )
@@ -69,6 +71,23 @@ def _get_gitlab_client() -> GitLabClient:
 # ---------------------------------------------------------------------------
 # Workspace endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/workspaces/check")
+async def check_workspace_name(
+    name: str = Query(..., description="Workspace name to check"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Check if a workspace name already exists (excluding deleted)."""
+    from workspace_provisioner.models import ArgusWorkspace
+    result = await session.execute(
+        select(ArgusWorkspace).where(
+            ArgusWorkspace.name == name,
+            ArgusWorkspace.status != "deleted",
+        )
+    )
+    ws = result.scalars().first()
+    return {"exists": ws is not None, "name": name}
+
 
 @router.post("/workspaces", response_model=WorkspaceResponse)
 async def create_workspace(
@@ -169,6 +188,48 @@ async def get_workspace_credentials(
         logger.info("GET /workspaces/%d/credentials - not found", workspace_id)
         raise HTTPException(status_code=404, detail="Credentials not found")
     return cred
+
+
+# ---------------------------------------------------------------------------
+# Pipeline association endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/workspaces/{workspace_id}/pipelines",
+    response_model=list[WorkspacePipelineResponse],
+)
+async def get_workspace_pipelines(
+    workspace_id: int,
+    session: AsyncSession = Depends(get_session),
+):
+    """Get pipelines associated with a workspace."""
+    from workspace_provisioner.models import ArgusWorkspacePipeline
+    from workspace_provisioner.plugins.models import ArgusPipeline
+
+    result = await session.execute(
+        select(ArgusWorkspacePipeline)
+        .where(ArgusWorkspacePipeline.workspace_id == workspace_id)
+        .order_by(ArgusWorkspacePipeline.deploy_order)
+    )
+    ws_pipelines = result.scalars().all()
+
+    responses = []
+    for wp in ws_pipelines:
+        # Load pipeline name
+        p_result = await session.execute(
+            select(ArgusPipeline).where(ArgusPipeline.id == wp.pipeline_id)
+        )
+        pipeline = p_result.scalars().first()
+        responses.append(WorkspacePipelineResponse(
+            id=wp.id,
+            pipeline_id=wp.pipeline_id,
+            pipeline_name=pipeline.name if pipeline else None,
+            pipeline_display_name=pipeline.display_name if pipeline else None,
+            deploy_order=wp.deploy_order,
+            status=wp.status,
+            created_at=wp.created_at,
+        ))
+    return responses
 
 
 # ---------------------------------------------------------------------------

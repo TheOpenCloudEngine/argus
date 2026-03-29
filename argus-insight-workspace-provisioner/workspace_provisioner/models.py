@@ -83,6 +83,8 @@ class ArgusWorkspaceMember(Base):
     workspace_id = Column(Integer, ForeignKey("argus_workspaces.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("argus_users.id"), nullable=False)
     role = Column(String(50), nullable=False, default="User")
+    gitlab_access_token = Column(String(255))   # Per-user GitLab project access token
+    gitlab_token_name = Column(String(100))     # Token name (e.g. "argus-admin-mlteamdev")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -131,3 +133,28 @@ class ArgusWorkspaceCredential(Base):
     kserve_endpoint = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ArgusWorkspacePipeline(Base):
+    """Workspace-Pipeline association table.
+
+    A workspace can use multiple pipelines, and each pipeline can be
+    used by multiple workspaces. Tracks deployment order and status.
+
+    Columns:
+        id:            Auto-incremented primary key.
+        workspace_id:  FK to argus_workspaces.id.
+        pipeline_id:   FK to argus_pipelines.id.
+        deploy_order:  Order in which pipelines are deployed (0-based).
+        status:        Deployment status (pending, running, completed, failed).
+        created_at:    Timestamp when the association was created.
+    """
+
+    __tablename__ = "argus_workspace_pipelines"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    workspace_id = Column(Integer, ForeignKey("argus_workspaces.id", ondelete="CASCADE"), nullable=False)
+    pipeline_id = Column(Integer, ForeignKey("argus_pipelines.id"), nullable=False)
+    deploy_order = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

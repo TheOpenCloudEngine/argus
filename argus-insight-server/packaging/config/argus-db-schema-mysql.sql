@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS argus_users (
     s3_access_key   VARCHAR(100)                              COMMENT 'MinIO per-user access key',
     s3_secret_key   VARCHAR(100)                              COMMENT 'MinIO per-user secret key',
     s3_bucket       VARCHAR(255)                              COMMENT 'MinIO bucket name',
+    gitlab_username VARCHAR(100)                              COMMENT 'GitLab username (e.g. argus-admin)',
+    gitlab_password VARCHAR(255)                              COMMENT 'GitLab auto-generated password',
     role_id         INT             NOT NULL                  COMMENT 'Foreign key to argus_roles(id)',
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Account creation timestamp',
     updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Account last update timestamp',
@@ -218,7 +220,11 @@ INSERT IGNORE INTO argus_configuration (category, config_key, config_value, desc
 ('gitlab', 'gitlab_token',              '',                     'GitLab API private token'),
 ('gitlab', 'gitlab_group_path',         'workspaces',           'Default group path for workspace projects'),
 ('gitlab', 'gitlab_default_branch',     'main',                 'Default branch for new projects'),
-('gitlab', 'gitlab_project_visibility', 'internal',             'Project visibility (internal, private, public)');
+('gitlab', 'gitlab_project_visibility', 'internal',             'Project visibility (internal, private, public)'),
+-- Kubernetes
+('k8s', 'k8s_kubeconfig_path',   '/etc/rancher/k3s/k3s.yaml', 'Path to kubeconfig file'),
+('k8s', 'k8s_namespace_prefix',  'argus-ws-',                  'Workspace namespace prefix'),
+('k8s', 'k8s_context',           '',                           'Kubeconfig context (empty = default)');
 
 -- ---------------------------------------------------------------------------
 -- Notes tables
@@ -313,6 +319,21 @@ CREATE TABLE IF NOT EXISTS argus_app_instances (
     CONSTRAINT fk_instance_user FOREIGN KEY (user_id) REFERENCES argus_users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Running instances of apps (one user can have multiple)';
+
+-- Workspace-Pipeline association table
+CREATE TABLE IF NOT EXISTS argus_workspace_pipelines (
+    id              INT             AUTO_INCREMENT PRIMARY KEY,
+    workspace_id    INT             NOT NULL                  COMMENT 'FK to argus_workspaces',
+    pipeline_id     INT             NOT NULL                  COMMENT 'FK to argus_pipelines',
+    deploy_order    INT             NOT NULL DEFAULT 0        COMMENT 'Deployment order (0-based)',
+    status          VARCHAR(20)     NOT NULL DEFAULT 'pending' COMMENT 'pending|running|completed|failed',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_ws_pipelines_workspace (workspace_id),
+    KEY idx_ws_pipelines_pipeline (pipeline_id),
+    CONSTRAINT fk_ws_pipeline_workspace FOREIGN KEY (workspace_id) REFERENCES argus_workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ws_pipeline_pipeline FOREIGN KEY (pipeline_id) REFERENCES argus_pipelines(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Many-to-many: workspaces to pipelines with deployment order and status';
 
 -- Seed default apps
 INSERT IGNORE INTO argus_apps (app_type, display_name, description, icon, template_dir, default_namespace, hostname_pattern) VALUES

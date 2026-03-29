@@ -92,6 +92,10 @@ class WorkspaceCreateRequest(BaseModel):
     admin_user_id: int = Field(
         ..., description="User ID to assign as WorkspaceAdmin",
     )
+    pipeline_ids: list[int] = Field(
+        default_factory=list,
+        description="List of pipeline IDs to deploy in this workspace (in order).",
+    )
     provisioning_config: ProvisioningConfig = Field(
         default_factory=ProvisioningConfig,
         description="(Legacy) Service-level provisioning settings. "
@@ -132,6 +136,18 @@ class WorkspaceMemberAddRequest(BaseModel):
     role: WorkspaceMemberRole = WorkspaceMemberRole.USER
 
 
+class WorkspacePipelineResponse(BaseModel):
+    """Pipeline associated with a workspace."""
+
+    id: int
+    pipeline_id: int
+    pipeline_name: str | None = None
+    pipeline_display_name: str | None = None
+    deploy_order: int
+    status: str
+    created_at: datetime
+
+
 # ---------------------------------------------------------------------------
 # Workspace response schemas
 # ---------------------------------------------------------------------------
@@ -141,6 +157,8 @@ class WorkspaceMemberResponse(BaseModel):
     workspace_id: int
     user_id: int
     role: str
+    gitlab_access_token: str | None = None
+    gitlab_token_name: str | None = None
     created_at: datetime
 
 
@@ -162,6 +180,7 @@ class WorkspaceResponse(BaseModel):
     kserve_endpoint: str | None = None
     status: WorkspaceStatus
     created_by: int
+    pipelines: list[WorkspacePipelineResponse] = []
     created_at: datetime
     updated_at: datetime
 
