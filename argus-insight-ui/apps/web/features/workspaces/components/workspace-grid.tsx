@@ -438,7 +438,7 @@ export function WorkspaceGrid({ onSelect, onDeleted, refreshKey, onAddWorkspace 
           </Button>
         )}
       </div>
-      <div className="ag-theme-alpine" style={{ width: "100%" }}>
+      <div className="ag-theme-alpine" style={{ width: "100%", height: 36 + 40 * 10 + 48 }}>
         <style>{`
           .ag-theme-alpine {
             --ag-font-family: 'Roboto Condensed', Roboto, sans-serif;
@@ -454,7 +454,6 @@ export function WorkspaceGrid({ onSelect, onDeleted, refreshKey, onAddWorkspace 
             if (event.data) onSelect(event.data)
           }}
           getRowId={(params) => String(params.data.id)}
-          domLayout="autoHeight"
           headerHeight={36}
           rowHeight={40}
           pagination={true}

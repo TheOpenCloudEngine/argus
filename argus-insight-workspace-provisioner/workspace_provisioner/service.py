@@ -851,6 +851,18 @@ async def delete_workspace(
     # Build deletion context from DB records
     deletion_context = _build_deletion_context(ws, cred)
 
+    # Enrich gitlab_project_id from workspace_services if not in workspace record
+    if not deletion_context.get("gitlab_project_id"):
+        svc_result = await session.execute(
+            select(ArgusWorkspaceService).where(
+                ArgusWorkspaceService.workspace_id == workspace_id,
+                ArgusWorkspaceService.plugin_name == "argus-gitlab",
+            )
+        )
+        gitlab_svc = svc_result.scalars().first()
+        if gitlab_svc and gitlab_svc.metadata_json:
+            deletion_context["gitlab_project_id"] = gitlab_svc.metadata_json.get("project_id")
+
     logger.info("Launching deletion workflow in background for workspace %d", workspace_id)
     asyncio.create_task(
         _run_deletion_workflow(workspace_id, deletion_context, gitlab_client, req)
