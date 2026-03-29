@@ -226,9 +226,16 @@ class AirflowDeployStep(WorkflowStep):
             )
 
     async def teardown(self, ctx: WorkflowContext) -> dict | None:
-        """Delete all Airflow K8s resources (re-rendering manifests from context)."""
+        """Delete all Airflow K8s resources and DNS record."""
         manifests = ctx.get("airflow_manifests") or self._render_manifests(ctx)
         kubeconfig = ctx.get("k8s_kubeconfig")
         await kubectl_delete(manifests, kubeconfig=kubeconfig)
-        logger.info("Teardown Airflow K8s resources for workspace '%s'", ctx.workspace_name)
+        endpoint = ctx.get("airflow_endpoint")
+        if endpoint:
+            try:
+                from workspace_provisioner.workflow.steps.app_deploy import delete_workspace_dns
+                await delete_workspace_dns(endpoint.replace("http://", "").replace("https://", ""))
+            except Exception as e:
+                logger.warning("DNS deletion failed for Airflow: %s", e)
+        logger.info("Teardown Airflow for workspace '%s'", ctx.workspace_name)
         return {"k8s_deleted": True}

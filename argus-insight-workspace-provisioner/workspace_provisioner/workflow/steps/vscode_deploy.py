@@ -195,5 +195,12 @@ class VScodeServerDeployStep(WorkflowStep):
         manifests = ctx.get("vscode_manifests") or self._render_manifests(ctx)
         kubeconfig = ctx.get("k8s_kubeconfig")
         await kubectl_delete(manifests, kubeconfig=kubeconfig)
+        endpoint = ctx.get("vscode_endpoint")
+        if endpoint:
+            try:
+                from workspace_provisioner.workflow.steps.app_deploy import delete_workspace_dns
+                await delete_workspace_dns(endpoint.replace("http://", "").replace("https://", ""))
+            except Exception as e:
+                logger.warning("DNS deletion failed for VS Code: %s", e)
         logger.info("Teardown VS Code Server for workspace '%s'", ctx.workspace_name)
         return {"k8s_deleted": True}

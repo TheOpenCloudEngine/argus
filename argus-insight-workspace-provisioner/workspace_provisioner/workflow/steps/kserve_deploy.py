@@ -182,9 +182,16 @@ class KServeDeployStep(WorkflowStep):
             )
 
     async def teardown(self, ctx: WorkflowContext) -> dict | None:
-        """Delete all KServe K8s resources (re-rendering manifests from context)."""
+        """Delete all KServe K8s resources and DNS record."""
         manifests = ctx.get("kserve_manifests") or self._render_manifests(ctx)
         kubeconfig = ctx.get("k8s_kubeconfig")
         await kubectl_delete(manifests, kubeconfig=kubeconfig)
-        logger.info("Teardown KServe K8s resources for workspace '%s'", ctx.workspace_name)
+        endpoint = ctx.get("kserve_endpoint")
+        if endpoint:
+            try:
+                from workspace_provisioner.workflow.steps.app_deploy import delete_workspace_dns
+                await delete_workspace_dns(endpoint.replace("http://", "").replace("https://", ""))
+            except Exception as e:
+                logger.warning("DNS deletion failed for KServe: %s", e)
+        logger.info("Teardown KServe for workspace '%s'", ctx.workspace_name)
         return {"k8s_deleted": True}

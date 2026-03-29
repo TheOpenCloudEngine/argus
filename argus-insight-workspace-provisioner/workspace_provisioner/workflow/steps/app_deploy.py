@@ -198,6 +198,14 @@ async def register_workspace_dns(hostname: str) -> None:
         await register_app_dns(session, hostname, server_ip)
 
 
+async def delete_workspace_dns(hostname: str) -> None:
+    """Delete DNS for a workspace service."""
+    from app.core.database import async_session
+
+    async with async_session() as session:
+        await delete_app_dns(session, hostname)
+
+
 async def deploy_manifests(template_dir: str, variables: dict[str, str]) -> str:
     """Render and apply K8s manifests from a template directory."""
     logger.info("[k8s] Rendering manifests from template '%s'", template_dir)
