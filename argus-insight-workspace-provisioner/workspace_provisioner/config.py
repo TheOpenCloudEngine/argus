@@ -88,10 +88,29 @@ class AirflowConfig(BaseModel):
 class MlflowConfig(BaseModel):
     """MLflow deployment settings."""
 
+    # MLflow server
     image: str = Field(
         default="ghcr.io/mlflow/mlflow:v2.19.0",
         description="MLflow tracking server image",
     )
+    port: int = Field(
+        default=5000,
+        description="MLflow server listening port",
+    )
+    serve_artifacts: bool = Field(
+        default=True,
+        description="Enable artifact proxy serving",
+    )
+    artifact_root_prefix: str = Field(
+        default="mlflow-artifacts",
+        description="S3 artifact root path prefix",
+    )
+    resources: ResourceConfig = Field(
+        default_factory=ResourceConfig,
+        description="CPU/Memory for the MLflow server container",
+    )
+
+    # PostgreSQL backend store
     postgres_image: str = Field(
         default="postgres:16-alpine",
         description="PostgreSQL image for MLflow backend store",
@@ -100,9 +119,53 @@ class MlflowConfig(BaseModel):
         default="10Gi",
         description="PVC size for PostgreSQL data volume",
     )
-    resources: ResourceConfig = Field(
-        default_factory=ResourceConfig,
-        description="CPU/Memory for the MLflow server container",
+    db_name: str = Field(
+        default="mlflow",
+        description="PostgreSQL database name",
+    )
+    db_user: str = Field(
+        default="mlflow",
+        description="PostgreSQL username",
+    )
+    db_cpu_request: str = Field(
+        default="100m",
+        description="PostgreSQL CPU request",
+    )
+    db_cpu_limit: str = Field(
+        default="500m",
+        description="PostgreSQL CPU limit",
+    )
+    db_memory_request: str = Field(
+        default="256Mi",
+        description="PostgreSQL memory request",
+    )
+    db_memory_limit: str = Field(
+        default="512Mi",
+        description="PostgreSQL memory limit",
+    )
+
+    # Ingress
+    ingress_class: str = Field(
+        default="nginx",
+        description="Kubernetes Ingress class name",
+    )
+    proxy_body_size: str = Field(
+        default="256m",
+        description="Maximum upload size for model files",
+    )
+    proxy_read_timeout: int = Field(
+        default=600,
+        description="Nginx Ingress proxy read timeout in seconds",
+    )
+
+    # Health check
+    liveness_initial_delay: int = Field(
+        default=30,
+        description="Liveness probe initial delay in seconds",
+    )
+    readiness_initial_delay: int = Field(
+        default=15,
+        description="Readiness probe initial delay in seconds",
     )
 
 

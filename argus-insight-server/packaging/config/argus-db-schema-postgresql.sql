@@ -271,7 +271,13 @@ INSERT INTO argus_configuration (category, config_key, config_value, description
 ('auth', 'auth_keycloak_client_secret',  'argus-client-secret',  'Keycloak client secret'),
 ('auth', 'auth_keycloak_admin_role',     'argus-admin',          'Admin role name'),
 ('auth', 'auth_keycloak_superuser_role', 'argus-superuser',      'Superuser role name'),
-('auth', 'auth_keycloak_user_role',      'argus-user',           'User role name')
+('auth', 'auth_keycloak_user_role',      'argus-user',           'User role name'),
+-- GitLab
+('gitlab', 'gitlab_url',                '',                     'GitLab server URL'),
+('gitlab', 'gitlab_token',              '',                     'GitLab API private token'),
+('gitlab', 'gitlab_group_path',         'workspaces',           'Default group path for workspace projects'),
+('gitlab', 'gitlab_default_branch',     'main',                 'Default branch for new projects'),
+('gitlab', 'gitlab_project_visibility', 'internal',             'Project visibility (internal, private, public)')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- ---------------------------------------------------------------------------

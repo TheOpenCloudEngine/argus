@@ -420,6 +420,12 @@ async def seed_infra_config(session: AsyncSession) -> None:
         ("auth", "auth_keycloak_admin_role", settings.auth_keycloak_admin_role, "Admin role name"),
         ("auth", "auth_keycloak_superuser_role", settings.auth_keycloak_superuser_role, "Superuser role name"),
         ("auth", "auth_keycloak_user_role", settings.auth_keycloak_user_role, "User role name"),
+        # GitLab
+        ("gitlab", "gitlab_url", settings.gitlab_url, "GitLab server URL"),
+        ("gitlab", "gitlab_token", settings.gitlab_token, "GitLab API private token"),
+        ("gitlab", "gitlab_group_path", "workspaces", "Default group path for workspace projects"),
+        ("gitlab", "gitlab_default_branch", "main", "Default branch for new projects"),
+        ("gitlab", "gitlab_project_visibility", "internal", "Project visibility (internal, private, public)"),
     ]
     for category, key, value, description in defaults:
         result = await session.execute(
@@ -473,4 +479,34 @@ async def load_auth_settings(session: AsyncSession) -> dict[str, str]:
     logger.info("Auth settings loaded from DB: type=%s, server_url=%s, realm=%s",
                 app_settings.auth_type, app_settings.auth_keycloak_server_url,
                 app_settings.auth_keycloak_realm)
+    return cfg
+
+
+async def load_gitlab_settings(session: AsyncSession) -> dict[str, str]:
+    """Load GitLab settings from DB and update the global settings object.
+
+    Also reinitializes the GitLab client used by the workspace provisioner.
+    """
+    from app.core.config import settings as app_settings
+
+    cfg = await get_config_by_category(session, "gitlab")
+    if not cfg:
+        logger.info("No GitLab settings in DB, using config file defaults")
+        return {}
+
+    app_settings.gitlab_url = cfg.get("gitlab_url", app_settings.gitlab_url)
+    app_settings.gitlab_token = cfg.get("gitlab_token", app_settings.gitlab_token)
+
+    # Reinitialize GitLab client if URL and token are available
+    if app_settings.gitlab_url and app_settings.gitlab_token:
+        try:
+            from workspace_provisioner.router import init_gitlab_client
+            init_gitlab_client(
+                url=app_settings.gitlab_url,
+                private_token=app_settings.gitlab_token,
+            )
+        except Exception as e:
+            logger.warning("Failed to reinitialize GitLab client: %s", e)
+
+    logger.info("GitLab settings loaded from DB: url=%s", app_settings.gitlab_url)
     return cfg

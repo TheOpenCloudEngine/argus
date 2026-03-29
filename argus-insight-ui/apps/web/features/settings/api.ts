@@ -504,3 +504,50 @@ export async function testAuthConnection(
   if (!res.ok) throw new Error(`Test failed: ${res.status}`)
   return res.json()
 }
+
+// --------------------------------------------------------------------------- //
+// GitLab Settings
+// --------------------------------------------------------------------------- //
+
+export type GitlabConfig = {
+  url: string
+  token: string
+  group_path: string
+  default_branch: string
+  project_visibility: string
+}
+
+export async function fetchGitlabConfig(): Promise<GitlabConfig> {
+  const res = await authFetch(`${BASE}/gitlab`)
+  if (!res.ok) throw new Error(await extractErrorMessage(res, "Failed to fetch GitLab config"))
+  return res.json()
+}
+
+export async function fetchGitlabToken(): Promise<string> {
+  const res = await authFetch(`${BASE}/gitlab/token`)
+  if (!res.ok) throw new Error("Failed to fetch token")
+  const data = await res.json()
+  return data.token
+}
+
+export async function updateGitlabConfig(config: GitlabConfig): Promise<void> {
+  const res = await authFetch(`${BASE}/gitlab`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(await extractErrorMessage(res, "Failed to save GitLab config"))
+}
+
+export async function testGitlabConnection(
+  url: string,
+  token: string,
+): Promise<{ success: boolean; message: string }> {
+  const res = await authFetch(`${BASE}/gitlab/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, token }),
+  })
+  if (!res.ok) throw new Error(`Test failed: ${res.status}`)
+  return res.json()
+}

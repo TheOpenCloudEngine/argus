@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         await seed_roles(session)
 
-    from app.settings.service import load_auth_settings, seed_infra_config
+    from app.settings.service import load_auth_settings, load_gitlab_settings, seed_infra_config
 
     async with async_session() as session:
         await seed_infra_config(session)
@@ -106,6 +106,10 @@ async def lifespan(app: FastAPI):
     # Load auth settings from DB (overrides config file defaults)
     async with async_session() as session:
         await load_auth_settings(session)
+
+    # Load GitLab settings from DB and initialize client
+    async with async_session() as session:
+        await load_gitlab_settings(session)
 
     # Seed default admin user in local auth mode
     async with async_session() as session:
@@ -116,12 +120,17 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         await seed_apps(session)
 
-    # Initialize GitLab client for workspace provisioner
+    # Fallback: Initialize GitLab client if not already done by load_gitlab_settings
     if settings.gitlab_url and settings.gitlab_token:
-        init_gitlab_client(
-            url=settings.gitlab_url,
-            private_token=settings.gitlab_token,
-        )
+        try:
+            from workspace_provisioner.router import _gitlab_client
+            if _gitlab_client is None:
+                init_gitlab_client(
+                    url=settings.gitlab_url,
+                    private_token=settings.gitlab_token,
+                )
+        except Exception:
+            pass
 
     await disconnect_checker.start()
     yield
