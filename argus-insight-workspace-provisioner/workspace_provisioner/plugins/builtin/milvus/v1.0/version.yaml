@@ -1,0 +1,14 @@
+version: "1.0"
+display_name: "v1.0 (Standalone + Attu UI)"
+description: Milvus Standalone with embedded etcd/MinIO and Attu Web UI
+status: stable
+release_date: "2026-03-30"
+step_class: workspace_provisioner.workflow.steps.milvus_deploy.MilvusDeployStep
+config_class: workspace_provisioner.config.MilvusConfig
+template_dir: milvus
+changelog: |
+  - Milvus 2.5.x Standalone (embedded etcd + MinIO)
+  - gRPC API (19530) for PyMilvus, LangChain, LlamaIndex
+  - Attu Web UI sidecar (9091) for collection management
+  - Persistent vector data storage
+upgradeable_from: []

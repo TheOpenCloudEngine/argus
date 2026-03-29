@@ -17,12 +17,6 @@
           "icon": "Monitor"
         },
         {
-          "id": "servers",
-          "title": "Servers",
-          "url": "/dashboard/servers",
-          "icon": "Server"
-        },
-        {
           "id": "alerts",
           "title": "Alerts",
           "url": "/dashboard/alerts",
@@ -39,12 +33,6 @@
           "title": "File Browser",
           "url": "/dashboard/file-browser",
           "icon": "FolderOpen"
-        },
-        {
-          "id": "notes",
-          "title": "My Notes",
-          "url": "/dashboard/notes",
-          "icon": "BookOpen"
         },
         {
           "id": "catalogs",

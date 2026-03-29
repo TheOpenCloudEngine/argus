@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: argus-milvus-${WORKSPACE_NAME}
+  namespace: ${K8S_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: ${WORKSPACE_NAME}
+    app.kubernetes.io/part-of: argus-insight
+    argus-insight/workspace: ${WORKSPACE_NAME}
+spec:
+  serviceName: argus-milvus-${WORKSPACE_NAME}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: milvus
+      app.kubernetes.io/instance: ${WORKSPACE_NAME}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: milvus
+        app.kubernetes.io/instance: ${WORKSPACE_NAME}
+        app.kubernetes.io/part-of: argus-insight
+        argus-insight/workspace: ${WORKSPACE_NAME}
+    spec:
+      containers:
+        - name: milvus
+          image: ${MILVUS_IMAGE}
+          command: ["milvus", "run", "standalone"]
+          env:
+            - name: ETCD_USE_EMBED
+              value: "true"
+            - name: ETCD_DATA_DIR
+              value: "/var/lib/milvus/etcd"
+            - name: ETCD_CONFIG_PATH
+              value: "/milvus/configs/embedEtcd.yaml"
+            - name: COMMON_STORAGETYPE
+              value: "local"
+          ports:
+            - name: grpc
+              containerPort: 19530
+              protocol: TCP
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "${MILVUS_CPU_REQUEST}"
+              memory: "${MILVUS_MEMORY_REQUEST}"
+            limits:
+              cpu: "${MILVUS_CPU_LIMIT}"
+              memory: "${MILVUS_MEMORY_LIMIT}"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/milvus
+        - name: attu
+          image: ${ATTU_IMAGE}
+          env:
+            - name: MILVUS_URL
+              value: "localhost:19530"
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: argus-milvus-${WORKSPACE_NAME}-data

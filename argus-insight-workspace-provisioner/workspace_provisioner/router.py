@@ -295,6 +295,28 @@ async def list_workspaces(
     return await service.list_workspaces(session, status=status, search=search, page=page, page_size=page_size)
 
 
+@router.get("/workspaces/my")
+async def list_my_workspaces(
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """List workspaces where the current user is a member."""
+    from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceMember
+    user_id = int(current_user.sub)
+    result = await session.execute(
+        select(ArgusWorkspace)
+        .join(ArgusWorkspaceMember, ArgusWorkspaceMember.workspace_id == ArgusWorkspace.id)
+        .where(ArgusWorkspaceMember.user_id == user_id)
+        .where(ArgusWorkspace.status != "deleted")
+        .order_by(ArgusWorkspace.name)
+    )
+    workspaces = result.scalars().all()
+    return [
+        {"id": ws.id, "name": ws.name, "display_name": ws.display_name, "status": ws.status}
+        for ws in workspaces
+    ]
+
+
 @router.get("/workspaces/{workspace_id}", response_model=WorkspaceResponse)
 async def get_workspace(
     workspace_id: int,
