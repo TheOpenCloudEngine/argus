@@ -65,6 +65,7 @@ class Neo4jDeployStep(WorkflowStep):
         from workspace_provisioner.service import generate_service_id
         svc_id = generate_service_id()
         hostname = f"argus-neo4j-{svc_id}.argus-insight.{domain}"
+        bolt_hostname = f"argus-neo4j-bolt-{svc_id}.argus-insight.{domain}"
 
         variables = {
             "NEO4J_IMAGE": config.image,
@@ -78,6 +79,7 @@ class Neo4jDeployStep(WorkflowStep):
             "K8S_NAMESPACE": namespace,
             "DOMAIN": domain,
             "HOSTNAME": hostname,
+            "BOLT_HOSTNAME": bolt_hostname,
         }
 
         manifests = render_manifests("neo4j", variables)
@@ -100,11 +102,13 @@ class Neo4jDeployStep(WorkflowStep):
             )
 
         ctx.set("neo4j_endpoint", hostname)
+        ctx.set("neo4j_bolt_endpoint", bolt_hostname)
         ctx.set("neo4j_manifests", manifests)
 
-        # Register DNS
+        # Register DNS (HTTP + Bolt)
         from workspace_provisioner.workflow.steps.app_deploy import register_workspace_dns
         await register_workspace_dns(hostname)
+        await register_workspace_dns(bolt_hostname)
 
         # Register service
         internal_bolt = f"bolt://argus-neo4j-{workspace_name}.{namespace}.svc.cluster.local:7687"
@@ -115,11 +119,12 @@ class Neo4jDeployStep(WorkflowStep):
             plugin_name="argus-neo4j",
             display_name="Neo4j Graph Database",
             version="1.0",
-            endpoint=f"http://{hostname}",
+            endpoint=f"bolt://{bolt_hostname}:80",
             service_id=svc_id,
             username="neo4j",
             password=password,
             metadata={
+                "browser_url": f"http://{hostname}",
                 "internal_bolt": internal_bolt,
                 "internal_http": internal_http,
                 "bolt_port": 7687,
@@ -140,6 +145,7 @@ class Neo4jDeployStep(WorkflowStep):
         config: Neo4jConfig = ctx.get("argus_neo4j_config", Neo4jConfig())
         namespace = ctx.get("k8s_namespace", f"argus-ws-{ctx.workspace_name}")
         hostname = ctx.get("neo4j_endpoint", f"argus-neo4j-teardown.argus-insight.{ctx.domain}")
+        bolt_hostname = ctx.get("neo4j_bolt_endpoint", f"argus-neo4j-bolt-teardown.argus-insight.{ctx.domain}")
         return render_manifests("neo4j", {
             "NEO4J_IMAGE": config.image,
             "NEO4J_STORAGE_SIZE": config.storage_size,
@@ -152,6 +158,7 @@ class Neo4jDeployStep(WorkflowStep):
             "K8S_NAMESPACE": namespace,
             "DOMAIN": ctx.domain,
             "HOSTNAME": hostname,
+            "BOLT_HOSTNAME": bolt_hostname,
         })
 
     async def rollback(self, ctx: WorkflowContext) -> None:
@@ -162,16 +169,17 @@ class Neo4jDeployStep(WorkflowStep):
             logger.info("Rolled back Neo4j for workspace '%s'", ctx.workspace_name)
 
     async def teardown(self, ctx: WorkflowContext) -> dict | None:
-        """Delete all Neo4j K8s resources and DNS record."""
+        """Delete all Neo4j K8s resources and DNS records (HTTP + Bolt)."""
         manifests = ctx.get("neo4j_manifests") or self._render_manifests(ctx)
         kubeconfig = ctx.get("k8s_kubeconfig")
         await kubectl_delete(manifests, kubeconfig=kubeconfig)
-        endpoint = ctx.get("neo4j_endpoint")
-        if endpoint:
-            try:
-                from workspace_provisioner.workflow.steps.app_deploy import delete_workspace_dns
-                await delete_workspace_dns(endpoint.replace("http://", "").replace("https://", ""))
-            except Exception as e:
-                logger.warning("DNS deletion failed for Neo4j: %s", e)
+        from workspace_provisioner.workflow.steps.app_deploy import delete_workspace_dns
+        for ep_key in ("neo4j_endpoint", "neo4j_bolt_endpoint"):
+            endpoint = ctx.get(ep_key)
+            if endpoint:
+                try:
+                    await delete_workspace_dns(endpoint.replace("http://", "").replace("https://", ""))
+                except Exception as e:
+                    logger.warning("DNS deletion failed for Neo4j (%s): %s", ep_key, e)
         logger.info("Teardown Neo4j for workspace '%s'", ctx.workspace_name)
         return {"k8s_deleted": True}
