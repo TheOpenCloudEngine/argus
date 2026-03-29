@@ -227,6 +227,30 @@ class JupyterPySparkConfig(JupyterLabConfig):
     memory_limit: str = Field(default="8Gi", description="Memory limit")
 
 
+class MilvusConfig(BaseModel):
+    """Milvus Vector Database deployment settings."""
+
+    image: str = Field(
+        default="milvusdb/milvus:v2.5.6",
+        description="Milvus Standalone container image",
+    )
+    attu_image: str = Field(
+        default="zilliz/attu:v2.4.12",
+        description="Attu Web UI sidecar image",
+    )
+    storage_size: str = Field(
+        default="30Gi",
+        description="Persistent data volume size",
+    )
+    resources: ResourceConfig = Field(
+        default_factory=lambda: ResourceConfig(
+            cpu_request="500m", cpu_limit="4",
+            memory_request="2Gi", memory_limit="8Gi",
+        ),
+        description="CPU/Memory for the Milvus container",
+    )
+
+
 class MindsdbConfig(BaseModel):
     """MindsDB AI-in-Database deployment settings."""
 
