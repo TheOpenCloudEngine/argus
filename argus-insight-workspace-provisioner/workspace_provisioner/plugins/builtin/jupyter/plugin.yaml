@@ -1,0 +1,17 @@
+name: argus-jupyter
+display_name: JupyterLab
+description: Browser-based interactive notebook environment with scipy/numpy/pandas
+icon: jupyter
+category: development
+depends_on: []
+provides:
+  - jupyter_endpoint
+requires: []
+tags:
+  - notebook
+  - jupyter
+  - development
+  - ide
+versions:
+  - "1.0"
+default_version: "1.0"

@@ -172,6 +172,7 @@ class ArgusWorkspaceService(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     workspace_id = Column(Integer, ForeignKey("argus_workspaces.id", ondelete="CASCADE"), nullable=False)
     plugin_name = Column(String(100), nullable=False)
+    service_id = Column(String(20))  # timestamp hex + random (e.g., "67e8a400a3f1")
     display_name = Column(String(255))
     version = Column(String(50))
     endpoint = Column(String(500))

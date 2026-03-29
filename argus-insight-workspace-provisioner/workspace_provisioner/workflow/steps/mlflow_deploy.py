@@ -92,6 +92,11 @@ class MlflowDeployStep(WorkflowStep):
             except Exception as e:
                 logger.warning("MinIO bucket check for MLflow artifacts: %s", e)
 
+        # Generate unique service ID for hostname
+        from workspace_provisioner.service import generate_service_id
+        svc_id = generate_service_id()
+        hostname = f"argus-mlflow-{svc_id}.argus-insight.{domain}"
+
         variables = {
             "MLFLOW_IMAGE": config.image,
             "MLFLOW_POSTGRES_IMAGE": config.postgres_image,
@@ -103,6 +108,7 @@ class MlflowDeployStep(WorkflowStep):
             "WORKSPACE_NAME": workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": domain,
+            "HOSTNAME": hostname,
             "MLFLOW_DB_PASSWORD": db_password,
             "MLFLOW_ARTIFACT_BUCKET": artifact_bucket,
             "MINIO_ACCESS_KEY": minio_access_key,
@@ -140,11 +146,13 @@ class MlflowDeployStep(WorkflowStep):
                 f"MLflow rollout timed out: argus-mlflow-{workspace_name} in {namespace}"
             )
 
-        external_endpoint = f"argus-mlflow-{workspace_name}.argus-insight.{domain}"
-
-        ctx.set("mlflow_endpoint", external_endpoint)
+        ctx.set("mlflow_endpoint", hostname)
         ctx.set("mlflow_artifact_bucket", artifact_bucket)
         ctx.set("mlflow_manifests", manifests)
+
+        # Register DNS
+        from workspace_provisioner.workflow.steps.app_deploy import register_workspace_dns
+        await register_workspace_dns(hostname)
 
         # Register service
         internal_endpoint = f"http://argus-mlflow-{workspace_name}.{namespace}.svc.cluster.local:5000"
@@ -154,7 +162,8 @@ class MlflowDeployStep(WorkflowStep):
             plugin_name="argus-mlflow",
             display_name="MLflow Tracking Server",
             version="1.0",
-            endpoint=f"http://{external_endpoint}",
+            endpoint=f"http://{hostname}",
+            service_id=svc_id,
             metadata={
                 "internal_endpoint": internal_endpoint,
                 "artifact_bucket": artifact_bucket,
@@ -163,16 +172,19 @@ class MlflowDeployStep(WorkflowStep):
         )
 
         return {
-            "endpoint": external_endpoint,
+            "endpoint": hostname,
             "internal_endpoint": internal_endpoint,
             "artifact_bucket": artifact_bucket,
             "namespace": namespace,
+            "service_id": svc_id,
         }
 
     def _render_manifests(self, ctx: WorkflowContext) -> str:
         """Re-render manifests from context for teardown."""
         config: MlflowConfig = ctx.get("mlflow_config", MlflowConfig())
         namespace = ctx.get("k8s_namespace", f"argus-ws-{ctx.workspace_name}")
+        # Hostname is not critical for teardown (kubectl delete matches by resource name)
+        hostname = ctx.get("mlflow_endpoint", f"argus-mlflow-teardown.argus-insight.{ctx.domain}")
         return render_manifests("mlflow", {
             "MLFLOW_IMAGE": config.image,
             "MLFLOW_POSTGRES_IMAGE": config.postgres_image,
@@ -184,6 +196,7 @@ class MlflowDeployStep(WorkflowStep):
             "WORKSPACE_NAME": ctx.workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": ctx.domain,
+            "HOSTNAME": hostname,
             "MLFLOW_DB_PASSWORD": "",
             "MLFLOW_ARTIFACT_BUCKET": ctx.get("mlflow_artifact_bucket", ctx.workspace_name),
             "MINIO_ACCESS_KEY": ctx.get("minio_ws_admin_access_key", ""),

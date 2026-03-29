@@ -225,6 +225,7 @@ class WorkspaceServiceResponse(BaseModel):
     id: int
     workspace_id: int
     plugin_name: str
+    service_id: str | None = None
     display_name: str | None = None
     version: str | None = None
     endpoint: str | None = None

@@ -433,6 +433,7 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     id              SERIAL          PRIMARY KEY,
     workspace_id    INTEGER         NOT NULL REFERENCES argus_workspaces(id) ON DELETE CASCADE,
     plugin_name     VARCHAR(100)    NOT NULL,
+    service_id      VARCHAR(20),
     display_name    VARCHAR(255),
     version         VARCHAR(50),
     endpoint        VARCHAR(500),

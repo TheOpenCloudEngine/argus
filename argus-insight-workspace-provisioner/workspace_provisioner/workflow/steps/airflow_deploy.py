@@ -84,6 +84,11 @@ class AirflowDeployStep(WorkflowStep):
         gitlab_repo_url = ctx.get("gitlab_http_url", "")
         gitlab_token = ctx.get("gitlab_token", "")
 
+        # Generate unique service ID for hostname
+        from workspace_provisioner.service import generate_service_id
+        svc_id = generate_service_id()
+        hostname = f"argus-airflow-{svc_id}.argus-insight.{domain}"
+
         variables = {
             "AIRFLOW_IMAGE": config.image,
             "AIRFLOW_POSTGRES_IMAGE": config.postgres_image,
@@ -103,6 +108,7 @@ class AirflowDeployStep(WorkflowStep):
             "WORKSPACE_NAME": workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": domain,
+            "HOSTNAME": hostname,
             "AIRFLOW_ADMIN_PASSWORD": admin_password,
             "AIRFLOW_DB_PASSWORD": db_password,
             "AIRFLOW_FERNET_KEY": fernet_key,
@@ -142,11 +148,13 @@ class AirflowDeployStep(WorkflowStep):
                 f"Airflow rollout timed out: argus-airflow-{workspace_name} in {namespace}"
             )
 
-        external_endpoint = f"argus-airflow-{workspace_name}.argus-insight.{domain}"
-
-        ctx.set("airflow_endpoint", external_endpoint)
+        ctx.set("airflow_endpoint", hostname)
         ctx.set("airflow_admin_password", admin_password)
         ctx.set("airflow_manifests", manifests)
+
+        # Register DNS
+        from workspace_provisioner.workflow.steps.app_deploy import register_workspace_dns
+        await register_workspace_dns(hostname)
 
         # Register service
         internal_endpoint = f"http://argus-airflow-{workspace_name}.{namespace}.svc.cluster.local:8080"
@@ -156,7 +164,8 @@ class AirflowDeployStep(WorkflowStep):
             plugin_name="argus-airflow",
             display_name="Apache Airflow",
             version="1.0",
-            endpoint=f"http://{external_endpoint}",
+            endpoint=f"http://{hostname}",
+            service_id=svc_id,
             username="admin",
             password=admin_password,
             metadata={
@@ -166,16 +175,18 @@ class AirflowDeployStep(WorkflowStep):
         )
 
         return {
-            "endpoint": external_endpoint,
+            "endpoint": hostname,
             "internal_endpoint": internal_endpoint,
             "admin_user": "admin",
             "namespace": namespace,
+            "service_id": svc_id,
         }
 
     def _render_manifests(self, ctx: WorkflowContext) -> str:
         """Re-render manifests from context for teardown."""
         config: AirflowConfig = ctx.get("airflow_config", AirflowConfig())
         namespace = ctx.get("k8s_namespace", f"argus-ws-{ctx.workspace_name}")
+        hostname = ctx.get("airflow_endpoint", f"argus-airflow-teardown.argus-insight.{ctx.domain}")
         return render_manifests("airflow", {
             "AIRFLOW_IMAGE": config.image,
             "AIRFLOW_POSTGRES_IMAGE": config.postgres_image,
@@ -195,6 +206,7 @@ class AirflowDeployStep(WorkflowStep):
             "WORKSPACE_NAME": ctx.workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": ctx.domain,
+            "HOSTNAME": hostname,
             "AIRFLOW_ADMIN_PASSWORD": ctx.get("airflow_admin_password", ""),
             "AIRFLOW_DB_PASSWORD": "",
             "AIRFLOW_FERNET_KEY": "",

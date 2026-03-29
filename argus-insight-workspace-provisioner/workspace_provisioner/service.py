@@ -7,6 +7,8 @@ models and the workflow engine.
 
 import asyncio
 import logging
+import secrets
+import time
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +44,17 @@ from workspace_provisioner.workflow.steps.gitlab_create_project import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def generate_service_id() -> str:
+    """Generate a unique service ID for hostname security.
+
+    Format: 8-char hex timestamp + 4-char random hex = 12 chars.
+    Example: "67e8a400a3f1"
+    """
+    ts_hex = f"{int(time.time()):08x}"
+    rand_hex = secrets.token_hex(2)
+    return f"{ts_hex}{rand_hex}"
 
 
 async def log_audit(
@@ -83,6 +96,7 @@ async def register_workspace_service(
     access_token: str | None = None,
     status: str = "running",
     metadata: dict | None = None,
+    service_id: str | None = None,
 ) -> None:
     """Register or update a service deployed to a workspace (upsert).
 
@@ -105,12 +119,14 @@ async def register_workspace_service(
             if username: svc.username = username
             if password: svc.password = password
             if access_token: svc.access_token = access_token
+            if service_id: svc.service_id = service_id
             svc.status = status
             if metadata: svc.metadata_json = metadata
         else:
             svc = ArgusWorkspaceService(
                 workspace_id=workspace_id,
                 plugin_name=plugin_name,
+                service_id=service_id,
                 display_name=display_name,
                 version=version,
                 endpoint=endpoint,
@@ -122,8 +138,8 @@ async def register_workspace_service(
             )
             session.add(svc)
         await session.commit()
-        logger.info("Service registered: workspace=%d plugin=%s endpoint=%s",
-                     workspace_id, plugin_name, endpoint)
+        logger.info("Service registered: workspace=%d plugin=%s service_id=%s endpoint=%s",
+                     workspace_id, plugin_name, service_id, endpoint)
 
 
 async def _build_workspace_response(ws: ArgusWorkspace, session: AsyncSession | None = None) -> WorkspaceResponse:

@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS argus_workspace_services (
     id              INT             AUTO_INCREMENT PRIMARY KEY,
     workspace_id    INT             NOT NULL,
     plugin_name     VARCHAR(100)    NOT NULL,
+    service_id      VARCHAR(20)     COMMENT 'Unique service ID used in external hostname',
     display_name    VARCHAR(255),
     version         VARCHAR(50),
     endpoint        VARCHAR(500),

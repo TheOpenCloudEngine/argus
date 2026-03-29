@@ -184,6 +184,20 @@ async def get_pdns_config(session) -> dict[str, str]:
     return await get_pdns_settings(session)
 
 
+async def register_workspace_dns(hostname: str) -> None:
+    """Register DNS for a workspace service using server IP from socket."""
+    import socket
+    from app.core.database import async_session
+
+    try:
+        server_ip = socket.gethostbyname(socket.gethostname())
+    except Exception:
+        server_ip = "127.0.0.1"
+
+    async with async_session() as session:
+        await register_app_dns(session, hostname, server_ip)
+
+
 async def deploy_manifests(template_dir: str, variables: dict[str, str]) -> str:
     """Render and apply K8s manifests from a template directory."""
     logger.info("[k8s] Rendering manifests from template '%s'", template_dir)

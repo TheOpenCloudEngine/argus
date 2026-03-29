@@ -20,7 +20,7 @@ data:
     sql_alchemy_conn = postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@argus-airflow-${WORKSPACE_NAME}-db:5432/airflow
 
     [webserver]
-    base_url = https://argus-airflow-${WORKSPACE_NAME}.argus-insight.${DOMAIN}
+    base_url = https://${HOSTNAME}
     web_server_port = 8080
     rbac = True
     expose_config = False

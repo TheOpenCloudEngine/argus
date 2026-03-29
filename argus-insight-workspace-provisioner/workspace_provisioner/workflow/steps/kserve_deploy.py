@@ -70,6 +70,11 @@ class KServeDeployStep(WorkflowStep):
         )
         model_bucket = workspace_name
 
+        # Generate unique service ID for hostname
+        from workspace_provisioner.service import generate_service_id
+        svc_id = generate_service_id()
+        hostname = f"argus-kserve-{svc_id}.argus-insight.{domain}"
+
         variables = {
             "KSERVE_CONTROLLER_IMAGE": config.controller_image,
             "KSERVE_DEFAULT_RUNTIME": config.default_runtime,
@@ -80,6 +85,7 @@ class KServeDeployStep(WorkflowStep):
             "WORKSPACE_NAME": workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": domain,
+            "HOSTNAME": hostname,
             "MINIO_ENDPOINT": minio_endpoint,
             "MINIO_ACCESS_KEY": minio_access_key,
             "MINIO_SECRET_KEY": minio_secret_key,
@@ -113,10 +119,12 @@ class KServeDeployStep(WorkflowStep):
                 f"in {namespace}"
             )
 
-        external_endpoint = f"argus-kserve-{workspace_name}.argus-insight.{domain}"
-
-        ctx.set("kserve_endpoint", external_endpoint)
+        ctx.set("kserve_endpoint", hostname)
         ctx.set("kserve_manifests", manifests)
+
+        # Register DNS
+        from workspace_provisioner.workflow.steps.app_deploy import register_workspace_dns
+        await register_workspace_dns(hostname)
 
         # Register service
         from workspace_provisioner.service import register_workspace_service
@@ -125,7 +133,8 @@ class KServeDeployStep(WorkflowStep):
             plugin_name="argus-kserve",
             display_name="KServe Model Serving",
             version="1.0",
-            endpoint=f"http://{external_endpoint}",
+            endpoint=f"http://{hostname}",
+            service_id=svc_id,
             metadata={
                 "internal_endpoint": f"http://argus-kserve-{workspace_name}.{namespace}.svc.cluster.local:8080",
                 "default_runtime": config.default_runtime,
@@ -134,15 +143,17 @@ class KServeDeployStep(WorkflowStep):
         )
 
         return {
-            "endpoint": external_endpoint,
+            "endpoint": hostname,
             "default_runtime": config.default_runtime,
             "namespace": namespace,
+            "service_id": svc_id,
         }
 
     def _render_manifests(self, ctx: WorkflowContext) -> str:
         """Re-render manifests from context for teardown."""
         config: KServeConfig = ctx.get("kserve_config", KServeConfig())
         namespace = ctx.get("k8s_namespace", f"argus-ws-{ctx.workspace_name}")
+        hostname = ctx.get("kserve_endpoint", f"argus-kserve-teardown.argus-insight.{ctx.domain}")
         return render_manifests("kserve", {
             "KSERVE_CONTROLLER_IMAGE": config.controller_image,
             "KSERVE_DEFAULT_RUNTIME": config.default_runtime,
@@ -153,6 +164,7 @@ class KServeDeployStep(WorkflowStep):
             "WORKSPACE_NAME": ctx.workspace_name,
             "K8S_NAMESPACE": namespace,
             "DOMAIN": ctx.domain,
+            "HOSTNAME": hostname,
             "MINIO_ENDPOINT": ctx.get("minio_endpoint", ""),
             "MINIO_ACCESS_KEY": ctx.get("minio_ws_admin_access_key", ""),
             "MINIO_SECRET_KEY": ctx.get("minio_ws_admin_secret_key", ""),

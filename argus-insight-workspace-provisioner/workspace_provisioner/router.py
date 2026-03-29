@@ -144,13 +144,38 @@ def _verify_ws_token(token: str, workspace_name: str) -> dict | None:
 async def workspace_auth_verify(
     request: Request,
     workspace: str = Query(""),
+    service_id: str = Query(""),
     argus_ws_token: str | None = Cookie(None),
     x_original_url: str | None = Header(None),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Nginx Ingress auth-url subrequest endpoint for workspace services."""
+    """Nginx Ingress auth-url subrequest endpoint for workspace services.
+
+    Supports both workspace name and service_id based lookups.
+    With service_id hostnames, the service_id is extracted from the hostname
+    and mapped to the workspace name via argus_workspace_services.
+    """
     if not argus_ws_token:
         return Response(status_code=401)
+
     ws_name = workspace
+
+    # If no workspace name, try to resolve from service_id
+    if not ws_name and service_id:
+        from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceService
+        svc_result = await session.execute(
+            select(ArgusWorkspaceService).where(
+                ArgusWorkspaceService.service_id == service_id
+            )
+        )
+        svc = svc_result.scalars().first()
+        if svc:
+            ws_result = await session.execute(
+                select(ArgusWorkspace.name).where(ArgusWorkspace.id == svc.workspace_id)
+            )
+            ws_name = ws_result.scalar() or ""
+
+    # Fallback: extract from X-Original-URL hostname
     if not ws_name and x_original_url:
         parsed = urlparse(x_original_url)
         host = parsed.hostname or ""
@@ -158,7 +183,23 @@ async def workspace_auth_verify(
         if parts:
             prefix_parts = parts[0].split("-")
             if len(prefix_parts) >= 3:
-                ws_name = "-".join(prefix_parts[2:])
+                # Try service_id lookup from hostname (e.g., argus-mlflow-67e8a400a3f1)
+                potential_sid = prefix_parts[-1]
+                from workspace_provisioner.models import ArgusWorkspace, ArgusWorkspaceService
+                svc_result = await session.execute(
+                    select(ArgusWorkspaceService).where(
+                        ArgusWorkspaceService.service_id == potential_sid
+                    )
+                )
+                svc = svc_result.scalars().first()
+                if svc:
+                    ws_result = await session.execute(
+                        select(ArgusWorkspace.name).where(
+                            ArgusWorkspace.id == svc.workspace_id
+                        )
+                    )
+                    ws_name = ws_result.scalar() or ""
+
     if not ws_name:
         return Response(status_code=401)
     payload = _verify_ws_token(argus_ws_token, ws_name)
@@ -424,7 +465,8 @@ async def get_workspace_services(
     return [
         WorkspaceServiceResponse(
             id=s.id, workspace_id=s.workspace_id,
-            plugin_name=s.plugin_name, display_name=s.display_name,
+            plugin_name=s.plugin_name, service_id=s.service_id,
+            display_name=s.display_name,
             version=s.version, endpoint=s.endpoint,
             username=s.username, password=s.password,
             access_token=s.access_token, status=s.status,
