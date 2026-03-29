@@ -319,7 +319,6 @@ CREATE TABLE IF NOT EXISTS argus_pipelines (
     name            VARCHAR(100)    NOT NULL UNIQUE              COMMENT 'Unique pipeline slug (e.g. ml-team-pipeline)',
     display_name    VARCHAR(255)    NOT NULL                     COMMENT 'Human-readable pipeline name',
     description     TEXT                                         COMMENT 'Optional pipeline description',
-    is_default      BOOLEAN         NOT NULL DEFAULT FALSE       COMMENT 'Whether this is the default pipeline',
     version         INT             NOT NULL DEFAULT 1             COMMENT 'Auto-incremented on each save',
     deleted         BOOLEAN         NOT NULL DEFAULT FALSE         COMMENT 'Soft delete flag',
     created_by      VARCHAR(100)                                   COMMENT 'Username of the pipeline creator',

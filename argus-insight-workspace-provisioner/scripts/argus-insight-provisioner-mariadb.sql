@@ -119,7 +119,6 @@ CREATE TABLE IF NOT EXISTS argus_pipelines (
     name            VARCHAR(100)    NOT NULL,
     display_name    VARCHAR(255)    NOT NULL,
     description     TEXT            DEFAULT NULL,
-    is_default      BOOLEAN         NOT NULL DEFAULT FALSE,
     version         INT             NOT NULL DEFAULT 1,
     deleted         BOOLEAN         NOT NULL DEFAULT FALSE,
     created_by      VARCHAR(100)    DEFAULT NULL,

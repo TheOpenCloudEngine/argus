@@ -29,7 +29,6 @@ class ArgusPipeline(Base):
     name = Column(String(100), nullable=False, unique=True)  # slug: "ml-team-pipeline"
     display_name = Column(String(255), nullable=False)
     description = Column(Text)
-    is_default = Column(Boolean, default=False)
     version = Column(Integer, nullable=False, default=1)
     deleted = Column(Boolean, nullable=False, default=False)
     created_by = Column(String(100))  # username of the creator
@@ -39,7 +38,7 @@ class ArgusPipeline(Base):
     def __repr__(self) -> str:
         return (
             f"<ArgusPipeline(name={self.name!r}, "
-            f"display_name={self.display_name!r}, default={self.is_default})>"
+            f"display_name={self.display_name!r}, version={self.version})>"
         )
 
 

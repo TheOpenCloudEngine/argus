@@ -137,7 +137,6 @@ CREATE TABLE IF NOT EXISTS argus_pipelines (
     name            VARCHAR(100)    NOT NULL,
     display_name    VARCHAR(255)    NOT NULL,
     description     TEXT            DEFAULT NULL,
-    is_default      BOOLEAN         NOT NULL DEFAULT FALSE,
     version         INTEGER         NOT NULL DEFAULT 1,
     deleted         BOOLEAN         NOT NULL DEFAULT FALSE,
     created_by      VARCHAR(100)    DEFAULT NULL,
@@ -149,8 +148,8 @@ CREATE TABLE IF NOT EXISTS argus_pipelines (
 COMMENT ON TABLE argus_pipelines IS 'Named deployment pipelines for workspace provisioning';
 COMMENT ON COLUMN argus_pipelines.name IS 'Unique pipeline slug (e.g. pipeline-20260329-143052-7a3f)';
 COMMENT ON COLUMN argus_pipelines.display_name IS 'Human-readable pipeline name';
-COMMENT ON COLUMN argus_pipelines.is_default IS 'Whether this is the default pipeline for new workspaces';
 COMMENT ON COLUMN argus_pipelines.version IS 'Auto-incremented on each save (starts at 1)';
+COMMENT ON COLUMN argus_pipelines.deleted IS 'Soft delete flag';
 COMMENT ON COLUMN argus_pipelines.created_by IS 'Username of the pipeline creator';
 
 CREATE OR REPLACE TRIGGER trg_pipelines_updated_at
