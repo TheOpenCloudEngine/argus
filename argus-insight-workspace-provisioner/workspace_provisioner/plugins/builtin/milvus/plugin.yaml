@@ -1,0 +1,19 @@
+name: argus-milvus
+display_name: Milvus Vector Database
+description: High-performance vector database for semantic search, RAG, and AI applications
+icon: database
+category: database
+depends_on: []
+provides:
+  - milvus_endpoint
+requires: []
+tags:
+  - vector
+  - milvus
+  - database
+  - embedding
+  - rag
+  - semantic-search
+versions:
+  - "1.0"
+default_version: "1.0"

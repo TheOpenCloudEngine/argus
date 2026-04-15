@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zot-registry
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: zot-registry
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zot-registry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zot-registry
+        app.kubernetes.io/part-of: argus-insight
+    spec:
+      containers:
+        - name: zot-registry
+          image: argus-insight/zot-registry:2.1.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/zot
+            - name: config
+              mountPath: /etc/zot/config.json
+              subPath: config.json
+            - name: secrets
+              mountPath: /etc/zot/htpasswd
+              subPath: htpasswd
+            - name: secrets
+              mountPath: /etc/zot/credentials.json
+              subPath: credentials.json
+            - name: tls
+              mountPath: /etc/zot/tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: argus-zot-data
+        - name: config
+          configMap:
+            name: zot-registry-config
+        - name: secrets
+          secret:
+            secretName: zot-registry-secrets
+        - name: tls
+          secret:
+            secretName: zot-registry-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zot-registry
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: zot-registry
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  selector:
+    app.kubernetes.io/name: zot-registry
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30000
+      protocol: TCP
+  type: NodePort

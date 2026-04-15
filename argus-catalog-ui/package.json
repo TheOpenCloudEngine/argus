@@ -1,0 +1,38 @@
+{
+  "name": "argus-catalog-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "turbo format",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "turbo": "^2.8.8",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@9.0.6",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@tiptap/extension-link": "^3.20.4",
+    "@tiptap/extension-placeholder": "^3.20.4",
+    "@tiptap/pm": "^3.20.4",
+    "@tiptap/react": "^3.20.4",
+    "@tiptap/starter-kit": "^3.20.4",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@xyflow/react": "^12.10.1",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "recharts": "^3.8.0",
+    "remark-gfm": "^4.0.1"
+  }
+}

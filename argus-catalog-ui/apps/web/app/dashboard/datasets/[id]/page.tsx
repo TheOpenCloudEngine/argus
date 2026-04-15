@@ -1,0 +1,2050 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
+import { toast } from "sonner"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Code2,
+  Columns3,
+  Database,
+  FlaskConical,
+  Flame,
+  Globe,
+  History,
+  Loader2,
+  Pencil,
+  Plus,
+  FolderOpen,
+  Rocket,
+  Search,
+  Server,
+  Settings2,
+  Shield,
+  Sparkles,
+  Tags,
+  Trash2,
+  Users,
+  Workflow,
+  X,
+} from "lucide-react"
+
+import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@workspace/ui/components/command"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+// Textarea removed — replaced by Tiptap MarkdownEditor
+import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import { Separator } from "@workspace/ui/components/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@workspace/ui/components/table"
+import { DashboardHeader } from "@/components/dashboard-header"
+import {
+  addDatasetGlossaryTerm,
+  addDatasetOwner,
+  addDatasetTag,
+  fetchDataset,
+  fetchPlatformMetadata,
+  type PlatformMetadata,
+  removeDatasetGlossaryTerm,
+  removeDatasetOwner,
+  removeDatasetTag,
+  updateDataset,
+  updateDatasetSchema,
+} from "@/features/datasets/api"
+import { fetchTags } from "@/features/tags/api"
+import { fetchGlossaryTerms } from "@/features/glossary/api"
+import { fetchUsers } from "@/features/users/api"
+import type { User } from "@/features/users/data/schema"
+import type { DatasetDetail, GlossaryTerm, SchemaField, Tag } from "@/features/datasets/data/schema"
+import { useAuth } from "@/features/auth"
+import { SampleDataTab } from "@/features/datasets/components/sample-data-tab"
+import { SchemaHistoryTab } from "@/features/datasets/components/schema-history-tab"
+import { PlatformSpecificCard } from "@/features/datasets/components/platform-specific-card"
+import { MarkdownEditor, MarkdownViewer } from "@/features/datasets/components/markdown-editor"
+import { SchemaEditGrid, type EditableField } from "@/features/datasets/components/schema-edit-grid"
+import { NiFiFlowTab } from "@/features/datasets/components/nifi-flow-tab"
+import { KestraFlowTab } from "@/features/datasets/components/kestra-flow-tab"
+import { AirflowDagTab } from "@/features/datasets/components/airflow-dag-tab"
+import { LineageTab } from "@/features/datasets/components/lineage-tab"
+import { QualityTab } from "@/features/datasets/components/quality-tab"
+import { TermsTab } from "@/features/datasets/components/terms-tab"
+import {
+  generateDescription, generateColumns, suggestTags, detectPII,
+  type DescriptionResult, type ColumnsResult,
+} from "@/features/datasets/ai-api"
+import { GitBranch, MessageSquare } from "lucide-react"
+import { CommentSection } from "@/components/comments"
+
+// ---------------------------------------------------------------------------
+// Schema field helpers for editing
+// ---------------------------------------------------------------------------
+
+let _idCounter = 0
+function genId(): string {
+  return `f-${Date.now()}-${++_idCounter}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function newField(ordinal: number): EditableField {
+  return {
+    key: genId(),
+    field_path: "",
+    field_type: "STRING",
+    native_type: "",
+    description: "",
+    nullable: "true",
+    is_primary_key: "false",
+    is_unique: "false",
+    is_indexed: "false",
+    is_partition_key: "false",
+    ordinal,
+  }
+}
+
+function toEditable(f: SchemaField): EditableField {
+  return {
+    key: genId(),
+    field_path: f.field_path,
+    field_type: f.field_type,
+    native_type: f.native_type ?? "",
+    description: f.description ?? "",
+    nullable: f.nullable,
+    is_primary_key: f.is_primary_key ?? "false",
+    is_unique: f.is_unique ?? "false",
+    is_indexed: f.is_indexed ?? "false",
+    is_partition_key: f.is_partition_key ?? "false",
+    ordinal: f.ordinal,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Avro schema generator
+// ---------------------------------------------------------------------------
+function fieldTypeToAvro(fieldType: string): unknown {
+  const t = fieldType.toUpperCase()
+  switch (t) {
+    case "BOOLEAN":
+    case "BOOL":
+      return "boolean"
+    case "TINYINT":
+    case "SMALLINT":
+    case "INT":
+    case "INT8":
+    case "INT16":
+    case "INT32":
+    case "INTEGER":
+    case "MEDIUMINT":
+    case "SERIAL":
+      return "int"
+    case "BIGINT":
+    case "INT64":
+    case "BIGSERIAL":
+    case "LARGEINT":
+      return "long"
+    case "FLOAT":
+    case "FLOAT32":
+    case "REAL":
+      return "float"
+    case "DOUBLE":
+    case "DOUBLE PRECISION":
+    case "FLOAT64":
+      return "double"
+    case "DECIMAL":
+    case "NUMERIC":
+    case "NUMBER":
+    case "MONEY":
+    case "DECIMAL128":
+      return { type: "bytes", logicalType: "decimal", precision: 38, scale: 10 }
+    case "DATE":
+      return { type: "int", logicalType: "date" }
+    case "TIME":
+      return { type: "long", logicalType: "time-millis" }
+    case "TIMESTAMP":
+    case "TIMESTAMPTZ":
+    case "TIMESTAMP_NTZ":
+    case "TIMESTAMP_LTZ":
+    case "TIMESTAMP_TZ":
+    case "DATETIME":
+    case "UNIXTIME_MICROS":
+      return { type: "long", logicalType: "timestamp-millis" }
+    case "BINARY":
+    case "BYTEA":
+    case "VARBINARY":
+    case "BYTES":
+    case "BINDATA":
+    case "BLOB":
+      return "bytes"
+    case "UUID":
+      return { type: "string", logicalType: "uuid" }
+    case "JSON":
+    case "JSONB":
+    case "VARIANT":
+    case "SUPER":
+      return "string"
+    case "ARRAY":
+      return { type: "array", items: "string" }
+    case "MAP":
+      return { type: "map", values: "string" }
+    case "STRUCT":
+    case "ROW":
+    case "OBJECT":
+      return { type: "record", name: "nested", fields: [] }
+    default:
+      return "string"
+  }
+}
+
+function generateAvroSchema(datasetName: string, namespace: string, fields: SchemaField[]): string {
+  const avroFields = fields.map((f) => {
+    const avroType = fieldTypeToAvro(f.field_type)
+    const fieldDef: Record<string, unknown> = {
+      name: f.field_path.replace(/[^a-zA-Z0-9_]/g, "_"),
+      type: f.nullable === "true" ? ["null", avroType] : avroType,
+    }
+    if (f.nullable === "true") {
+      fieldDef.default = null
+    }
+    if (f.description) {
+      fieldDef.doc = f.description
+    }
+    return fieldDef
+  })
+
+  const schema = {
+    type: "record",
+    name: datasetName.replace(/[^a-zA-Z0-9_]/g, "_"),
+    namespace,
+    doc: `Avro schema for ${datasetName}`,
+    fields: avroFields,
+  }
+
+  return JSON.stringify(schema, null, 2)
+}
+
+// ---------------------------------------------------------------------------
+// PySpark code generator
+// ---------------------------------------------------------------------------
+
+function fieldTypeToSparkType(fieldType: string): string {
+  switch (fieldType.toUpperCase()) {
+    case "NUMBER": return "StringType()"  // Read as string for safety; cast in downstream
+    case "STRING": return "StringType()"
+    case "BOOLEAN": return "StringType()"
+    case "DATE": return "StringType()"
+    case "BYTES": return "BinaryType()"
+    case "MAP": return "StringType()"
+    case "ARRAY": return "StringType()"
+    case "ENUM": return "StringType()"
+    default: return "StringType()"
+  }
+}
+
+function getJdbcUrl(platformType: string): { url: string; driver: string; format: string } {
+  switch (platformType) {
+    case "mysql":
+      return { url: "jdbc:mysql://<HOST>:<PORT>/<DATABASE>", driver: "com.mysql.cj.jdbc.Driver", format: "jdbc" }
+    case "postgresql":
+      return { url: "jdbc:postgresql://<HOST>:<PORT>/<DATABASE>", driver: "org.postgresql.Driver", format: "jdbc" }
+    case "greenplum":
+      return { url: "jdbc:postgresql://<HOST>:<PORT>/<DATABASE>", driver: "org.postgresql.Driver", format: "jdbc" }
+    case "starrocks":
+      return { url: "jdbc:mysql://<HOST>:<PORT>/<DATABASE>", driver: "com.mysql.cj.jdbc.Driver", format: "jdbc" }
+    case "trino":
+      return { url: "jdbc:trino://<HOST>:<PORT>/<CATALOG>/<SCHEMA>", driver: "io.trino.jdbc.TrinoDriver", format: "jdbc" }
+    case "oracle":
+      return { url: "jdbc:oracle:thin:@<HOST>:<PORT>:<SID>", driver: "oracle.jdbc.OracleDriver", format: "jdbc" }
+    default:
+      return { url: `jdbc:${platformType}://<HOST>:<PORT>/<DATABASE>`, driver: "<DRIVER_CLASS>", format: "jdbc" }
+  }
+}
+
+function generatePySparkCode(dataset: DatasetDetail): string {
+  const tableName = dataset.name  // e.g. "sakila.actor"
+  const parts = tableName.split(".")
+  const dbName = parts.length > 1 ? parts[0] : "<DATABASE>"
+  const tblName = parts.length > 1 ? parts[1] : parts[0]
+  const platformType = dataset.platform.type
+  const platformId = dataset.platform.platform_id
+  const jdbc = getJdbcUrl(platformType)
+  const fields = dataset.schema_fields
+
+  const structFields = fields.map((f) => {
+    const sparkType = fieldTypeToSparkType(f.field_type)
+    const nullable = f.nullable === "true" ? "True" : "False"
+    return `    StructField("${f.field_path}", ${sparkType}, ${nullable}),`
+  }).join("\n")
+
+  return `"""
+PySpark code to read '${tableName}' from ${dataset.platform.name} (${platformId})
+and write to HDFS as Parquet with optional date-based partitioning.
+
+Generated by Argus Catalog
+Platform: ${platformType} (${platformId})
+Table: ${dbName}.${tblName}
+Fields: ${fields.length}
+"""
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    StructType, StructField, StringType, BinaryType,
+)
+
+# ---------------------------------------------------------------------------
+# 1. Spark Session
+# ---------------------------------------------------------------------------
+
+spark = SparkSession.builder \\
+    .appName("argus-catalog-${platformId}-${tblName}") \\
+    .getOrCreate()
+
+# ---------------------------------------------------------------------------
+# 2. Schema Definition (from Argus Catalog metadata)
+# ---------------------------------------------------------------------------
+
+schema = StructType([
+${structFields}
+])
+
+# ---------------------------------------------------------------------------
+# 3. Read from Source (JDBC)
+# ---------------------------------------------------------------------------
+
+jdbc_url = "${jdbc.url}"
+
+df = spark.read \\
+    .format("${jdbc.format}") \\
+    .option("url", jdbc_url) \\
+    .option("dbtable", "${dbName}.${tblName}") \\
+    .option("driver", "${jdbc.driver}") \\
+    .option("user", "<USERNAME>") \\
+    .option("password", "<PASSWORD>") \\
+    .schema(schema) \\
+    .load()
+
+print(f"Read {df.count()} rows from ${tableName}")
+df.printSchema()
+
+# ---------------------------------------------------------------------------
+# 4. Write to HDFS as Parquet
+# ---------------------------------------------------------------------------
+
+hdfs_path = "hdfs://nameservice/data/catalog/${platformId}/${dbName}/${tblName}"
+
+df.write \\
+    .mode("overwrite") \\
+    .parquet(hdfs_path)
+
+print(f"Written to {hdfs_path}")
+
+# ---------------------------------------------------------------------------
+# 5. Date-based Partitioning (Optional)
+#
+# Uncomment and customize the code below to read/write by date partition.
+# This is useful for incremental ingestion of large tables.
+#
+# Requirements:
+#   - The source table must have a date/timestamp column (e.g. "last_update")
+#   - Adjust the column name, date format, and paths as needed
+# ---------------------------------------------------------------------------
+
+# from pyspark.sql.functions import col, to_date, lit
+# from datetime import date, timedelta
+#
+# # Configuration
+# DATE_COLUMN = "last_update"          # Column to partition by
+# TARGET_DATE = date(2026, 3, 20)      # Specific date to process
+# # TARGET_DATE = date.today() - timedelta(days=1)  # Yesterday
+#
+# # Read only rows matching the target date
+# df_daily = spark.read \\
+#     .format("${jdbc.format}") \\
+#     .option("url", jdbc_url) \\
+#     .option("dbtable", f"(SELECT * FROM ${dbName}.${tblName} WHERE DATE({DATE_COLUMN}) = '{TARGET_DATE}') AS t") \\
+#     .option("driver", "${jdbc.driver}") \\
+#     .option("user", "<USERNAME>") \\
+#     .option("password", "<PASSWORD>") \\
+#     .schema(schema) \\
+#     .load()
+#
+# # Add partition column
+# df_daily = df_daily.withColumn("dt", lit(str(TARGET_DATE)))
+#
+# # Write with date partitioning (append mode for incremental)
+# hdfs_partitioned_path = "hdfs://nameservice/data/catalog/${platformId}/${dbName}/${tblName}"
+#
+# df_daily.write \\
+#     .mode("append") \\
+#     .partitionBy("dt") \\
+#     .parquet(hdfs_partitioned_path)
+#
+# print(f"Written {df_daily.count()} rows for {TARGET_DATE} to {hdfs_partitioned_path}/dt={TARGET_DATE}")
+
+# ---------------------------------------------------------------------------
+# 6. Cleanup
+# ---------------------------------------------------------------------------
+
+spark.stop()
+`
+}
+
+// ---------------------------------------------------------------------------
+// Main page component
+// ---------------------------------------------------------------------------
+export default function DatasetDetailPage() {
+  const { user } = useAuth()
+  const params = useParams()
+  const router = useRouter()
+  const datasetId = Number(params.id)
+  const [dataset, setDataset] = useState<DatasetDetail | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // All tags / glossary terms for pickers
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [allGlossary, setAllGlossary] = useState<GlossaryTerm[]>([])
+
+  // Platform metadata
+  const [platformMeta, setPlatformMeta] = useState<PlatformMetadata | null>(null)
+
+  // Users for owner picker (loaded on search)
+  const [ownerSearchUsers, setOwnerSearchUsers] = useState<User[]>([])
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState("")
+  const [ownerSearching, setOwnerSearching] = useState(false)
+
+  // Popover states
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false)
+  const [glossaryPopoverOpen, setGlossaryPopoverOpen] = useState(false)
+  const [ownerPopoverOpen, setOwnerPopoverOpen] = useState(false)
+  const [ownerType, setOwnerType] = useState("TECHNICAL_OWNER")
+
+  // Schema inline edit state
+  const [schemaEditing, setSchemaEditing] = useState(false)
+  const [editFields, setEditFields] = useState<EditableField[]>([])
+  const [schemaSaving, setSchemaSaving] = useState(false)
+
+  // Status toggling
+  const [statusUpdating, setStatusUpdating] = useState(false)
+
+  // Description inline editing
+  const [descEditing, setDescEditing] = useState(false)
+  const [descDraft, setDescDraft] = useState("")
+  const [descSaving, setDescSaving] = useState(false)
+
+  // AI generation
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiDescResult, setAiDescResult] = useState<DescriptionResult | null>(null)
+  const [aiColsResult, setAiColsResult] = useState<ColumnsResult | null>(null)
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [aiDialogType, setAiDialogType] = useState<"description" | "columns" | null>(null)
+
+  const load = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) setIsLoading(true)
+      const data = await fetchDataset(datasetId)
+      setDataset(data)
+      // Fetch platform metadata
+      fetchPlatformMetadata(data.platform.id).then(setPlatformMeta).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load dataset")
+    } finally {
+      if (showLoading) setIsLoading(false)
+    }
+  }, [datasetId])
+
+  useEffect(() => {
+    load()
+    fetchTags().then(setAllTags).catch(() => {})
+    fetchGlossaryTerms().then(setAllGlossary).catch(() => {})
+  }, [load])
+
+  // Debounced owner search: fetch users when ownerSearchQuery changes
+  useEffect(() => {
+    const trimmed = ownerSearchQuery.trim()
+    if (!trimmed) {
+      setOwnerSearchUsers([])
+      return
+    }
+    setOwnerSearching(true)
+    const timer = setTimeout(() => {
+      fetchUsers({ search: trimmed, pageSize: 0 })
+        .then((r) => setOwnerSearchUsers(r.items))
+        .catch(() => setOwnerSearchUsers([]))
+        .finally(() => setOwnerSearching(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [ownerSearchQuery])
+
+  // -------------------------------------------------------------------------
+  // Status change
+  // -------------------------------------------------------------------------
+  const handleStatusChange = async (newStatus: string) => {
+    if (!dataset || statusUpdating || dataset.status === newStatus) return
+    try {
+      setStatusUpdating(true)
+      const updated = await updateDataset(datasetId, { status: newStatus })
+      setDataset(updated)
+    } catch {
+      // revert silently
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const statusConfig: { [key: string]: { label: string; icon: React.ReactNode; className: string } } = {
+    active: {
+      label: "Active",
+      icon: <Check className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-primary text-primary-foreground hover:bg-primary/90",
+    },
+    inactive: {
+      label: "Inactive",
+      icon: <Circle className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-amber-500 text-white hover:bg-amber-500/90",
+    },
+    deprecated: {
+      label: "Deprecated",
+      icon: <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-zinc-600 text-white hover:bg-zinc-600/90",
+    },
+  }
+
+  const allStatuses = ["active", "inactive", "deprecated"] as const
+  const currentStatusConfig = statusConfig[dataset?.status ?? "active"] ?? statusConfig["active"]
+
+  // Origin (environment) config & handler
+  const [originUpdating, setOriginUpdating] = useState(false)
+
+  const originConfig: { [key: string]: { label: string; icon: React.ReactNode; className: string } } = {
+    PROD: {
+      label: "PROD",
+      icon: <Rocket className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-emerald-600 text-white hover:bg-emerald-600/90",
+    },
+    STAGING: {
+      label: "STAGING",
+      icon: <FlaskConical className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-orange-500 text-white hover:bg-orange-500/90",
+    },
+    DEV: {
+      label: "DEV",
+      icon: <Server className="mr-1.5 h-3.5 w-3.5" />,
+      className: "bg-sky-500 text-white hover:bg-sky-500/90",
+    },
+  }
+
+  const allOrigins = ["PROD", "STAGING", "DEV"] as const
+  const currentOriginConfig = originConfig[dataset?.origin ?? "PROD"] ?? originConfig["PROD"]
+
+  const handleOriginChange = async (newOrigin: string) => {
+    if (!dataset || originUpdating || dataset.origin === newOrigin) return
+    try {
+      setOriginUpdating(true)
+      const updated = await updateDataset(datasetId, { origin: newOrigin })
+      setDataset(updated)
+    } catch {
+      // revert silently
+    } finally {
+      setOriginUpdating(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Description inline editing
+  // -------------------------------------------------------------------------
+  const startDescEdit = () => {
+    setDescDraft(dataset?.description ?? "")
+    setDescEditing(true)
+  }
+
+  const cancelDescEdit = () => {
+    setDescEditing(false)
+    setDescDraft("")
+  }
+
+  const saveDesc = async () => {
+    if (!dataset) return
+    const trimmed = descDraft.trim()
+    if (trimmed === (dataset.description ?? "")) {
+      setDescEditing(false)
+      return
+    }
+    try {
+      setDescSaving(true)
+      const updated = await updateDataset(datasetId, { description: trimmed || undefined })
+      setDataset(updated)
+      setDescEditing(false)
+    } catch {
+      // keep editing on error
+    } finally {
+      setDescSaving(false)
+    }
+  }
+
+  // Keyboard shortcuts removed — Tiptap editor handles its own input.
+  // Save/Cancel are done via buttons.
+  const _unused_handleDescKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") cancelDescEdit()
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveDesc()
+  }
+
+  // -------------------------------------------------------------------------
+  // AI metadata generation
+  // -------------------------------------------------------------------------
+  const handleAiGenerate = async (type: "description" | "columns" | "tags" | "pii") => {
+    if (!dataset) return
+    setAiGenerating(true)
+    try {
+      if (type === "description") {
+        const result = await generateDescription(datasetId, { apply: false })
+        if (result.skipped) {
+          toast.info(result.reason || "Description already exists")
+        } else {
+          setAiDescResult(result)
+          setAiDialogType("description")
+          setAiDialogOpen(true)
+        }
+      } else if (type === "columns") {
+        const result = await generateColumns(datasetId, { apply: false })
+        if (result.skipped) {
+          toast.info(result.reason || "All columns already have descriptions")
+        } else {
+          setAiColsResult(result)
+          setAiDialogType("columns")
+          setAiDialogOpen(true)
+        }
+      } else if (type === "tags") {
+        const result = await suggestTags(datasetId, { apply: true })
+        toast.success(`Applied ${result.applied_tags.length} tag(s), created ${result.created_tags.length} new tag(s)`)
+        load(false)
+      } else if (type === "pii") {
+        const result = await detectPII(datasetId, { apply: true })
+        if (result.pii_columns.length === 0) {
+          toast.info("No PII columns detected")
+        } else {
+          toast.success(`Detected ${result.pii_columns.length} PII column(s): ${result.pii_columns.map(c => `${c.name}(${c.pii_type})`).join(", ")}`)
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI generation failed")
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  const handleAiApplyDescription = async () => {
+    if (!aiDescResult || !dataset) return
+    try {
+      const result = await generateDescription(datasetId, { apply: true, force: true })
+      setDataset({ ...dataset, description: result.description })
+      setAiDialogOpen(false)
+      setAiDescResult(null)
+      toast.success("Description applied")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Apply failed")
+    }
+  }
+
+  const handleAiApplyColumns = async () => {
+    if (!aiColsResult) return
+    try {
+      await generateColumns(datasetId, { apply: true, force: true })
+      setAiDialogOpen(false)
+      setAiColsResult(null)
+      toast.success(`Applied ${aiColsResult.total_generated} column description(s)`)
+      load(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Apply failed")
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Schema inline editing
+  // -------------------------------------------------------------------------
+  const startSchemaEdit = () => {
+    if (!dataset) return
+    setEditFields(
+      dataset.schema_fields.length > 0
+        ? dataset.schema_fields.map(toEditable)
+        : [newField(0)]
+    )
+    setSchemaEditing(true)
+  }
+
+  const cancelSchemaEdit = () => {
+    setSchemaEditing(false)
+    setEditFields([])
+  }
+
+  const saveSchema = async () => {
+    const valid = editFields.filter((f) => f.field_path.trim() && f.field_type.trim())
+    const payload = valid.map((f, idx) => ({
+      field_path: f.field_path.trim(),
+      field_type: f.field_type.trim(),
+      native_type: f.native_type.trim() || undefined,
+      description: f.description.trim() || undefined,
+      nullable: f.nullable,
+      is_primary_key: f.is_primary_key,
+      is_unique: f.is_unique,
+      is_indexed: f.is_indexed,
+      is_partition_key: f.is_partition_key,
+      ordinal: idx,
+    }))
+    try {
+      setSchemaSaving(true)
+      await updateDatasetSchema(datasetId, payload)
+      setSchemaEditing(false)
+      await load(false)
+    } catch {
+      // keep editing on error
+    } finally {
+      setSchemaSaving(false)
+    }
+  }
+
+  // Platform data type options for the Type dropdown
+  const dataTypeOptions = platformMeta?.data_types ?? []
+  const featuresMeta = platformMeta?.features ?? []
+
+  // -------------------------------------------------------------------------
+  // Tag management
+  // -------------------------------------------------------------------------
+  const handleAddTag = async (tagId: number) => {
+    try {
+      await addDatasetTag(datasetId, tagId)
+      setTagPopoverOpen(false)
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleRemoveTag = async (tagId: number) => {
+    try {
+      await removeDatasetTag(datasetId, tagId)
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Glossary management
+  // -------------------------------------------------------------------------
+  const handleAddGlossary = async (termId: number) => {
+    try {
+      await addDatasetGlossaryTerm(datasetId, termId)
+      setGlossaryPopoverOpen(false)
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleRemoveGlossary = async (termId: number) => {
+    try {
+      await removeDatasetGlossaryTerm(datasetId, termId)
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Owner management
+  // -------------------------------------------------------------------------
+  const handleAddOwner = async (user: User) => {
+    try {
+      const ownerName = `${user.firstName} ${user.lastName}`.trim() || user.username
+      await addDatasetOwner(datasetId, {
+        owner_name: ownerName,
+        owner_type: ownerType,
+      })
+      setOwnerPopoverOpen(false)
+      setOwnerSearchQuery("")
+      setOwnerSearchUsers([])
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleRemoveOwner = async (ownerId: number) => {
+    try {
+      await removeDatasetOwner(datasetId, ownerId)
+      await load(false)
+    } catch {
+      // ignore
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Derived data
+  // -------------------------------------------------------------------------
+  const attachedTagIds = new Set(dataset?.tags.map((t) => t.id) ?? [])
+  const availableTags = allTags.filter((t) => !attachedTagIds.has(t.id))
+
+  const attachedTermIds = new Set(dataset?.glossary_terms.map((t) => t.id) ?? [])
+  const availableGlossary = allGlossary.filter((t) => !attachedTermIds.has(t.id))
+  const availableTermsOnly = availableGlossary.filter((t) => (t.term_type ?? "TERM") === "TERM")
+
+  // Owners: exclude users who are already owners
+  const attachedOwnerNames = new Set(dataset?.owners.map((o) => o.owner_name) ?? [])
+  const availableUsers = ownerSearchUsers.filter((u) => {
+    const fullName = `${u.firstName} ${u.lastName}`.trim() || u.username
+    return !attachedOwnerNames.has(fullName)
+  })
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
+  if (isLoading) {
+    return (
+      <>
+        <DashboardHeader title="Dataset" />
+        <div className="flex items-center justify-center p-8">
+          <p className="text-muted-foreground">Loading dataset...</p>
+        </div>
+      </>
+    )
+  }
+
+  if (error || !dataset) {
+    return (
+      <>
+        <DashboardHeader title="Dataset" />
+        <div className="flex flex-col items-center justify-center gap-4 p-8">
+          <p className="text-destructive">{error || "Dataset not found"}</p>
+          <Button variant="outline" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <DashboardHeader title={dataset.name} />
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        {/* Back button */}
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+
+        {/* Dataset header info */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  {dataset.name}
+                  {dataset.is_synced === "true" && (
+                    <span className="inline-flex items-center rounded-full border border-orange-400 px-2 py-0.5 text-[10px] font-semibold text-orange-500">
+                      SYNCED
+                    </span>
+                  )}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {dataset.urn}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {user?.is_admin ? (
+                  <>
+                    {/* Status dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={statusUpdating}
+                          className={currentStatusConfig?.className}
+                        >
+                          {currentStatusConfig?.icon}
+                          {currentStatusConfig?.label}
+                          <ChevronDown className="ml-1.5 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {allStatuses
+                          .filter((s) => s !== dataset.status)
+                          .map((s) => {
+                            const cfg = statusConfig[s]
+                            return (
+                              <DropdownMenuItem
+                                key={s}
+                                onClick={() => handleStatusChange(s)}
+                              >
+                                {cfg?.icon}
+                                {cfg?.label}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* Origin dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={originUpdating}
+                          className={currentOriginConfig?.className}
+                        >
+                          {currentOriginConfig?.icon}
+                          {currentOriginConfig?.label}
+                          <ChevronDown className="ml-1.5 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {allOrigins
+                          .filter((o) => o !== dataset.origin)
+                          .map((o) => {
+                            const cfg = originConfig[o]
+                            return (
+                              <DropdownMenuItem
+                                key={o}
+                                onClick={() => handleOriginChange(o)}
+                              >
+                                {cfg?.icon}
+                                {cfg?.label}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* AI Generate dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" disabled={aiGenerating}>
+                          {aiGenerating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          AI Generate
+                          <ChevronDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleAiGenerate("description")}>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate Description
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("columns")}>
+                          <Columns3 className="h-4 w-4 mr-2" />
+                          Generate Column Descriptions
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("tags")}>
+                          <Tags className="h-4 w-4 mr-2" />
+                          Suggest Tags
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiGenerate("pii")}>
+                          <Shield className="h-4 w-4 mr-2" />
+                          Detect PII
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                ) : (
+                  <>
+                    <Badge className={currentStatusConfig?.className}>{currentStatusConfig?.label}</Badge>
+                    <Badge className={currentOriginConfig?.className}>{currentOriginConfig?.label}</Badge>
+                  </>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Platform</span>
+                <div className="flex items-center gap-1.5 mt-1 font-medium">
+                  <Database className="h-4 w-4" />
+                  {dataset.platform.name}
+                </div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Qualified Name</span>
+                <p className="mt-1 font-medium">{dataset.qualified_name || "-"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Created</span>
+                <p className="mt-1 font-medium">
+                  {new Date(dataset.created_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Updated</span>
+                <p className="mt-1 font-medium">
+                  {new Date(dataset.updated_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <Separator className="my-4" />
+            <div>
+              <span className="text-sm text-muted-foreground">Description</span>
+              {descEditing ? (
+                <div className="mt-1 space-y-2">
+                  <MarkdownEditor
+                    value={descDraft}
+                    onChange={setDescDraft}
+                    editable={!descSaving}
+                    placeholder="Write description in Markdown..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={saveDesc} disabled={descSaving}>
+                      {descSaving ? "Saving..." : "Save"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={cancelDescEdit} disabled={descSaving}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : dataset.description ? (
+                <div className="mt-1">
+                  <MarkdownViewer value={dataset.description} onClick={startDescEdit} />
+                </div>
+              ) : (
+                <p
+                  className="mt-1 text-sm cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-muted transition-colors text-muted-foreground italic"
+                  onClick={startDescEdit}
+                  title="Click to edit"
+                >
+                  No description. Click to add.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tabbed content */}
+        <Tabs defaultValue="schema" className="flex-1">
+          <TabsList>
+            <TabsTrigger value="schema" className="gap-1.5">
+              <Columns3 className="h-4 w-4" />
+              Schema ({dataset.schema_fields.length})
+            </TabsTrigger>
+            <TabsTrigger value="tags" className="gap-1.5">
+              <Tags className="h-4 w-4" />
+              Tags ({dataset.tags.length})
+            </TabsTrigger>
+            <TabsTrigger value="owners" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              Owners ({dataset.owners.length})
+            </TabsTrigger>
+            <TabsTrigger value="glossary" className="gap-1.5">
+              <BookOpen className="h-4 w-4" />
+              Glossary ({dataset.glossary_terms.length})
+            </TabsTrigger>
+            <TabsTrigger value="terms" className="gap-1.5">
+              <Shield className="h-4 w-4" />
+              Terms
+            </TabsTrigger>
+            <TabsTrigger value="quality" className="gap-1.5">
+              <CheckCircle className="h-4 w-4" />
+              Quality
+            </TabsTrigger>
+            <TabsTrigger value="sample" className="gap-1.5">
+              <Globe className="h-4 w-4" />
+              Sample
+            </TabsTrigger>
+            <TabsTrigger value="avro" className="gap-1.5">
+              <Code2 className="h-4 w-4" />
+              Avro
+            </TabsTrigger>
+            {!["hive", "impala"].includes(dataset.platform.type) && (
+              <>
+                <TabsTrigger value="spark" className="gap-1.5">
+                  <Flame className="h-4 w-4" />
+                  PySpark
+                </TabsTrigger>
+                <TabsTrigger value="nifi" className="gap-1.5">
+                  <Workflow className="h-4 w-4" />
+                  NiFi 2
+                </TabsTrigger>
+                <TabsTrigger value="kestra" className="gap-1.5">
+                  <Workflow className="h-4 w-4" />
+                  Kestra
+                </TabsTrigger>
+                <TabsTrigger value="airflow" className="gap-1.5">
+                  <Workflow className="h-4 w-4" />
+                  Airflow
+                </TabsTrigger>
+              </>
+            )}
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
+            <TabsTrigger value="lineage" className="gap-1.5">
+              <GitBranch className="h-4 w-4" />
+              Lineage
+            </TabsTrigger>
+            <TabsTrigger value="comments" className="gap-1.5">
+              <MessageSquare className="h-4 w-4" />
+              Comments
+            </TabsTrigger>
+          </TabsList>
+
+          {/* =============== Schema tab =============== */}
+          <TabsContent value="schema" className="mt-4">
+            <Card>
+              <div className="flex justify-end px-4 pt-3">
+                {schemaEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelSchemaEdit}
+                      disabled={schemaSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={saveSchema}
+                      disabled={schemaSaving}
+                    >
+                      {schemaSaving ? "Updating..." : "Update"}
+                    </Button>
+                  </div>
+                ) : user?.is_admin ? (
+                  <Button size="sm" variant="outline" onClick={startSchemaEdit}>
+                    <Pencil className="mr-1 h-3.5 w-3.5" />
+                    Edit Schema
+                  </Button>
+                ) : null}
+              </div>
+              <CardContent className="p-0">
+                {schemaEditing ? (
+                  /* ---------- AG Grid edit mode ---------- */
+                  <div>
+                    <SchemaEditGrid
+                      fields={editFields}
+                      onChange={setEditFields}
+                      dataTypeOptions={dataTypeOptions.map(dt => dt.type_name)}
+                    />
+
+                    {/* Platform features section */}
+                    {featuresMeta.length > 0 && (
+                      <>
+                        <Separator className="my-4" />
+                        <div className="space-y-3">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Platform Features ({dataset.platform.name})
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {featuresMeta.map((feat) => {
+                              const existing = dataset.properties?.find(
+                                (p) => p.property_key === feat.feature_key
+                              )
+                              return (
+                                <div key={feat.feature_key} className="grid gap-1">
+                                  <label className="text-xs font-medium flex items-center gap-1">
+                                    {feat.display_name}
+                                    {feat.is_required === "true" && (
+                                      <span className="text-destructive">*</span>
+                                    )}
+                                  </label>
+                                  {feat.description && (
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {feat.description}
+                                    </p>
+                                  )}
+                                  <Input
+                                    placeholder={
+                                      feat.value_type === "number"
+                                        ? "0"
+                                        : feat.value_type === "column_list"
+                                          ? "col1, col2"
+                                          : feat.value_type === "boolean"
+                                            ? "true / false"
+                                            : ""
+                                    }
+                                    defaultValue={existing?.property_value ?? ""}
+                                    className="h-8 text-sm"
+                                    disabled
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : dataset.schema_fields.length > 0 ? (
+                  /* ---------- Read-only view ---------- */
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[50px]">#</TableHead>
+                          <TableHead>Field</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Native Type</TableHead>
+                          <TableHead className="w-[50px] text-center">PK</TableHead>
+                          <TableHead className="w-[50px] text-center">Unique</TableHead>
+                          <TableHead className="w-[50px] text-center">Index</TableHead>
+                          <TableHead className="w-[50px] text-center">Partition</TableHead>
+                          <TableHead className="w-[50px] text-center">Distributed</TableHead>
+                          <TableHead className="w-[50px] text-center">Nullable</TableHead>
+                          <TableHead>Description</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dataset.schema_fields.map((field, idx) => (
+                          <TableRow key={field.id}>
+                            <TableCell className="text-muted-foreground">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell className="text-sm font-[family-name:var(--font-d2coding)]">
+                              {field.field_path}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="font-mono text-xs">
+                                {field.field_type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm font-[family-name:var(--font-d2coding)] uppercase">
+                              {field.native_type || "-"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_primary_key === "true" && (
+                                <Check className="h-4 w-4 text-primary mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_unique === "true" && (
+                                <Check className="h-4 w-4 text-primary mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_indexed === "true" && (
+                                <Check className="h-4 w-4 text-muted-foreground mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_partition_key === "true" && (
+                                <Check className="h-4 w-4 text-orange-500 mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.is_distribution_key === "true" && (
+                                <Check className="h-4 w-4 text-blue-500 mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {field.nullable === "true" && (
+                                <Check className="h-4 w-4 text-muted-foreground mx-auto" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm min-w-[200px] max-w-[500px]">
+                              <span className="whitespace-pre-wrap break-words">
+                                {field.description || "-"}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center p-8">
+                    <p className="text-muted-foreground">No schema fields defined.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Platform Specific — inside Schema tab */}
+            {(dataset.platform_properties || (dataset.properties && dataset.properties.length > 0)) && (
+              <div className="mt-4"><PlatformSpecificCard
+                platformType={dataset.platform.type}
+                properties={dataset.platform_properties || {}}
+                datasetProperties={dataset.properties}
+              /></div>
+            )}
+          </TabsContent>
+
+          {/* =============== Tags tab =============== */}
+          <TabsContent value="tags" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardTitle className="text-base">Tags</CardTitle>
+                <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline" disabled={availableTags.length === 0}>
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Add Tag
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0" align="end">
+                    <Command>
+                      <CommandInput placeholder="Search tags..." />
+                      <CommandList>
+                        <CommandEmpty>No tags found</CommandEmpty>
+                        <CommandGroup>
+                          {availableTags.map((tag) => (
+                            <CommandItem
+                              key={tag.id}
+                              value={tag.name}
+                              onSelect={() => handleAddTag(tag.id)}
+                            >
+                              <span
+                                className="inline-block h-3 w-3 rounded-full mr-2 shrink-0"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              {tag.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </CardHeader>
+              <CardContent className="pt-2">
+                {dataset.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {dataset.tags.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        style={{ backgroundColor: tag.color, color: "#fff" }}
+                        className="text-sm px-3 py-1 gap-1.5"
+                      >
+                        {tag.name}
+                        <button
+                          className="ml-1 hover:opacity-70 cursor-pointer"
+                          onClick={() => handleRemoveTag(tag.id)}
+                          aria-label={`Remove tag ${tag.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No tags attached</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* =============== Owners tab =============== */}
+          <TabsContent value="owners" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardTitle className="text-base">Owners</CardTitle>
+                <div className="flex items-center gap-2">
+                  {/* Owner type selector */}
+                  <Select value={ownerType} onValueChange={setOwnerType}>
+                    <SelectTrigger size="sm" className="w-[180px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TECHNICAL_OWNER">Technical Owner</SelectItem>
+                      <SelectItem value="BUSINESS_OWNER">Business Owner</SelectItem>
+                      <SelectItem value="DATA_STEWARD">Data Steward</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {/* Add owner popover */}
+                  <Popover
+                    open={ownerPopoverOpen}
+                    onOpenChange={(open) => {
+                      setOwnerPopoverOpen(open)
+                      if (!open) {
+                        setOwnerSearchQuery("")
+                        setOwnerSearchUsers([])
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                        Add Owner
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0" align="end">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search users..."
+                          value={ownerSearchQuery}
+                          onValueChange={setOwnerSearchQuery}
+                        />
+                        <CommandList>
+                          {ownerSearchQuery.trim() === "" ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                              Type to search users
+                            </div>
+                          ) : ownerSearching ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                              Searching...
+                            </div>
+                          ) : availableUsers.length === 0 ? (
+                            <CommandEmpty>No users found</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {availableUsers.map((user) => (
+                                <CommandItem
+                                  key={user.id}
+                                  value={user.id}
+                                  onSelect={() => handleAddOwner(user)}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {user.firstName} {user.lastName}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {user.username} · {user.email}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {dataset.owners.length > 0 ? (
+                  <Table className="w-[80%] mx-auto">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Added</TableHead>
+                        <TableHead className="w-[60px]" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dataset.owners.map((owner) => (
+                        <TableRow key={owner.id}>
+                          <TableCell className="font-medium">
+                            {owner.owner_name}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {owner.owner_type.replaceAll("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {new Date(owner.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleRemoveOwner(owner.id)}
+                              aria-label={`Remove owner ${owner.owner_name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="flex items-center justify-center p-8">
+                    <p className="text-muted-foreground">No owners assigned</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* =============== Glossary tab =============== */}
+          <TabsContent value="glossary" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardTitle className="text-base">Glossary</CardTitle>
+                <GlossaryTermPicker
+                  open={glossaryPopoverOpen}
+                  onOpenChange={setGlossaryPopoverOpen}
+                  allGlossary={allGlossary}
+                  availableTerms={availableTermsOnly}
+                  onSelect={handleAddGlossary}
+                />
+              </CardHeader>
+              <CardContent className="p-0">
+                {dataset.glossary_terms.length > 0 ? (
+                  <Table className="w-[80%] mx-auto">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Term</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="w-[60px]" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dataset.glossary_terms.map((term) => (
+                        <TableRow key={term.id}>
+                          <TableCell className="font-medium">
+                            {term.name}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[300px] truncate">
+                            {term.description || "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleRemoveGlossary(term.id)}
+                              aria-label={`Remove term ${term.name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="flex items-center justify-center p-8">
+                    <p className="text-muted-foreground">
+                      No glossary terms attached
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* =============== Sample tab =============== */}
+          <TabsContent value="sample" className="mt-4">
+            <SampleDataTab datasetId={datasetId} isSynced={dataset.is_synced === "true"} isAdmin={!!user?.is_admin} />
+          </TabsContent>
+
+          {/* =============== Avro tab =============== */}
+          <TabsContent value="avro" className="mt-4">
+            <AvroSchemaCard dataset={dataset} />
+          </TabsContent>
+
+          {/* =============== Spark tab =============== */}
+          {!["hive", "impala"].includes(dataset.platform.type) && (
+            <TabsContent value="spark" className="mt-4">
+              <SparkCodeCard dataset={dataset} />
+            </TabsContent>
+          )}
+
+          {/* =============== NiFi tab =============== */}
+          {!["hive", "impala"].includes(dataset.platform.type) && (
+            <TabsContent value="nifi" className="mt-4">
+              <NiFiFlowTab dataset={dataset} />
+            </TabsContent>
+          )}
+
+          {/* =============== Kestra tab =============== */}
+          {!["hive", "impala"].includes(dataset.platform.type) && (
+            <TabsContent value="kestra" className="mt-4">
+              <KestraFlowTab dataset={dataset} />
+            </TabsContent>
+          )}
+
+          {/* =============== Airflow tab =============== */}
+          {!["hive", "impala"].includes(dataset.platform.type) && (
+            <TabsContent value="airflow" className="mt-4">
+              <AirflowDagTab dataset={dataset} />
+            </TabsContent>
+          )}
+
+          {/* =============== History tab =============== */}
+          <TabsContent value="history" className="mt-4">
+            <SchemaHistoryTab datasetId={datasetId} />
+          </TabsContent>
+
+          {/* =============== Lineage tab =============== */}
+          {/* =============== Terms tab =============== */}
+          <TabsContent value="terms" className="mt-4">
+            <TermsTab datasetId={datasetId} />
+          </TabsContent>
+
+          {/* =============== Quality tab =============== */}
+          <TabsContent value="quality" className="mt-4">
+            <QualityTab datasetId={datasetId} />
+          </TabsContent>
+
+          <TabsContent value="lineage" className="mt-4">
+            <LineageTab datasetId={datasetId} datasetName={dataset.name} />
+          </TabsContent>
+
+          {/* =============== Comments tab =============== */}
+          <TabsContent value="comments" className="mt-4">
+            <CommentSection
+              entityType="dataset"
+              entityId={String(datasetId)}
+            />
+          </TabsContent>
+        </Tabs>
+
+      </div>
+
+      {/* AI Description Preview Dialog */}
+      <Dialog open={aiDialogOpen && aiDialogType === "description"} onOpenChange={(open) => { if (!open) { setAiDialogOpen(false); setAiDescResult(null) } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              AI Generated Description
+            </DialogTitle>
+          </DialogHeader>
+          {aiDescResult && (
+            <div className="space-y-4">
+              <div className="rounded-md border p-3 text-sm whitespace-pre-wrap bg-muted/50">
+                {aiDescResult.description}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span>Confidence: {(aiDescResult.confidence * 100).toFixed(0)}%</span>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setAiDialogOpen(false); setAiDescResult(null) }}>
+                  Dismiss
+                </Button>
+                <Button size="sm" onClick={handleAiApplyDescription}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Apply
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Column Descriptions Preview Dialog */}
+      <Dialog open={aiDialogOpen && aiDialogType === "columns"} onOpenChange={(open) => { if (!open) { setAiDialogOpen(false); setAiColsResult(null) } }}>
+        <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              AI Generated Column Descriptions
+            </DialogTitle>
+          </DialogHeader>
+          {aiColsResult && (
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[150px]">Column</TableHead>
+                    <TableHead>Generated Description</TableHead>
+                    <TableHead className="w-[60px] text-right">Conf.</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {aiColsResult.columns.map((col) => (
+                    <TableRow key={col.field_path}>
+                      <TableCell className="font-mono text-xs">{col.field_path}</TableCell>
+                      <TableCell className="text-sm">{col.description}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">{(col.confidence * 100).toFixed(0)}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex items-center gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setAiDialogOpen(false); setAiColsResult(null) }}>
+                  Dismiss
+                </Button>
+                <Button size="sm" onClick={handleAiApplyColumns}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Apply All ({aiColsResult.total_generated})
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Avro Schema Card with line numbers
+// ---------------------------------------------------------------------------
+function AvroSchemaCard({ dataset }: { dataset: DatasetDetail }) {
+  const schema = useMemo(() => {
+    if (dataset.schema_fields.length === 0) return ""
+    const schemaName = dataset.name.split(".").pop() || dataset.name
+    return generateAvroSchema(
+      schemaName,
+      `argus.catalog.${dataset.platform.platform_id}.${dataset.name.split(".").slice(0, -1).join(".")}`,
+      dataset.schema_fields
+    )
+  }, [dataset.name, dataset.platform.platform_id, dataset.schema_fields])
+
+  const lineCount = useMemo(() => schema.split("\n").length, [schema])
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between py-3">
+        <CardTitle className="text-base">Avro Schema</CardTitle>
+        {schema && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(schema)
+                toast.success("Copied to clipboard.")
+              } catch {
+                toast.error("Failed to copy. Clipboard API requires HTTPS.")
+              }
+            }}
+          >
+            Copy
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        {schema ? (
+          <div className="border-t">
+            <MonacoEditor
+              height={Math.min(lineCount * 20 + 20, 600)}
+              language="json"
+              value={schema}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                fontFamily: "var(--font-d2coding), 'D2Coding', Consolas, 'Courier New', monospace",
+                lineNumbers: "on",
+                renderLineHighlight: "none",
+                overviewRulerLanes: 0,
+                hideCursorInOverviewRuler: true,
+                scrollbar: { vertical: "auto", horizontal: "auto" },
+                wordWrap: "off",
+                domReadOnly: true,
+                padding: { top: 8, bottom: 8 },
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-muted-foreground">
+              Define schema fields first to generate Avro schema.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PySpark Code Card with Monaco Editor
+// ---------------------------------------------------------------------------
+import dynamic from "next/dynamic"
+const MonacoEditor = dynamic(() => import("@monaco-editor/react").then(m => m.default), { ssr: false })
+
+function SparkCodeCard({ dataset }: { dataset: DatasetDetail }) {
+  const code = useMemo(() => {
+    if (dataset.schema_fields.length === 0) return ""
+    return generatePySparkCode(dataset)
+  }, [dataset])
+
+  const lineCount = useMemo(() => code.split("\n").length, [code])
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between py-3">
+        <div>
+          <CardTitle className="text-base">PySpark Code</CardTitle>
+          <CardDescription className="text-xs mt-1">
+            JDBC read from {dataset.platform.type} and write to HDFS as Parquet.
+            Date partitioning code is included as comments.
+          </CardDescription>
+        </div>
+        {code && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(code)
+                toast.success("Copied to clipboard.")
+              } catch {
+                toast.error("Failed to copy. Clipboard API requires HTTPS.")
+              }
+            }}
+          >
+            Copy
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        {code ? (
+          <div className="border-t">
+            <MonacoEditor
+              height={Math.min(lineCount * 20 + 20, 600)}
+              language="python"
+              value={code}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                fontFamily: "var(--font-d2coding), 'D2Coding', Consolas, 'Courier New', monospace",
+                lineNumbers: "on",
+                renderLineHighlight: "none",
+                overviewRulerLanes: 0,
+                hideCursorInOverviewRuler: true,
+                scrollbar: { vertical: "auto", horizontal: "auto" },
+                wordWrap: "off",
+                domReadOnly: true,
+                padding: { top: 8, bottom: 8 },
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-muted-foreground">
+              Define schema fields first to generate PySpark code.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Glossary Term Picker — tree-based folder navigation
+// ---------------------------------------------------------------------------
+
+type GlossaryTreeNode = GlossaryTerm & { children: GlossaryTreeNode[]; depth: number }
+
+function buildGlossaryTree(terms: GlossaryTerm[]): GlossaryTreeNode[] {
+  const map = new Map<number, GlossaryTreeNode>()
+  const roots: GlossaryTreeNode[] = []
+  for (const t of terms) map.set(t.id, { ...t, children: [], depth: 0 })
+  for (const node of map.values()) {
+    if (node.parent_id && map.has(node.parent_id)) {
+      map.get(node.parent_id)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  const setDepth = (nodes: GlossaryTreeNode[], d: number) => {
+    for (const n of nodes) { n.depth = d; setDepth(n.children, d + 1) }
+  }
+  setDepth(roots, 0)
+  const sortNodes = (nodes: GlossaryTreeNode[]) => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name))
+    for (const n of nodes) sortNodes(n.children)
+  }
+  sortNodes(roots)
+  return roots
+}
+
+function collectGlossaryIds(node: GlossaryTreeNode): number[] {
+  const ids = [node.id]
+  for (const c of node.children) ids.push(...collectGlossaryIds(c))
+  return ids
+}
+
+function GlossaryTermPicker({
+  open,
+  onOpenChange,
+  allGlossary,
+  availableTerms,
+  onSelect,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  allGlossary: GlossaryTerm[]
+  availableTerms: GlossaryTerm[]
+  onSelect: (termId: number) => void
+}) {
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [search, setSearch] = useState("")
+
+  const categories = allGlossary.filter(t => (t.term_type ?? "TERM") === "CATEGORY")
+  const catTree = useMemo(() => buildGlossaryTree(categories), [categories])
+  const catMap = useMemo(() => {
+    const m = new Map<number, GlossaryTreeNode>()
+    const walk = (nodes: GlossaryTreeNode[]) => { for (const n of nodes) { m.set(n.id, n); walk(n.children) } }
+    walk(catTree)
+    return m
+  }, [catTree])
+
+  const visibleCats = useMemo(() => {
+    const result: GlossaryTreeNode[] = []
+    const walk = (nodes: GlossaryTreeNode[]) => {
+      for (const n of nodes) {
+        if ((n.term_type ?? "TERM") !== "CATEGORY") continue
+        result.push(n)
+        if (expandedIds.has(n.id)) walk(n.children)
+      }
+    }
+    walk(catTree)
+    return result
+  }, [catTree, expandedIds])
+
+  const filteredTerms = useMemo(() => {
+    let list = availableTerms
+    if (selectedFolderId) {
+      // Collect all CATEGORY ids under selected folder (including itself)
+      const node = catMap.get(selectedFolderId)
+      if (node) {
+        const folderIds = new Set(collectGlossaryIds(node))
+        // Filter terms whose parent_id is one of these folders
+        list = list.filter(t => t.parent_id != null && folderIds.has(t.parent_id))
+      }
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(t => t.name.toLowerCase().includes(q) || (t.description ?? "").toLowerCase().includes(q))
+    }
+    return list
+  }, [availableTerms, selectedFolderId, catMap, search])
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" disabled={availableTerms.length === 0}>
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Add Term
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[520px] p-0" align="end">
+        <div className="flex h-[340px]">
+          {/* Left: folder tree */}
+          <div className="w-[180px] border-r overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => setSelectedFolderId(null)}
+              className={`w-full text-left flex items-center gap-1.5 px-2 py-1.5 text-sm transition-colors ${
+                selectedFolderId === null ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              All
+            </button>
+            {visibleCats.map(node => {
+              const hasCatChildren = node.children.some(c => (c.term_type ?? "TERM") === "CATEGORY")
+              const isExp = expandedIds.has(node.id)
+              const isSel = selectedFolderId === node.id
+              return (
+                <div
+                  key={node.id}
+                  className={`flex items-center gap-1 pr-1 transition-colors ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  style={{ paddingLeft: `${node.depth * 14 + 6}px` }}
+                >
+                  <button
+                    type="button"
+                    className={`shrink-0 p-0.5 ${hasCatChildren ? "cursor-pointer" : "invisible"}`}
+                    onClick={() => hasCatChildren && toggleExpand(node.id)}
+                  >
+                    <ChevronRight className={`h-3 w-3 transition-transform ${isExp ? "rotate-90" : ""}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId(node.id)}
+                    className={`flex-1 min-w-0 text-left truncate text-sm py-1 flex items-center gap-1 ${isSel ? "text-primary font-medium" : ""}`}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    {node.name}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Right: term list */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="px-2 py-1.5 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search terms..."
+                  className="h-7 pl-7 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {filteredTerms.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  No terms available
+                </div>
+              ) : (
+                filteredTerms.map(term => (
+                  <button
+                    key={term.id}
+                    type="button"
+                    onClick={() => { onSelect(term.id); onOpenChange(false) }}
+                    className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                  >
+                    <span className="text-sm font-medium">{term.name}</span>
+                    {term.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{term.description}</p>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}

@@ -1,0 +1,139 @@
+"""Pydantic schemas for infrastructure configuration API."""
+
+from pydantic import BaseModel, Field
+
+
+class InfraConfigItem(BaseModel):
+    """A single infrastructure configuration entry."""
+
+    config_key: str
+    config_value: str
+    description: str | None = None
+
+
+class InfraCategoryResponse(BaseModel):
+    """Configuration items grouped by category."""
+
+    category: str
+    items: dict[str, str] = Field(
+        description="Key-value pairs for this category",
+    )
+
+
+class InfraConfigResponse(BaseModel):
+    """Full infrastructure configuration returned to the UI."""
+
+    categories: list[InfraCategoryResponse] = Field(
+        description="Configuration grouped by category",
+    )
+
+
+class UpdateInfraCategoryRequest(BaseModel):
+    """Request to update settings within a single category."""
+
+    category: str = Field(description="Category identifier (e.g. network)")
+    items: dict[str, str] = Field(
+        description="Key-value pairs to update",
+    )
+
+
+class DockerRegistryTestRequest(BaseModel):
+    """Request to test Docker Registry connectivity."""
+
+    url: str = Field(description="Docker Registry URL")
+    username: str = Field(default="", description="Registry username")
+    password: str = Field(default="", description="Registry password")
+
+
+class DockerRegistryTestResponse(BaseModel):
+    """Response from Docker Registry connectivity test."""
+
+    success: bool
+    message: str
+
+
+class UnityCatalogTestRequest(BaseModel):
+    """Request to test Unity Catalog connectivity."""
+
+    url: str = Field(description="Unity Catalog URL")
+    access_token: str = Field(default="", description="Unity Catalog access token")
+
+
+class UnityCatalogTestResponse(BaseModel):
+    """Response from Unity Catalog connectivity test."""
+
+    success: bool
+    message: str
+
+
+class UnityCatalogInitRequest(BaseModel):
+    """Request to initialize Unity Catalog with default metastore and catalog."""
+
+    url: str = Field(description="Unity Catalog URL")
+    access_token: str = Field(default="", description="Unity Catalog access token")
+
+
+class UnityCatalogInitResponse(BaseModel):
+    """Response from Unity Catalog initialization."""
+
+    success: bool
+    message: str
+
+
+class ObjectStorageTestRequest(BaseModel):
+    """Request to test Object Storage connectivity by listing buckets."""
+
+    endpoint: str = Field(description="S3-compatible endpoint URL")
+    access_key: str = Field(default="", description="Access key")
+    secret_key: str = Field(default="", description="Secret key")
+    region: str = Field(default="us-east-1", description="Region")
+
+
+class ObjectStorageTestResponse(BaseModel):
+    """Response from Object Storage connectivity test."""
+
+    success: bool
+    message: str
+
+
+class ObjectStorageInitRequest(BaseModel):
+    """Request to initialize Object Storage (ensure 'global' bucket exists)."""
+
+    endpoint: str = Field(description="S3-compatible endpoint URL")
+    access_key: str = Field(default="", description="Access key")
+    secret_key: str = Field(default="", description="Secret key")
+    region: str = Field(default="us-east-1", description="Region")
+
+
+class ObjectStorageInitResponse(BaseModel):
+    """Response from Object Storage initialization."""
+
+    success: bool
+    message: str
+
+
+class PrometheusTestRequest(BaseModel):
+    """Request to test Prometheus Push Gateway connectivity."""
+
+    host: str = Field(description="Push Gateway host")
+    port: int = Field(default=9091, description="Push Gateway port")
+
+
+class PrometheusTestResponse(BaseModel):
+    """Response from Prometheus Push Gateway connectivity test."""
+
+    success: bool
+    message: str
+
+
+class CheckPathRequest(BaseModel):
+    """Request to check if a file path exists on the server."""
+
+    path: str = Field(description="File path to check")
+
+
+class CheckPathResponse(BaseModel):
+    """Response indicating whether the path exists."""
+
+    path: str
+    exists: bool

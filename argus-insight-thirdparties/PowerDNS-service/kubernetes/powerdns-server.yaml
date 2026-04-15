@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: powerdns-server
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: powerdns-server
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: powerdns-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: powerdns-server
+        app.kubernetes.io/part-of: argus-insight
+    spec:
+      containers:
+        - name: powerdns-server
+          image: argus-insight/powerdns-server:4.9
+          env:
+            - name: PDNS_api
+              value: "yes"
+            - name: PDNS_api_key
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: pdns_api_key
+            - name: PDNSCONF_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: pdns_api_key
+            - name: PDNS_webserver
+              value: "yes"
+            - name: PDNS_webserver_address
+              value: "0.0.0.0"
+            - name: PDNS_webserver_port
+              value: "8083"
+            - name: PDNS_webserver_allow_from
+              value: "0.0.0.0/0"
+            - name: PDNS_gmysql_host
+              value: powerdns-db
+            - name: PDNS_gmysql_port
+              value: "3306"
+            - name: PDNS_gmysql_user
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: mysql_user
+            - name: PDNS_gmysql_password
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: mysql_password
+            - name: PDNS_gmysql_dbname
+              value: pdns
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: api
+              containerPort: 8083
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            tcpSocket:
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: powerdns-server
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: powerdns-server
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  type: LoadBalancer
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+    - name: api
+      port: 8083
+      targetPort: api
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: powerdns-server

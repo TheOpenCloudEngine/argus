@@ -1,0 +1,64 @@
+services:
+  keycloak-postgresql:
+    image: argus-insight/keycloak-postgresql:${POSTGRES_VERSION}
+    build:
+      context: ./postgresql
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak_db_password
+    volumes:
+      - argus-keycloak-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  keycloak:
+    image: argus-insight/keycloak:${KEYCLOAK_VERSION}
+    build:
+      context: ./keycloak
+      args:
+        KEYCLOAK_VERSION: ${KEYCLOAK_VERSION}
+    command: start
+    hostname: sso.argus.local
+    ports:
+      - "8180:8080"
+    environment:
+      # ─── Admin ──────────────────────────────────────────────────────────
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "Argus!nsight2026"
+      # ─── Database ──────────────────────────────────────────────────────
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgresql:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak_db_password
+      # ─── Hostname ──────────────────────────────────────────────────────
+      KC_HOSTNAME: sso.argus.local
+      KC_HOSTNAME_STRICT: "false"
+      # ─── HTTP ───────────────────────────────────────────────────────────
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      # ─── Health & Metrics ──────────────────────────────────────────────
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      # ─── Logging ────────────────────────────────────────────────────────
+      KC_LOG_LEVEL: info
+    depends_on:
+      keycloak-postgresql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  argus-keycloak-db-data:

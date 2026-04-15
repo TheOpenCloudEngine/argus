@@ -1,0 +1,231 @@
+"""Catalog Server - FastAPI application entry point."""
+
+import argparse
+import logging
+import sys
+import time
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app import __version__
+from app.ai.router import router as ai_router
+from app.alert.router import router as alert_router
+from app.auth.router import router as auth_router  # Added for SSO AUTH
+from app.catalog.impala_profile_router import router as impala_profile_router
+from app.catalog.router import router as catalog_router
+from app.comments.router import router as comments_router
+from app.core.config import settings
+from app.core.database import Base, close_database, engine, init_database
+from app.core.logging import setup_logging
+from app.core.security import SecurityHeadersMiddleware
+from app.external.router import router as external_router
+from app.filesystemmgr.router import router as filesystem_router
+from app.models.router import router as models_router
+from app.models.store_router import router as model_store_router
+from app.models.uc_compat import router as uc_compat_router
+from app.oci_hub.router import router as oci_hub_router
+from app.quality.router import router as quality_router
+from app.search.router import router as search_router
+from app.settings.router import router as settings_router
+from app.standard.router import router as standard_router
+from app.usermgr.router import router as usermgr_router
+
+logger = logging.getLogger(__name__)
+_start_time: float = 0.0
+
+BANNER = r"""
+_______                                  _________      _____       ______                  ________
+___    |_____________ ____  _________    __  ____/_____ __  /______ ___  /____________ _    __  ___/______________   ______________
+__  /| |_  ___/_  __ `/  / / /_  ___/    _  /    _  __ `/  __/  __ `/_  /_  __ \_  __ `/    _____ \_  _ \_  ___/_ | / /  _ \_  ___/
+_  ___ |  /   _  /_/ // /_/ /_(__  )     / /___  / /_/ // /_ / /_/ /_  / / /_/ /  /_/ /     ____/ //  __/  /   __ |/ //  __/  /
+/_/  |_/_/    _\__, / \__,_/ /____/      \____/  \__,_/ \__/ \__,_/ /_/  \____/_\__, /      /____/ \___//_/    _____/ \___//_/
+              /____/                                                           /____/
+"""
+
+
+def _print_banner() -> None:
+    logger.info(BANNER)
+    logger.info("Version           : %s", settings.app_version)
+    logger.info("Config YAML       : %s", settings.config_yaml_path)
+    logger.info("Config Properties : %s", settings.config_properties_path)
+    logger.info("Data Directory    : %s", settings.data_dir)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _start_time
+    _start_time = time.monotonic()
+    setup_logging()
+    _print_banner()
+    logger.info("Catalog Server %s starting", __version__)
+    await init_database()
+
+    import app.ai.models  # noqa: F401
+    import app.catalog.models  # noqa: F401
+    import app.comments.models  # noqa: F401
+    import app.embedding.models  # noqa: F401
+    import app.models.models  # noqa: F401
+    import app.oci_hub.models  # noqa: F401
+    import app.settings.models  # noqa: F401
+    import app.usermgr.models  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables verified")
+
+    # Seed default data
+    from app.catalog.service import seed_platform_metadata, seed_platforms
+    from app.core.database import async_session
+    from app.settings.service import (
+        load_auth_settings,
+        load_cors_settings,
+        load_embedding_settings,
+        load_llm_settings,
+        load_os_settings,
+        seed_configuration,
+    )
+    from app.usermgr.service import seed_admin_user, seed_roles
+
+    async with async_session() as session:
+        await seed_platforms(session)
+        await seed_platform_metadata(session)
+        await seed_roles(session)
+        await seed_configuration(session)
+        await load_os_settings(session)
+        await load_embedding_settings(session)
+        await load_llm_settings(session)
+        await load_auth_settings(session)
+        await load_cors_settings(session)
+        await seed_admin_user(session)
+
+    # Ensure S3 bucket exists
+    try:
+        from app.core.s3 import ensure_bucket
+        await ensure_bucket()
+        logger.info("S3 model-artifacts bucket verified")
+    except Exception as e:
+        logger.warning("S3 bucket check skipped (MinIO may not be available): %s", e)
+
+    yield
+    from app.ai.registry import shutdown_provider as shutdown_llm
+    from app.embedding.registry import shutdown_provider as shutdown_embedding
+    await shutdown_embedding()
+    await shutdown_llm()
+    await close_database()
+    logger.info("Catalog Server shutting down")
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=__version__,
+    lifespan=lifespan,
+)
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+class DynamicCORSMiddleware:
+    """CORS middleware that reads allowed origins from settings at request time.
+
+    Rebuilds the inner CORSMiddleware only when settings.cors_origins changes.
+    """
+
+    def __init__(self, app):
+        self.app = app
+        self._inner = None
+        self._origins_snapshot = None
+
+    def _get_inner(self):
+        current = tuple(settings.cors_origins)
+        if current != self._origins_snapshot:
+            self._inner = CORSMiddleware(
+                app=self.app,
+                allow_origins=list(current),
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
+            self._origins_snapshot = current
+        return self._inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        await self._get_inner()(scope, receive, send)
+
+
+app.add_middleware(DynamicCORSMiddleware)
+
+app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(comments_router, prefix="/api/v1")
+app.include_router(filesystem_router, prefix="/api/v1")
+app.include_router(models_router, prefix="/api/v1")
+app.include_router(model_store_router, prefix="/api/v1")
+app.include_router(oci_hub_router, prefix="/api/v1")
+app.include_router(uc_compat_router)  # /api/2.0/mlflow/unity-catalog (no extra prefix)
+app.include_router(search_router, prefix="/api/v1")
+app.include_router(quality_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(standard_router, prefix="/api/v1")
+app.include_router(usermgr_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
+app.include_router(alert_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")  # Added for SSO AUTH
+app.include_router(external_router, prefix="/api/v1")
+app.include_router(impala_profile_router, prefix="/api/v1")
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    uptime_seconds = int(time.monotonic() - _start_time)
+    return {
+        "status": "ok",
+        "service": "argus-catalog-server",
+        "uptime": uptime_seconds,
+        "version": __version__,
+    }
+
+
+def run() -> None:
+    parser = argparse.ArgumentParser(
+        prog="argus-catalog-server",
+        description="Catalog Server - Data catalog management server for Argus platform.",
+    )
+    parser.add_argument("--config-yaml", metavar="PATH", help="Path to YAML config file")
+    parser.add_argument("--config-properties", metavar="PATH", help="Path to properties file")
+    args = parser.parse_args()
+
+    if args.config_yaml or args.config_properties:
+        from app.core.config import init_settings
+        init_settings(
+            yaml_path=args.config_yaml,
+            properties_path=args.config_properties,
+        )
+    else:
+        yaml_exists = settings.config_yaml_path.is_file()
+        props_exists = settings.config_properties_path.is_file()
+        if not yaml_exists and not props_exists:
+            parser.print_help()
+            print()
+            print(
+                f"Error: No configuration files found at default location:\n"
+                f"  - {settings.config_yaml_path}\n"
+                f"  - {settings.config_properties_path}\n"
+            )
+            sys.exit(1)
+
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+    )
+
+
+if __name__ == "__main__":
+    run()

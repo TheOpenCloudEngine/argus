@@ -1,0 +1,16 @@
+version: "1.0"
+display_name: "v1.0 (PySpark + dual S3)"
+description: JupyterLab with Apache Spark, PySpark, and dual S3 bucket mount
+status: stable
+release_date: "2026-03-29"
+step_class: workspace_provisioner.workflow.steps.jupyter_deploy.JupyterLabDeployStep
+config_class: workspace_provisioner.config.JupyterPySparkConfig
+template_dir: jupyter
+changelog: |
+  - Apache Spark with PySpark
+  - scipy/numpy/pandas/sklearn included
+  - Token-free access
+  - Dual S3 mount: /workspace (shared) + /data (personal)
+upgradeable_from: []
+os_key: ubuntu-24.04
+software_version: "4.3"

@@ -1,0 +1,325 @@
+"""Argus Insight Server - FastAPI application entry point."""
+
+import argparse
+import logging
+import sys
+import time
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app import __version__
+from app.agent.disconnect_checker import disconnect_checker
+from app.agent.router import router as agent_router
+from app.auth.router import router as auth_router
+from app.core.config import settings
+from app.core.database import Base, close_database, engine, init_database
+from app.core.logging import setup_logging
+from app.core.security import SecurityHeadersMiddleware
+from app.dashboard.router import router as dashboard_router
+from app.dns.router import router as dns_router
+from app.settings.router import router as settings_router
+from app.objectfilemgr.router import router as objectfilemgr_router
+from app.proxy.router import router as proxy_router
+from app.security.router import router as security_router
+from app.servermgr.router import router as servermgr_router
+from app.unity_catalog.router import router as unity_catalog_router
+from app.usermgr.router import router as usermgr_router
+from app.voc.router import router as voc_router
+from app.ml_studio.router import router as ml_studio_router
+from app.apps.registry_router import router as app_registry_router
+from app.apps.instance_router import router as app_instance_router
+from app.k8s.router import router as k8s_router
+from app.resource_profile.router import router as resource_profile_router
+from app.resource_profile.router import workspace_router as resource_workspace_router
+from workspace_provisioner.router import router as workspace_router
+from workspace_provisioner.router import init_gitlab_client
+from workspace_provisioner.plugins.router import router as plugins_router
+from app.sql.router import router as sql_router
+
+logger = logging.getLogger(__name__)
+_start_time: float = 0.0
+
+BANNER = r"""
+_______                                  ________             _____        ______ _____     ________
+___    |_____________ ____  _________    ____  _/________________(_)______ ___  /___  /_    __  ___/______________   ______________
+__  /| |_  ___/_  __ `/  / / /_  ___/     __  / __  __ \_  ___/_  /__  __ `/_  __ \  __/    _____ \_  _ \_  ___/_ | / /  _ \_  ___/
+_  ___ |  /   _  /_/ // /_/ /_(__  )     __/ /  _  / / /(__  )_  / _  /_/ /_  / / / /_      ____/ //  __/  /   __ |/ //  __/  /
+/_/  |_/_/    _\__, / \__,_/ /____/      /___/  /_/ /_//____/ /_/  _\__, / /_/ /_/\__/      /____/ \___//_/    _____/ \___//_/
+              /____/                                               /____/
+"""
+
+
+def _print_banner() -> None:
+    """Print startup banner with version and config paths."""
+    logger.info(BANNER)
+    logger.info("Version           : %s", settings.app_version)
+    logger.info("Config YAML       : %s", settings.config_yaml_path)
+    logger.info("Config Properties : %s", settings.config_properties_path)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    global _start_time
+    _start_time = time.monotonic()
+    setup_logging()
+    _print_banner()
+    logger.info("Argus Insight Server %s starting", __version__)
+    await init_database()
+    # Ensure ORM tables exist (import models so they are registered with Base)
+    import app.agent.models  # noqa: F401
+    import app.settings.models  # noqa: F401
+    import app.objectfilemgr.models  # noqa: F401
+    import app.usermgr.models  # noqa: F401
+    import app.apps.models  # noqa: F401
+    import app.resource_profile.models  # noqa: F401
+    import app.voc.models  # noqa: F401
+    import app.ml_studio.models  # noqa: F401
+    import workspace_provisioner.models  # noqa: F401
+    import workspace_provisioner.plugins.models  # noqa: F401
+    import app.sql.models  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables verified")
+
+    # Initialize plugin registry
+    from pathlib import Path
+    from workspace_provisioner.plugins.registry import PluginRegistry
+    plugin_registry = PluginRegistry.get_instance()
+    builtin_dir = Path(__file__).resolve().parent.parent / "workspace_provisioner" / "plugins" / "builtin"
+    external_dir = Path("/etc/argus-insight-server/plugins")
+    discover_dirs = [builtin_dir]
+    if external_dir.is_dir():
+        discover_dirs.append(external_dir)
+    count = plugin_registry.discover(discover_dirs)
+    logger.info("Plugin registry initialized: %d plugins discovered", count)
+
+    # Seed default roles and configuration
+    from app.core.database import async_session
+    from app.usermgr.service import seed_admin_user, seed_roles
+
+    async with async_session() as session:
+        await seed_roles(session)
+
+    from app.settings.service import load_auth_settings, load_gitlab_settings, seed_infra_config
+
+    async with async_session() as session:
+        await seed_infra_config(session)
+
+    # Load auth settings from DB (overrides config file defaults)
+    async with async_session() as session:
+        await load_auth_settings(session)
+
+    # Load GitLab settings from DB and initialize client
+    async with async_session() as session:
+        await load_gitlab_settings(session)
+
+    # Seed default admin user in local auth mode
+    async with async_session() as session:
+        await seed_admin_user(session)
+
+    # Seed default apps
+    from app.apps.service import seed_apps
+    async with async_session() as session:
+        await seed_apps(session)
+
+    # Fallback: Initialize GitLab client if not already done by load_gitlab_settings
+    if settings.gitlab_url and settings.gitlab_token:
+        try:
+            from workspace_provisioner.router import _gitlab_client
+            if _gitlab_client is None:
+                init_gitlab_client(
+                    url=settings.gitlab_url,
+                    private_token=settings.gitlab_token,
+                )
+        except Exception:
+            pass
+
+    await disconnect_checker.start()
+    yield
+    await disconnect_checker.stop()
+    await close_database()
+    logger.info("Argus Insight Server shutting down")
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=__version__,
+    lifespan=lifespan,
+)
+
+# Middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routers
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(agent_router, prefix="/api/v1")
+app.include_router(proxy_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(dns_router, prefix="/api/v1")
+app.include_router(usermgr_router, prefix="/api/v1")
+app.include_router(servermgr_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(objectfilemgr_router, prefix="/api/v1")
+app.include_router(security_router, prefix="/api/v1")
+app.include_router(unity_catalog_router, prefix="/api/v1")
+app.include_router(app_registry_router, prefix="/api/v1")
+app.include_router(app_instance_router, prefix="/api/v1")
+app.include_router(k8s_router, prefix="/api/v1")
+app.include_router(resource_profile_router, prefix="/api/v1")
+app.include_router(resource_workspace_router, prefix="/api/v1")
+app.include_router(workspace_router, prefix="/api/v1")
+app.include_router(plugins_router, prefix="/api/v1")
+app.include_router(sql_router, prefix="/api/v1")
+app.include_router(voc_router, prefix="/api/v1")
+app.include_router(ml_studio_router, prefix="/api/v1")
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    uptime_seconds = int(time.monotonic() - _start_time)
+    return {
+        "status": "ok",
+        "service": "argus-insight-server",
+        "uptime": uptime_seconds,
+        "version": __version__,
+    }
+
+
+@app.get("/api/v1/system/network-info")
+async def network_info():
+    """Return server IP addresses for DB provisioning access control.
+
+    Provisioners should use these IPs to grant DB access when deploying
+    PostgreSQL, MariaDB, etc. in workspace namespaces.
+    """
+    import socket
+    import subprocess
+
+    ips = set()
+    # Method 1: hostname resolution
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ips.add(info[4][0])
+    except Exception:
+        pass
+
+    # Method 2: parse 'ip addr' for all interface IPs
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split()
+            for i, p in enumerate(parts):
+                if p == "inet" and i + 1 < len(parts):
+                    ip = parts[i + 1].split("/")[0]
+                    if ip != "127.0.0.1":
+                        ips.add(ip)
+        # Also add CIDR ranges for CNI bridge (pod network)
+        cni_ranges = []
+        for line in result.stdout.strip().split("\n"):
+            if "cni" in line or "flannel" in line:
+                parts = line.split()
+                for i, p in enumerate(parts):
+                    if p == "inet" and i + 1 < len(parts):
+                        cni_ranges.append(parts[i + 1])  # e.g. 10.42.0.1/24
+    except Exception:
+        cni_ranges = []
+
+    return {
+        "ips": sorted(ips),
+        "cni_ranges": cni_ranges,
+        "grant_hosts": {
+            "postgresql_pg_hba": [f"host all all {ip}/32 scram-sha-256" for ip in sorted(ips)],
+            "mariadb_grant": [f"'argus'@'{ip}'" for ip in sorted(ips)],
+        },
+    }
+
+
+def run() -> None:
+    """CLI entry point with config file argument support."""
+    parser = argparse.ArgumentParser(
+        prog="argus-insight-server",
+        description="Argus Insight Server - Central management server for Argus Insight platform.",
+        epilog=(
+            "examples:\n"
+            "  argus-insight-server\n"
+            "  argus-insight-server --config-yaml /opt/config/config.yml\n"
+            "  argus-insight-server --config-properties /opt/config/config.properties\n"
+            "  argus-insight-server --config-yaml ./config.yml --config-properties ./config.properties\n"
+            "\n"
+            "If no options are specified, configuration files are loaded from\n"
+            "/etc/argus-insight-server/ (or the ARGUS_SERVER_CONFIG_DIR environment variable)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--config-yaml",
+        metavar="PATH",
+        help=(
+            "path to the YAML configuration file (config.yml). "
+            "This file defines the main application settings using "
+            "Spring Boot style ${variable:default} placeholders. "
+            "(default: /etc/argus-insight-server/config.yml)"
+        ),
+    )
+    parser.add_argument(
+        "--config-properties",
+        metavar="PATH",
+        help=(
+            "path to the properties variable file (config.properties). "
+            "This file defines key=value variables referenced by config.yml "
+            "for environment-specific values such as host, port, and credentials. "
+            "(default: /etc/argus-insight-server/config.properties)"
+        ),
+    )
+    args = parser.parse_args()
+
+    if args.config_yaml or args.config_properties:
+        from app.core.config import init_settings
+
+        init_settings(
+            yaml_path=args.config_yaml,
+            properties_path=args.config_properties,
+        )
+    else:
+        yaml_exists = settings.config_yaml_path.is_file()
+        props_exists = settings.config_properties_path.is_file()
+        if not yaml_exists and not props_exists:
+            parser.print_help()
+            print()
+            print(
+                f"Error: No configuration files found at default location:\n"
+                f"  - {settings.config_yaml_path}\n"
+                f"  - {settings.config_properties_path}\n"
+                f"\n"
+                f"Specify config file paths with --config-yaml and/or "
+                f"--config-properties options."
+            )
+            sys.exit(1)
+
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+    )
+
+
+if __name__ == "__main__":
+    run()

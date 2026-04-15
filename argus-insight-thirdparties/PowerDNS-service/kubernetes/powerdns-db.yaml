@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: powerdns-db
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: powerdns-db
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: powerdns-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: powerdns-db
+        app.kubernetes.io/part-of: argus-insight
+    spec:
+      containers:
+        - name: mariadb
+          image: argus-insight/powerdns-mariadb:11.7
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+          env:
+            - name: MYSQL_DATABASE
+              value: pdns
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: mysql_user
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: mysql_password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: powerdns-secrets
+                  key: mysql_root_password
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            exec:
+              command:
+                - mariadb-admin
+                - ping
+                - -uroot
+                - -p$(MYSQL_ROOT_PASSWORD)
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - mariadb-admin
+                - ping
+                - -uroot
+                - -p$(MYSQL_ROOT_PASSWORD)
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: init-schema
+              mountPath: /docker-entrypoint-initdb.d/01-schema.sql
+              subPath: 01-schema.sql
+            - name: config
+              mountPath: /etc/mysql/conf.d/custom.cnf
+              subPath: my.cnf
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: argus-powerdns-mysql-data
+        - name: init-schema
+          configMap:
+            name: powerdns-config
+            items:
+              - key: 01-schema.sql
+                path: 01-schema.sql
+        - name: config
+          configMap:
+            name: powerdns-config
+            items:
+              - key: my.cnf
+                path: my.cnf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: powerdns-db
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: powerdns-db
+    app.kubernetes.io/part-of: argus-insight
+spec:
+  type: ClusterIP
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: powerdns-db

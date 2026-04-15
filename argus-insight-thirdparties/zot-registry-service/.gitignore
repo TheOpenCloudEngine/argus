@@ -1,0 +1,5 @@
+zot-registry/zot
+dist/
+rpm/rpmbuild/
+rpm/zot
+rpm/*.rpm

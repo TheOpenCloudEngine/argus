@@ -1,0 +1,18 @@
+services:
+  zot-registry:
+    build:
+      context: ../zot-registry
+    image: argus-insight/zot-registry:${ZOT_VERSION}
+    container_name: zot-registry
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - argus-zot-data:/var/lib/zot
+      - ../config.json:/etc/zot/config.json
+      - ../htpasswd:/etc/zot/htpasswd
+      - ../credentials.json:/etc/zot/credentials.json
+      - ../certs:/etc/zot/certs
+
+volumes:
+  argus-zot-data:

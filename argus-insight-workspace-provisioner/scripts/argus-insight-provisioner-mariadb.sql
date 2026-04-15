@@ -1,0 +1,78 @@
+-- ============================================================================
+-- Argus Insight Workspace Provisioner - MariaDB Schema
+-- ============================================================================
+-- Database: MariaDB 10.6+
+-- Charset:  utf8mb4 / utf8mb4_unicode_ci
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. argus_workspaces
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS argus_workspaces (
+    id              INT             NOT NULL AUTO_INCREMENT,
+    name            VARCHAR(100)    NOT NULL,
+    display_name    VARCHAR(255)    NOT NULL,
+    description     TEXT            DEFAULT NULL,
+    domain          VARCHAR(255)    NOT NULL,
+    k8s_cluster     VARCHAR(255)    DEFAULT NULL,
+    k8s_namespace   VARCHAR(255)    DEFAULT NULL,
+    gitlab_project_id  INT          DEFAULT NULL,
+    gitlab_project_url VARCHAR(500) DEFAULT NULL,
+    minio_endpoint  VARCHAR(500)    DEFAULT NULL,
+    minio_console_endpoint VARCHAR(500) DEFAULT NULL,
+    minio_default_bucket VARCHAR(255) DEFAULT NULL,
+    airflow_endpoint VARCHAR(500)   DEFAULT NULL,
+    mlflow_endpoint VARCHAR(500)    DEFAULT NULL,
+    kserve_endpoint VARCHAR(500)    DEFAULT NULL,
+    status          VARCHAR(20)     NOT NULL DEFAULT 'provisioning',
+    resource_profile_id INT         DEFAULT NULL,
+    created_by      INT             NOT NULL,
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_workspaces_name (name),
+    KEY idx_workspaces_status (status),
+    KEY idx_workspaces_created_by (created_by),
+    CONSTRAINT fk_workspaces_created_by FOREIGN KEY (created_by) REFERENCES argus_users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- 2. argus_workspace_credentials
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS argus_workspace_credentials (
+    workspace_id        INT             NOT NULL,
+    gitlab_http_url     VARCHAR(500)    DEFAULT NULL,
+    gitlab_ssh_url      VARCHAR(500)    DEFAULT NULL,
+    minio_endpoint      VARCHAR(500)    DEFAULT NULL,
+    minio_root_user     VARCHAR(255)    DEFAULT NULL,
+    minio_root_password VARCHAR(500)    DEFAULT NULL,
+    minio_access_key    VARCHAR(255)    DEFAULT NULL,
+    minio_secret_key    VARCHAR(500)    DEFAULT NULL,
+    airflow_url         VARCHAR(500)    DEFAULT NULL,
+    airflow_admin_username VARCHAR(255) DEFAULT NULL,
+    airflow_admin_password VARCHAR(500) DEFAULT NULL,
+    mlflow_artifact_bucket VARCHAR(255) DEFAULT NULL,
+    kserve_endpoint     VARCHAR(500)    DEFAULT NULL,
+    created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (workspace_id),
+    CONSTRAINT fk_workspace_credentials_workspace FOREIGN KEY (workspace_id) REFERENCES argus_workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- 3. argus_workspace_members
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS argus_workspace_members (
+    id              INT             NOT NULL AUTO_INCREMENT,
+    workspace_id    INT             NOT NULL,
+    user_id         INT             NOT NULL,
+    role            VARCHAR(50)     NOT NULL DEFAULT 'User',
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_workspace_members (workspace_id, user_id),
+    KEY idx_workspace_members_user (user_id),
+    CONSTRAINT fk_workspace_members_workspace FOREIGN KEY (workspace_id) REFERENCES argus_workspaces (id) ON DELETE CASCADE,
+    CONSTRAINT fk_workspace_members_user FOREIGN KEY (user_id) REFERENCES argus_users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- (workflow_executions and workflow_step_executions removed — progress is tracked via audit logs)

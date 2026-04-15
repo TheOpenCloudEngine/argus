@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: powerdns-admin
+  namespace: argus-insight
+  labels:
+    app.kubernetes.io/name: powerdns-admin
+    app.kubernetes.io/part-of: argus-insight
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: powerdns-admin
+                port:
+                  name: http

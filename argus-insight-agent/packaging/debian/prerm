@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+if [ "$1" = "remove" ]; then
+    systemctl stop argus-insight-agent.service || true
+    systemctl disable argus-insight-agent.service || true
+fi

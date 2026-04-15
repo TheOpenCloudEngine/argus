@@ -1,0 +1,194 @@
+{
+  "groups": [
+    {
+      "id": "main",
+      "label": "Main",
+      "items": [
+        {
+          "id": "workspace",
+          "title": "Workspace",
+          "url": "/dashboard/workspace",
+          "icon": "Briefcase"
+        },
+        {
+          "id": "dashboard",
+          "title": "Dashboard",
+          "url": "/dashboard",
+          "icon": "LayoutDashboard"
+        },
+        {
+          "id": "alerts",
+          "title": "Alerts",
+          "url": "/dashboard/alerts",
+          "icon": "Bell"
+        },
+        {
+          "id": "file-browser",
+          "title": "File Browser",
+          "url": "/dashboard/file-browser",
+          "icon": "FolderOpen"
+        },
+        {
+          "id": "catalogs",
+          "title": "Catalog",
+          "url": "/dashboard/unity-catalog",
+          "icon": "Library"
+        },
+        {
+          "id": "sql-editor",
+          "title": "SQL",
+          "url": "/dashboard/sql",
+          "icon": "SquareTerminal"
+        },
+        {
+          "id": "vscode",
+          "title": "VS Code",
+          "url": "/dashboard/vscode",
+          "icon": "Code",
+          "id": "voc",
+          "title": "VOC",
+          "url": "/dashboard/voc",
+          "icon": "MessageSquareMore"
+        }
+      ]
+    },
+    {
+      "id": "kubernetes",
+      "label": "Kubernetes",
+      "items": [
+        {
+          "id": "k8s-overview",
+          "title": "Cluster Overview",
+          "url": "/dashboard/kubernetes",
+          "icon": "LayoutDashboard"
+        },
+        {
+          "id": "k8s-workloads",
+          "title": "Workloads",
+          "url": "/dashboard/kubernetes/workloads",
+          "icon": "Container",
+          "children": [
+            { "id": "k8s-pods", "title": "Pods", "url": "/dashboard/kubernetes/workloads/pods", "icon": "Box" },
+            { "id": "k8s-deployments", "title": "Deployments", "url": "/dashboard/kubernetes/workloads/deployments", "icon": "Layers" },
+            { "id": "k8s-statefulsets", "title": "StatefulSets", "url": "/dashboard/kubernetes/workloads/statefulsets", "icon": "Database" },
+            { "id": "k8s-daemonsets", "title": "DaemonSets", "url": "/dashboard/kubernetes/workloads/daemonsets", "icon": "Repeat" },
+            { "id": "k8s-jobs", "title": "Jobs", "url": "/dashboard/kubernetes/workloads/jobs", "icon": "Play" },
+            { "id": "k8s-cronjobs", "title": "CronJobs", "url": "/dashboard/kubernetes/workloads/cronjobs", "icon": "Clock" },
+            { "id": "k8s-replicasets", "title": "ReplicaSets", "url": "/dashboard/kubernetes/workloads/replicasets", "icon": "Copy" }
+          ]
+        },
+        {
+          "id": "k8s-network",
+          "title": "Network",
+          "url": "/dashboard/kubernetes/network",
+          "icon": "Network",
+          "children": [
+            { "id": "k8s-services", "title": "Services", "url": "/dashboard/kubernetes/network/services", "icon": "Globe" },
+            { "id": "k8s-ingresses", "title": "Ingresses", "url": "/dashboard/kubernetes/network/ingresses", "icon": "ArrowRightLeft" },
+            { "id": "k8s-endpoints", "title": "Endpoints", "url": "/dashboard/kubernetes/network/endpoints", "icon": "Plug" }
+          ]
+        },
+        {
+          "id": "k8s-storage",
+          "title": "Storage",
+          "url": "/dashboard/kubernetes/storage",
+          "icon": "HardDrive",
+          "children": [
+            { "id": "k8s-pvcs", "title": "PVCs", "url": "/dashboard/kubernetes/storage/pvcs", "icon": "HardDrive" },
+            { "id": "k8s-pvs", "title": "PVs", "url": "/dashboard/kubernetes/storage/pvs", "icon": "Database" },
+            { "id": "k8s-storageclasses", "title": "StorageClasses", "url": "/dashboard/kubernetes/storage/storageclasses", "icon": "Layers" }
+          ]
+        },
+        {
+          "id": "k8s-config",
+          "title": "Config",
+          "url": "/dashboard/kubernetes/config",
+          "icon": "Settings2",
+          "children": [
+            { "id": "k8s-configmaps", "title": "ConfigMaps", "url": "/dashboard/kubernetes/config/configmaps", "icon": "FileText" },
+            { "id": "k8s-secrets", "title": "Secrets", "url": "/dashboard/kubernetes/config/secrets", "icon": "KeyRound" }
+          ]
+        },
+        {
+          "id": "k8s-cluster",
+          "title": "Cluster",
+          "url": "/dashboard/kubernetes/cluster",
+          "icon": "Server",
+          "children": [
+            { "id": "k8s-nodes", "title": "Nodes", "url": "/dashboard/kubernetes/cluster/nodes", "icon": "Server" },
+            { "id": "k8s-namespaces", "title": "Namespaces", "url": "/dashboard/kubernetes/cluster/namespaces", "icon": "FolderOpen" },
+            { "id": "k8s-events", "title": "Events", "url": "/dashboard/kubernetes/cluster/events", "icon": "Zap" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "label": "AI",
+      "items": [
+        {
+          "id": "ai-playground",
+          "title": "AI Playground",
+          "url": "/dashboard/ai-playground",
+          "icon": "Sparkles"
+        },
+        {
+          "id": "ml-studio",
+          "title": "ML Studio",
+          "url": "/dashboard/ml-studio",
+          "icon": "FlaskConical"
+        }
+      ]
+    },
+    {
+      "id": "admin",
+      "label": "Administration",
+      "items": [
+        {
+          "id": "workspaces",
+          "title": "Workspaces",
+          "url": "/dashboard/workspaces",
+          "icon": "Container",
+          "adminOnly": true
+        },
+        {
+          "id": "users",
+          "title": "User Management",
+          "url": "/dashboard/users",
+          "icon": "Users"
+        },
+        {
+          "id": "server-management",
+          "title": "Server Management",
+          "url": "/dashboard/server-management",
+          "icon": "ServerCog"
+        },
+        {
+          "id": "configuration",
+          "title": "Service Configuration",
+          "url": "/dashboard/configuration",
+          "icon": "SlidersHorizontal"
+        },
+        {
+          "id": "dns-zone",
+          "title": "Domain Zone",
+          "url": "/dashboard/dns-zone",
+          "icon": "Globe"
+        },
+        {
+          "id": "software-deployment",
+          "title": "Software Deployment",
+          "url": "/dashboard/software-deployment",
+          "icon": "Blocks",
+          "adminOnly": true
+        },
+        {
+          "id": "settings",
+          "title": "Settings",
+          "url": "/dashboard/settings",
+          "icon": "Settings"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_install:
+	# Application
+	mkdir -p debian/argus-insight-agent/opt/argus-insight-agent
+	cp -r app debian/argus-insight-agent/opt/argus-insight-agent/
+
+	# Install Python dependencies
+	pip3 install --root=debian/argus-insight-agent --prefix=/opt/argus-insight-agent --no-deps .
+
+	# Entry points
+	mkdir -p debian/argus-insight-agent/opt/argus-insight-agent/bin
+	install -m 755 scripts/argus-insight-agent debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-agent
+	install -m 755 scripts/argus-insight-sysmon debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-sysmon
+	install -m 755 scripts/argus-insight-yum debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-yum
+	install -m 755 scripts/argus-insight-host debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-host
+	install -m 755 scripts/argus-insight-user debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-user
+	install -m 755 scripts/argus-insight-cert debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-cert
+	install -m 755 scripts/argus-insight-file debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-file
+	install -m 755 scripts/argus-insight-process debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-process
+	install -m 755 scripts/argus-insight-metric debian/argus-insight-agent/opt/argus-insight-agent/bin/argus-insight-metric
+
+	# Config
+	mkdir -p debian/argus-insight-agent/etc/argus-insight-agent
+	install -m 640 packaging/config/config.yml debian/argus-insight-agent/etc/argus-insight-agent/config.yml
+	install -m 640 packaging/config/config.properties debian/argus-insight-agent/etc/argus-insight-agent/config.properties
+
+	# Directories
+	mkdir -p debian/argus-insight-agent/var/log/argus-insight-agent
+	mkdir -p debian/argus-insight-agent/var/lib/argus-insight-agent

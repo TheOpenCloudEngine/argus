@@ -1,0 +1,75 @@
+services:
+  mariadb:
+    build:
+      context: ../mariadb
+      args:
+        MARIADB_VERSION: ${MARIADB_VERSION}
+    image: argus-insight/powerdns-mariadb:${MARIADB_VERSION}
+    environment:
+      MYSQL_DATABASE: pdns
+      MYSQL_USER: pdns
+      MYSQL_PASSWORD: pdns
+      MYSQL_ROOT_PASSWORD: Argus!insight2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - argus-powerdns-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  powerdns-server:
+    build:
+      context: ../powerdns-server
+      args:
+        PDNS_VERSION: ${PDNS_VERSION}
+    image: argus-insight/powerdns-server:${PDNS_VERSION}
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      - "15001:8083"
+    environment:
+      - PDNS_api=yes
+      - PDNS_api_key=Argus!insight2026
+      - PDNSCONF_API_KEY=Argus!insight2026
+      - PDNS_webserver=yes
+      - PDNS_webserver_allow_from=127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - PDNS_webserver_address=0.0.0.0
+      - PDNS_webserver_port=8083
+      - PDNS_webserver_password=Argus!insight2026
+      - PDNS_gmysql_host=mariadb
+      - PDNS_gmysql_port=3306
+      - PDNS_gmysql_user=pdns
+      - PDNS_gmysql_password=pdns
+      - PDNS_gmysql_dbname=pdns
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  powerdns-admin:
+    build:
+      context: ../powerdns-admin
+      args:
+        PDNS_ADMIN_VERSION: ${PDNS_ADMIN_VERSION}
+    image: argus-insight/powerdns-admin:${PDNS_ADMIN_VERSION}
+    ports:
+      - "15000:80"
+    environment:
+      - SQLALCHEMY_DATABASE_URI=mysql://pdns:pdns@mariadb:3306/pdns
+      - GUNICORN_TIMEOUT=60
+      - PDNS_API_URL=http://powerdns-server:8083/
+      - PDNS_API_KEY=Argus!insight2026
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      powerdns-server:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  argus-powerdns-mysql-data:

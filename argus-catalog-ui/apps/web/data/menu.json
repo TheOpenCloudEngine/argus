@@ -1,0 +1,108 @@
+{
+  "groups": [
+    {
+      "id": "catalog",
+      "label": "Data Catalog",
+      "items": [
+        {
+          "id": "dashboard",
+          "title": "Dashboard",
+          "url": "/dashboard",
+          "icon": "LayoutDashboard"
+        },
+        {
+          "id": "datasets",
+          "title": "Datasets",
+          "url": "/dashboard/datasets",
+          "icon": "Database"
+        },
+        {
+          "id": "platforms",
+          "title": "Platforms",
+          "url": "/dashboard/platforms",
+          "icon": "Server"
+        }
+      ]
+    },
+    {
+      "id": "model-catalog",
+      "label": "Model Catalog",
+      "items": [
+        {
+          "id": "models",
+          "title": "MLflow Models",
+          "url": "/dashboard/models",
+          "icon": "Box"
+        },
+        {
+          "id": "mlflow-files",
+          "title": "MLflow Model Files",
+          "url": "/dashboard/mlflow-files",
+          "icon": "FolderOpen",
+          "adminOnly": true
+        },
+        {
+          "id": "oci-hub",
+          "title": "OCI Model Hub",
+          "url": "/dashboard/oci-hub",
+          "icon": "Globe"
+        },
+        {
+          "id": "oci-files",
+          "title": "OCI Model Files",
+          "url": "/dashboard/oci-files",
+          "icon": "FolderOpen",
+          "adminOnly": true
+        }
+      ]
+    },
+    {
+      "id": "governance",
+      "label": "Governance",
+      "items": [
+        {
+          "id": "standards",
+          "title": "Data Standards",
+          "url": "/dashboard/standards",
+          "icon": "Shield"
+        },
+        {
+          "id": "glossary",
+          "title": "Glossary",
+          "url": "/dashboard/glossary",
+          "icon": "BookOpen"
+        },
+        {
+          "id": "tags",
+          "title": "Tags",
+          "url": "/dashboard/tags",
+          "icon": "Tags"
+        },
+        {
+          "id": "alerts",
+          "title": "Alerts",
+          "url": "/dashboard/alerts",
+          "icon": "Bell"
+        }
+      ]
+    },
+    {
+      "id": "admin",
+      "label": "Administration",
+      "items": [
+        {
+          "id": "users",
+          "title": "User Management",
+          "url": "/dashboard/users",
+          "icon": "Users"
+        },
+        {
+          "id": "settings",
+          "title": "Settings",
+          "url": "/dashboard/settings",
+          "icon": "Settings"
+        }
+      ]
+    }
+  ]
+}
